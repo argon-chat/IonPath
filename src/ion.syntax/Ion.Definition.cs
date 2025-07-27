@@ -12,7 +12,8 @@ public partial class IonParser
             Message.OfType<IonDefinition>(),
             Flags.OfType<IonDefinition>(),
             Enums.OfType<IonDefinition>(),
-            Typedef.OfType<IonDefinition>()
+            Typedef.OfType<IonDefinition>(),
+            AttributeDef.OfType<IonDefinition>()
         ).Before(SkipWhitespaces);
 
     public static Parser<char, IEnumerable<IonDefinition>> IonFile =>

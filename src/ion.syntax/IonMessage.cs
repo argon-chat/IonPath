@@ -21,7 +21,9 @@ public record IonFlags(string Name, IonUnderlyingType Type, List<IonFlagEntry> E
 public record IonEnum(string Name, IonUnderlyingType Type, List<IonFlagEntry> Entries) : IonDefinition;
 public record IonAttribute(string Name, List<string> Args) : IonSyntaxEntity;
 public record IonUse(string Path) : IonDefinition;
-public record IonTypedef(IonUnderlyingType Name, IonUnderlyingType? BaseType) : IonDefinition;
+public record IonTypedef(IonUnderlyingType TypeName, IonUnderlyingType? BaseType) : IonDefinition;
+public record IonArgument(string argName, IonUnderlyingType type) : IonDefinition;
+public record IonAttributeDef(string Name, List<IonArgument> Args) : IonDefinition;
 
 
 public static class IonDefinitionEx
