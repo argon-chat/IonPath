@@ -6,9 +6,9 @@ using static Pidgin.Parser<char>;
 
 public partial class IonParser
 {
-    private static Parser<char, IonDefinition> UseDirective =>
-        Map(IonDefinition
-            (doc, pos, path) => new IonUse(path).WithPos(pos).WithComments(doc),
+    private static Parser<char, IonSyntaxMember> UseDirective =>
+        Map(IonSyntaxMember
+            (doc, pos, path) => new IonUseSyntax(path).WithPos(pos).WithComments(doc),
             DocComment,
             CurrentPos,
             Try(
@@ -21,4 +21,17 @@ public partial class IonParser
 
     private static Parser<char, string> StringLiteral =>
         Char('"').Then(AnyCharExcept('"').ManyString()).Before(Char('"'));
+
+    private static Parser<char, IonSyntaxMember> FeatureDirective =>
+        Map(IonSyntaxMember
+                (doc, pos, path) => new IonFeatureSyntax(path).WithPos(pos).WithComments(doc),
+            DocComment,
+            CurrentPos,
+            Try(
+                String("#feature")
+                    .Before(SkipWhitespaces)
+                    .Then(StringLiteral)
+                    .Before(SkipWhitespaces)
+            )
+        );
 }

@@ -6,9 +6,9 @@ using static Pidgin.Parser<char>;
 
 public partial class IonParser
 {
-    public static Parser<char, IonTypedef> Typedef =>
+    public static Parser<char, IonTypedefSyntax> Typedef =>
         Map((doc, attrs, pos, name, baseType, _) =>
-                new IonTypedef(name, baseType.GetValueOrDefault()).WithAttributes(attrs).WithComments(doc).WithPos(pos),
+                new IonTypedefSyntax(name, baseType.GetValueOrDefault()).WithAttributes(attrs).WithComments(doc).WithPos(pos),
             DocComment,
             Attribute.Many(),
             CurrentPos,

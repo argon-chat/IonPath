@@ -25,9 +25,9 @@ public partial class IonParser
             Integer
         ).Or(Integer);
 
-    private static Parser<char, IonFlagEntry> FlagEntry =>
+    private static Parser<char, IonFlagEntrySyntax> FlagEntry =>
         Map(
-            (pos, name, expr) => new IonFlagEntry(name, expr.Trim()).WithPos(pos),
+            (pos, name, expr) => new IonFlagEntrySyntax(name, expr.Trim()).WithPos(pos),
             CurrentPos,
             Identifier.Before(Char('=').Before(SkipWhitespaces)),
             AnyCharExcept(',', '}')
@@ -35,9 +35,9 @@ public partial class IonParser
                 .Before(SkipWhitespaces)
         );
 
-    public static Parser<char, IonDefinition> Flags =>
-        Map(IonDefinition (pos, doc, attrs, name, baseType, entries) =>
-                new IonFlags(name, baseType, entries.ToList()).WithComments(doc).WithAttributes(attrs).WithPos(pos),
+    public static Parser<char, IonSyntaxMember> Flags =>
+        Map(IonSyntaxMember (pos, doc, attrs, name, baseType, entries) =>
+                new IonFlagsSyntax(name, baseType, entries.ToList()).WithComments(doc).WithAttributes(attrs).WithPos(pos),
             CurrentPos,
             LeadingDoc,
             Attributes,
@@ -48,9 +48,9 @@ public partial class IonParser
                 .Between(Char('{').Before(SkipWhitespaces), Char('}').Before(SkipWhitespaces))
         );
 
-    public static Parser<char, IonFlags> Enums =>
+    public static Parser<char, IonFlagsSyntax> Enums =>
         Map(
-            (pos, name, baseType, entries) => new IonFlags(name, baseType, entries.ToList()).WithPos(pos),
+            (pos, name, baseType, entries) => new IonFlagsSyntax(name, baseType, entries.ToList()).WithPos(pos),
             CurrentPos,
             String("enum").Before(SkipWhitespaces).Then(Identifier),
             Char(':').Before(SkipWhitespaces).Then(Type),

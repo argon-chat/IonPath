@@ -6,9 +6,9 @@ using static Pidgin.Parser<char>;
 
 public partial class IonParser
 {
-    private static Parser<char, IonArgument> ArgEntry =>
+    private static Parser<char, IonArgumentSyntax> ArgEntry =>
         Map(
-            (doc, attr, pos, name, _, type) => new IonArgument(name, type)
+            (doc, attr, pos, name, _, type) => new IonArgumentSyntax(name, type)
                 .WithPos(pos)
                 .WithAttributes(attr)
                 .WithComments(doc),
@@ -20,7 +20,7 @@ public partial class IonParser
             Type
         );
 
-    private static Parser<char, IEnumerable<IonArgument>> ArgList =>
+    private static Parser<char, IEnumerable<IonArgumentSyntax>> ArgList =>
         ArgEntry
             .Separated(Char(',')
             .Before(SkipWhitespaces))

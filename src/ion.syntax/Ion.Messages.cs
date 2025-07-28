@@ -16,10 +16,10 @@ public partial class IonParser
             LetterOrDigit.ManyString()
         ).Before(SkipWhitespaces);
 
-    private static readonly Parser<char, IonUnderlyingType> Type =
+    private static readonly Parser<char, IonUnderlyingTypeSyntax> Type =
         Map(
             (pos, name, isOptional, isArray) =>
-                new IonUnderlyingType(name, isOptional.HasValue, isArray.HasValue).WithPos(pos),
+                new IonUnderlyingTypeSyntax(name, isOptional.HasValue, isArray.HasValue).WithPos(pos),
             CurrentPos,
             Identifier.Before(SkipWhitespaces),
             Char('?').Before(SkipWhitespaces).Optional(),
@@ -27,9 +27,9 @@ public partial class IonParser
         );
 
 
-    private static Parser<char, IonField> Field =>
+    private static Parser<char, IonFieldSyntax> Field =>
         Map(
-            (doc, attrs, pos, name, _, type, __) => new IonField(name, type)
+            (doc, attrs, pos, name, _, type, __) => new IonFieldSyntax(name, type)
                 .WithComments(doc)
                 .WithAttributes(attrs)
                 .WithPos(pos),
@@ -42,14 +42,14 @@ public partial class IonParser
             Char(';').Before(SkipWhitespaces)
         );
 
-    private static Parser<char, IEnumerable<IonField>> FieldList =>
+    private static Parser<char, IEnumerable<IonFieldSyntax>> FieldList =>
         Field.ManyBetween(Char('{').Before(SkipWhitespaces), Char('}').Before(SkipWhitespaces));
 
 
-    public static Parser<char, IonDefinition> Message =>
-        Map(IonDefinition
+    public static Parser<char, IonSyntaxMember> Message =>
+        Map(IonSyntaxMember
             (doc, attrs, pos, msgName, fields) =>
-                new IonMessage(msgName, fields.ToList()).WithComments(doc).WithAttributes(attrs).WithPos(pos),
+                new IonMessageSyntax(msgName, fields.ToList()).WithComments(doc).WithAttributes(attrs).WithPos(pos),
             LeadingDoc,
             Attributes,
             CurrentPos,

@@ -6,9 +6,9 @@ using static Pidgin.Parser<char>;
 
 public partial class IonParser
 {
-    private static Parser<char, IonAttribute> Attribute =>
+    private static Parser<char, IonAttributeSyntax> Attribute =>
         Map(
-            (pos, name, args) => new IonAttribute(name, args).WithPos(pos),
+            (pos, name, args) => new IonAttributeSyntax(name, args).WithPos(pos),
             CurrentPos,
             Char('@').Then(Identifier).Before(SkipWhitespaces),
             Try(
@@ -22,13 +22,13 @@ public partial class IonParser
             ).Optional().Select(opt => opt.HasValue ? opt.Value : [])
         );
 
-    private static Parser<char, IEnumerable<IonAttribute>> Attributes =>
+    private static Parser<char, IEnumerable<IonAttributeSyntax>> Attributes =>
         Attribute.Many().Before(SkipWhitespaces);
 
 
-    public static readonly Parser<char, IonAttributeDef> AttributeDef =
+    public static readonly Parser<char, IonAttributeDefSyntax> AttributeDef =
         Map(
-            (doc, pos, _, name, args) => new IonAttributeDef(name, args.ToList()).WithPos(pos).WithComments(doc),
+            (doc, pos, _, name, args) => new IonAttributeDefSyntax(name, args.ToList()).WithPos(pos).WithComments(doc),
             DocComment,
             CurrentPos,
             String("attribute").Before(SkipWhitespaces),
