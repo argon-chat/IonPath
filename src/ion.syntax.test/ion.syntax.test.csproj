@@ -17,6 +17,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\ion.compiler\ion.compiler.csproj" />
+    <ProjectReference Include="..\ion.runtime\ion.runtime.csproj" />
     <ProjectReference Include="..\ion.syntax\ion.syntax.csproj" />
   </ItemGroup>
 
