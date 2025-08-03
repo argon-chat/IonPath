@@ -9,7 +9,7 @@ public partial class IonParser
     public static Parser<char, IonTypedefSyntax> Typedef =>
         Map((doc, attrs, pos, name, baseType, _) =>
                 new IonTypedefSyntax(name, baseType.GetValueOrDefault()).WithAttributes(attrs).WithComments(doc).WithPos(pos),
-            DocComment,
+            DocComment.Optional(),
             Attribute.Many(),
             CurrentPos,
             String("typedef").Before(SkipWhitespaces).Then(Type),

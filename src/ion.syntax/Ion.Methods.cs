@@ -8,16 +8,15 @@ public partial class IonParser
 {
     private static Parser<char, IonArgumentSyntax> ArgEntry =>
         Map(
-            (doc, attr, pos, name, _, type) => new IonArgumentSyntax(name, type)
+            (doc, attr, pos, name, type) => new IonArgumentSyntax(name, type)
                 .WithPos(pos)
                 .WithAttributes(attr)
                 .WithComments(doc),
-            DocComment,
+            LeadingDoc,
             Attributes,
             CurrentPos,
             Identifier.Before(SkipWhitespaces),
-            Char(':').Before(SkipWhitespaces),
-            Type
+            Char(':').Before(SkipWhitespaces).Then(Type).Before(SkipWhitespaces)
         );
 
     private static Parser<char, IEnumerable<IonArgumentSyntax>> ArgList =>
