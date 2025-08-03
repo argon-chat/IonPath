@@ -13,7 +13,7 @@ public class Tests
                                 foobarField: u8;
                                 delta: f4;
 
-                                foobarOptional?: bool; 
+                                foobarOptional: bool?; 
                                 theArray: i2[];
                              }
                              """;
@@ -32,7 +32,7 @@ public class Tests
                                 foobarField : u8 ;
                                 delta : f4 ;
 
-                                foobarOptional ? : bool ; 
+                                foobarOptional : bool ?; 
                                 theArray : i2 [] ;
                              }
                              """;
@@ -85,6 +85,82 @@ public class Tests
                              """;
 
         var result = IonParser.IonFile.Parse(input);
+
+        Assert.That(result.Success);
+    }
+
+    [Test]
+    public void Test6()
+    {
+        const string input = """
+                             @Grain()
+                             service IServerInteraction(@GrainId() id: guid)
+                             {
+                                GetServers(): Server[];
+                                FooBar(i: i4): Server;
+                                stream FooBar(i: i4): Server;
+                             }
+                             """;
+
+        var result = IonParser.Service.Parse(input);
+
+        Assert.That(result.Success);
+    }
+
+    [Test]
+    public void Test7()
+    {
+        const string input = """
+                             service IServerInteraction()
+                             {
+                                GetServers(): Server[];
+                             }
+                             """;
+
+        var result = IonParser.Service.Parse(input);
+
+        Assert.That(result.Success);
+    }
+
+    [Test]
+    public void Test8()
+    {
+        const string input = """
+                             service IServerInteraction(){
+                                 unary CreateChannel(request: CreateChannelRequest);
+                                 DeleteChannel(channelId: guid);
+                                 GetChannels(): RealtimeChannel[];
+                             }
+                             """;
+
+        var result = IonParser.Service.Parse(input);
+
+        Assert.That(result.Success);
+    }
+
+    [Test]
+    public void Test9()
+    {
+        const string input = """
+                             service IServerInteraction()
+                             {
+                                unary foobar();
+                             }
+                             """;
+
+        var result = IonParser.Service.Parse(input);
+
+        Assert.That(result.Success);
+    }
+
+    [Test]
+    public void Test10()
+    {
+        const string input = """
+                             unary CreateChannel(request: CreateChannelRequest);
+                             """;
+
+        var result = IonParser.ServiceMethod.Parse(input);
 
         Assert.That(result.Success);
     }

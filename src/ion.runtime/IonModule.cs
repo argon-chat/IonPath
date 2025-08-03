@@ -1,13 +1,17 @@
 ﻿namespace ion.runtime;
 
+using syntax;
+
 public sealed class IonModule
 {
     public required string Name { get; init; }
     public required string Path { get; init; }
     public required List<IonType> Definitions { get; init; }
-    public required List<IonFeature> Features { get; init; }
-    public required List<IonAttributeType> Attributes { get; init; }
-    public required List<string> Imports { get; init; }
+    public required List<IonService> Services { get; init; }
+    public required IReadOnlyList<IonFeature> Features { get; init; }
+    public required IReadOnlyList<IonAttributeType> Attributes { get; init; }
+    public required IReadOnlyList<string> Imports { get; init; }
+    public IonFileSyntax? Syntax { get; init; } = null;
 
 
     public static readonly Lazy<IonModule> GetStdModule = new(() => new IonModule
@@ -17,6 +21,8 @@ public sealed class IonModule
         Features = ["builtin"],
         Definitions =
         [
+            new ("void", ["builtin"], [], true),
+
             new ("bool", ["scalar", "builtin"], [], true),
 
             new ("i1", ["scalar", "builtin"], [], true),
@@ -51,7 +57,8 @@ public sealed class IonModule
             new ("scalar", []),
             new ("tag", [new IonType("i4", ["scalar", "builtin"], [], true)]),
         ],
-        Imports = []
+        Imports = [],
+        Services = []
     });
 
     public static readonly Lazy<IonModule> GetVectorModule = new(() => new IonModule
@@ -74,18 +81,52 @@ public sealed class IonModule
             new ("vec4h", ["builtin"], [], true),
         ],
         Attributes = [],
-        Imports = []
+        Imports = [],
+        Services = []
+    });
+
+    public static readonly Lazy<IonModule> GetOrleansModule = new(() => new IonModule
+    {
+        Name = "orleans",
+        Path = "ion://orleans",
+        Features = ["builtin"],
+        Definitions = [],
+        Attributes = [
+            new ("grainId", []),
+            new ("oneWay", [])
+        ],
+        Imports = [],
+        Services = []
     });
 }
 
-public record IonBase(string name, List<IonAttributeInstance> attributes);
+public record IonBase(IonIdentifier name, IReadOnlyList<IonAttributeInstance> attributes);
 
-public record IonField(string name, IonType type, List<IonAttributeInstance> attributes) : IonBase(name, attributes);
+public record IonField(IonIdentifier name, IonType type, IReadOnlyList<IonAttributeInstance> attributes) : IonBase(name, attributes);
 
-public record IonType(string name, List<IonAttributeInstance> attributes, List<IonField> fields, bool isTypedef = false)
+public record IonArgument(IonIdentifier name, IonType type, IReadOnlyList<IonAttributeInstance> attributes)
+    : IonBase(name, attributes);
+
+public record IonType(IonIdentifier name, IReadOnlyList<IonAttributeInstance> attributes, IReadOnlyList<IonField> fields, bool isTypedef = false)
     : IonBase(name, attributes)
 {
     public bool IsBuiltin => attributes.Any(x => x.IsBuiltinAttribute);
     public bool IsScalar => attributes.Any(x => x.IsScalarAttribute);
     public int? Tag => attributes.FirstOrDefault(x => x.IsTag)?.arguments.OfType<int>().FirstOrDefault();
+    public bool IsUnresolved => this is IonUnresolvedType;
 }
+
+public record IonMethod(
+    IonIdentifier name,
+    IReadOnlyList<IonArgument> arguments,
+    IonType returnType,
+    IReadOnlyList<IonAttributeInstance> attributes)
+    : IonBase(name, attributes);
+
+public record IonService(IonIdentifier name, 
+    IReadOnlyList<IonMethod> methods,
+    IReadOnlyList<IonAttributeInstance> attributes)
+    : IonBase(name, attributes);
+
+public sealed record IonUnresolvedType(IonIdentifier name, IReadOnlyList<IonAttributeInstance> attributes, IonSyntaxMember syntax, bool isTypedef = false) 
+    : IonType(name, attributes, [], isTypedef);

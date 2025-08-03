@@ -1,6 +1,8 @@
 ﻿namespace ion.runtime;
 
-public record IonAttributeInstance(string name, List<object> arguments)
+using ion.syntax;
+
+public record IonAttributeInstance(IonIdentifier name, List<object> arguments)
 {
     public bool IsBuiltinAttribute => name.Equals("builtin");
     public bool IsScalarAttribute => name.Equals("scalar");
@@ -14,4 +16,9 @@ public record IonScalarAttributeInstance() : IonAttributeInstance("scalar", []);
 public record IonTagAttributeInstance(int tag) : IonAttributeInstance("tag", [tag]);
 
 
-public record IonAttributeType(string name, List<IonType> arguments) : IonBase(name, []);
+public record IonAttributeType(IonIdentifier name, List<IonType> arguments) : IonBase(name, []);
+
+public record IonEnumType(IonIdentifier name, 
+    IonType baseType, 
+    IReadOnlyDictionary<string, string> kv, 
+    bool isFlags, IReadOnlyList<IonAttributeInstance> attributes) : IonBase(name, attributes);
