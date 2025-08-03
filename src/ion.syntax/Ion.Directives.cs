@@ -9,7 +9,7 @@ public partial class IonParser
     private static Parser<char, IonSyntaxMember> UseDirective =>
         Map(IonSyntaxMember
             (doc, pos, path) => new IonUseSyntax(path).WithPos(pos).WithComments(doc),
-            DocComment,
+            DocComment.Optional(),
             CurrentPos,
             Try(
                 String("#use")
@@ -25,7 +25,7 @@ public partial class IonParser
     private static Parser<char, IonSyntaxMember> FeatureDirective =>
         Map(IonSyntaxMember
                 (doc, pos, path) => new IonFeatureSyntax(path).WithPos(pos).WithComments(doc),
-            DocComment,
+            DocComment.Optional(),
             CurrentPos,
             Try(
                 String("#feature")

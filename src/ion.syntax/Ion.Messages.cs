@@ -9,11 +9,13 @@ public partial class IonParser
     private static Parser<char, string> MsgKeyword =>
         String("msg").Before(SkipWhitespaces);
 
-    private static Parser<char, string> Identifier =>
+    private static Parser<char, IonIdentifier> Identifier =>
         Map(
-            (first, rest) => first + new string(rest),
+            (start, first, rest, end) => new IonIdentifier(first + new string(rest)).WithPos(start, end),
+            CurrentPos,
             Letter,
-            LetterOrDigit.ManyString()
+            LetterOrDigit.ManyString(),
+            CurrentPos
         ).Before(SkipWhitespaces);
 
     private static readonly Parser<char, IonUnderlyingTypeSyntax> Type =
