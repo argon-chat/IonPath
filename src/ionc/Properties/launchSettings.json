@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "ionc": {
+      "commandName": "Project",
+      "commandLineArgs": "compile"
+    }
+  }
+}
