@@ -26,10 +26,10 @@ public partial class IonParser
         Attribute.Many().Before(SkipWhitespaces);
 
 
-    public static readonly Parser<char, IonAttributeDefSyntax> AttributeDef =
+    public static Parser<char, IonAttributeDefSyntax> AttributeDef =>
         Map(
             (doc, pos, _, name, args) => new IonAttributeDefSyntax(name, args.ToList()).WithPos(pos).WithComments(doc),
-            DocComment,
+            DocComment.Optional(),
             CurrentPos,
             String("attribute").Before(SkipWhitespaces),
             Char('@').Then(Identifier).Before(SkipWhitespaces),
