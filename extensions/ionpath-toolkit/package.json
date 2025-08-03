@@ -1,0 +1,25 @@
+{
+  "name": "ionpath-toolkit",
+  "displayName": "IonPathToolKit",
+  "description": "Toolkit for IonPath Language",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.102.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [{
+      "id": "ion",
+      "aliases": ["IonPath", "ion"],
+      "extensions": ["ion"],
+      "configuration": "./language-configuration.json"
+    }],
+    "grammars": [{
+      "language": "ion",
+      "scopeName": "source.ion",
+      "path": "./syntaxes/ionpath.tmLanguage"
+    }]
+  }
+}
