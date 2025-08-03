@@ -8,14 +8,22 @@ public partial class IonParser
 {
     public static Parser<char, IonSyntaxMember> Definition =>
         OneOf(
-            UseDirective.OfType<IonSyntaxMember>(),
-            FeatureDirective.OfType<IonSyntaxMember>(),
-            Message.OfType<IonSyntaxMember>(),
-            Flags.OfType<IonSyntaxMember>(),
-            Enums.OfType<IonSyntaxMember>(),
-            Typedef.OfType<IonSyntaxMember>(),
-            AttributeDef.OfType<IonSyntaxMember>()
+            Try(Service.OfType<IonSyntaxMember>()),
+            Try(UseDirective.OfType<IonSyntaxMember>()),
+            Try(FeatureDirective.OfType<IonSyntaxMember>()),
+            Try(Message.OfType<IonSyntaxMember>()),
+            Try(Flags.OfType<IonSyntaxMember>()),
+            Try(Enums.OfType<IonSyntaxMember>()),
+            Try(Typedef.OfType<IonSyntaxMember>()),
+            Try(AttributeDef.OfType<IonSyntaxMember>()),
+            InvalidBlockFallback
         ).Before(SkipWhitespaces);
+
+    private static Parser<char, IonSyntaxMember> InvalidBlockFallback =>
+        from first in Any
+        from rest in Any.Until(Lookahead(Char('}').Or(Char(';')))).Optional()
+        let content = first + string.Concat(rest.GetValueOrDefault() ?? [])
+        select (IonSyntaxMember)new InvalidIonBlock(content.Trim());
 
     public static Parser<char, IEnumerable<IonSyntaxMember>> IonFile =>
         Definition.Many().Before(End);
@@ -26,7 +34,7 @@ public partial class IonParser
         var result = IonFile.Parse(content);
 
         if (!result.Success)
-            throw new Exception();
+            throw new ParseException(result.Error);
 
         return new IonFileSyntax(name, new FileInfo($"{name}.ion"),
             result.Value.OfType<IonUseSyntax>().ToList(),
@@ -35,7 +43,8 @@ public partial class IonParser
             result.Value.OfType<IonEnumSyntax>().ToList(),
             result.Value.OfType<IonFlagsSyntax>().ToList(),
             result.Value.OfType<IonMessageSyntax>().ToList(),
-            result.Value.OfType<IonTypedefSyntax>().ToList()
+            result.Value.OfType<IonTypedefSyntax>().ToList(),
+            result.Value.OfType<IonServiceSyntax>().ToList()
         );
     }
 
@@ -53,7 +62,13 @@ public partial class IonParser
             result.Value.OfType<IonEnumSyntax>().ToList(),
             result.Value.OfType<IonFlagsSyntax>().ToList(),
             result.Value.OfType<IonMessageSyntax>().ToList(),
-            result.Value.OfType<IonTypedefSyntax>().ToList()
+            result.Value.OfType<IonTypedefSyntax>().ToList(),
+            result.Value.OfType<IonServiceSyntax>().ToList()
         );
     }
+}
+
+public class ParseException(ParseError<char>? error) : Exception
+{
+    public ParseError<char>? Error { get; } = error;
 }
