@@ -5,7 +5,12 @@ using syntax;
 public sealed class ImportCycleDetectionStage(CompilationContext context)
     : CompilationStage(context)
 {
-    private enum VisitState { Unvisited, Visiting, Visited }
+    private enum VisitState
+    {
+        Unvisited,
+        Visiting,
+        Visited
+    }
 
     public void Run(List<IonFileSyntax> modules)
     {
@@ -13,11 +18,10 @@ public sealed class ImportCycleDetectionStage(CompilationContext context)
         var state = new Dictionary<string, VisitState>();
         var stack = new Stack<string>();
 
-        foreach (var module in modules)
+        foreach (var fullPath in modules.Select(module => module.file.FullName)
+                     .Where(fullPath => !state.ContainsKey(fullPath)))
         {
-            var fullPath = module.file.FullName;
-            if (!state.ContainsKey(fullPath))
-                Dfs(fullPath, pathToModule, state, stack);
+            Dfs(fullPath, pathToModule, state, stack);
         }
     }
 
@@ -53,5 +57,10 @@ public sealed class ImportCycleDetectionStage(CompilationContext context)
 
         stack.Pop();
         state[currentPath] = VisitState.Visited;
+    }
+
+    public override void DoProcess()
+    {
+        throw new NotImplementedException();
     }
 }
