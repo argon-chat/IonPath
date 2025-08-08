@@ -8,7 +8,7 @@ public partial class IonParser
 {
     private static Parser<char, IonAttributeSyntax> Attribute =>
         Map(
-            (pos, name, args) => new IonAttributeSyntax(name, args).WithPos(pos),
+            (pos, name, args) => new IonAttributeSyntax(name, args.Where(x => !string.IsNullOrEmpty(x)).ToList()).WithPos(pos),
             CurrentPos,
             Char('@').Then(Identifier).Before(SkipWhitespaces),
             Try(

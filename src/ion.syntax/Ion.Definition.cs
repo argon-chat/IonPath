@@ -20,10 +20,13 @@ public partial class IonParser
         ).Before(SkipWhitespaces);
 
     private static Parser<char, IonSyntaxMember> InvalidBlockFallback =>
+        from startPos in CurrentPos
         from first in Any
         from rest in Any.Until(Lookahead(Char('}').Or(Char(';')))).Optional()
-        let content = first + string.Concat(rest.GetValueOrDefault() ?? [])
-        select (IonSyntaxMember)new InvalidIonBlock(content.Trim());
+        from term in OneOf(Char('}'), Char(';'))
+        from endPos in CurrentPos
+        let content = first + string.Concat(rest.GetValueOrDefault() ?? []) + term
+        select (IonSyntaxMember)new InvalidIonBlock(content.Trim()).WithPos(startPos, endPos);
 
     public static Parser<char, IEnumerable<IonSyntaxMember>> IonFile =>
         Definition.Many().Before(End);
@@ -44,7 +47,8 @@ public partial class IonParser
             result.Value.OfType<IonFlagsSyntax>().ToList(),
             result.Value.OfType<IonMessageSyntax>().ToList(),
             result.Value.OfType<IonTypedefSyntax>().ToList(),
-            result.Value.OfType<IonServiceSyntax>().ToList()
+            result.Value.OfType<IonServiceSyntax>().ToList(),
+            result.Value.ToList()
         );
     }
 
@@ -63,7 +67,8 @@ public partial class IonParser
             result.Value.OfType<IonFlagsSyntax>().ToList(),
             result.Value.OfType<IonMessageSyntax>().ToList(),
             result.Value.OfType<IonTypedefSyntax>().ToList(),
-            result.Value.OfType<IonServiceSyntax>().ToList()
+            result.Value.OfType<IonServiceSyntax>().ToList(),
+            result.Value.ToList()
         );
     }
 }
