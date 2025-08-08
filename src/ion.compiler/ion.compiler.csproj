@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\ion.runtime\ion.runtime.csproj" />
+    <ProjectReference Include="..\ion.compiler.runtime\ion.compiler.runtime.csproj" />
     <ProjectReference Include="..\ion.syntax\ion.syntax.csproj" />
   </ItemGroup>
 
