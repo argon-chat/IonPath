@@ -1,6 +1,7 @@
 ﻿namespace ion.syntax.test;
 
 using Pidgin;
+using static Assert;
 
 public class Tests
 {
@@ -20,7 +21,7 @@ public class Tests
 
         var result = IonParser.Message.Parse(input);
 
-        Assert.That(result.Success);
+        That(result.Success);
     }
 
     [Test]
@@ -39,7 +40,7 @@ public class Tests
 
         var result = IonParser.Message.Parse(input);
 
-        Assert.That(result.Success);
+        That(result.Success);
     }
 
     [Test]
@@ -55,7 +56,7 @@ public class Tests
 
         var result = IonParser.Flags.Parse(input);
 
-        Assert.That(result.Success);
+        That(result.Success);
     }
 
     [Test]
@@ -72,7 +73,7 @@ public class Tests
 
         var result = IonParser.Flags.Parse(input);
 
-        Assert.That(result.Success);
+        That(result.Success);
     }
 
     [Test]
@@ -86,7 +87,7 @@ public class Tests
 
         var result = IonParser.IonFile.Parse(input);
 
-        Assert.That(result.Success);
+        That(result.Success);
     }
 
     [Test]
@@ -104,7 +105,7 @@ public class Tests
 
         var result = IonParser.Service.Parse(input);
 
-        Assert.That(result.Success);
+        That(result.Success);
     }
 
     [Test]
@@ -119,7 +120,7 @@ public class Tests
 
         var result = IonParser.Service.Parse(input);
 
-        Assert.That(result.Success);
+        That(result.Success);
     }
 
     [Test]
@@ -135,7 +136,7 @@ public class Tests
 
         var result = IonParser.Service.Parse(input);
 
-        Assert.That(result.Success);
+        That(result.Success);
     }
 
     [Test]
@@ -150,7 +151,7 @@ public class Tests
 
         var result = IonParser.Service.Parse(input);
 
-        Assert.That(result.Success);
+        That(result.Success);
     }
 
     [Test]
@@ -162,6 +163,79 @@ public class Tests
 
         var result = IonParser.ServiceMethod.Parse(input);
 
-        Assert.That(result.Success);
+        That(result.Success);
+    }
+
+
+    [Test]
+    public void Test11()
+    {
+        const string input = """
+                             enum ChannelType: u2
+                             {
+                                 Text,
+                                 Voice,
+                                 Announcement
+                             }
+                             """;
+
+        var result = IonParser.Enums.Parse(input);
+
+        That(result.Success);
+    }
+
+    [Test]
+    public void Test12()
+    {
+        const string input = """
+                             enum ChannelType: u2
+                             {
+                                 Text,
+                                 Voice,
+                                 Announcement
+                             }
+                             """;
+
+        var result = IonParser.IonFile.Parse(input);
+
+        That(result.Success);
+        That(!result.Value.OfType<InvalidIonBlock>().Any());
+    }
+
+
+    [Test]
+    public void Test13()
+    {
+        const string input = """
+                             enum JoinToChannelError: u2 {
+                                 NONE,
+                                 CHANNEL_IS_NOT_VOICE
+                             }
+                             """;
+
+        var result = IonParser.Enums.Parse(input);
+
+        That(result.Success);
+    }
+
+    [Test]
+    public void Test14()
+    {
+        const string input = """
+                             flags ChannelMemberState
+                             {
+                                 NONE                       = 0,
+                                 MUTED                      = 1 << 1,
+                                 MUTED_BY_SERVER            = 1 << 2,
+                                 MUTED_HEADPHONES           = 1 << 3,
+                                 MUTED_HEADPHONES_BY_SERVER = 1 << 4,
+                                 STREAMING                  = 1 << 5
+                             }
+                             
+                             """;
+
+        var result = IonParser.Flags.Parse(input);
+
+        That(result.Success);
     }
 }
