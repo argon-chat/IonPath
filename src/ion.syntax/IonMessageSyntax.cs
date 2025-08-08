@@ -23,14 +23,17 @@ public record InvalidIonBlock(string block) : IonSyntaxMember
 public record IonIdentifier(string Identifier) : IonSyntaxBase()
 {
     public static implicit operator IonIdentifier(string val) => new(val) { StartPosition = new SourcePos(0, 0) };
+
+    public override string ToString() => Identifier;
 }
-public record IonUnderlyingTypeSyntax(IonIdentifier Name, bool IsOptional, bool IsArray) : IonSyntaxBase;
+public record IonUnderlyingTypeSyntax(IonIdentifier Name, IReadOnlyList<IonTypeParameterSyntax> generics, bool IsArray, bool IsOptional) : IonSyntaxBase;
 
 public record IonFieldSyntax(IonIdentifier Name, IonUnderlyingTypeSyntax Type) : IonSyntaxMember;
 
 public record IonMessageSyntax(IonIdentifier Name, List<IonFieldSyntax> Fields) : IonSyntaxMember;
 
-public record IonFlagEntrySyntax(IonIdentifier Name, string ValueExpression) : IonSyntaxBase;
+public record IonFlagEntrySyntax(IonIdentifier Name, Maybe<IonExpression> ValueExpression) : IonSyntaxBase;
+public record IonExpression(string value) : IonSyntaxBase;
 
 public record IonFlagsSyntax(IonIdentifier Name, IonUnderlyingTypeSyntax Type, List<IonFlagEntrySyntax> Entries)
     : IonSyntaxMember;
@@ -49,6 +52,10 @@ public record IonArgumentSyntax(IonIdentifier argName, IonUnderlyingTypeSyntax t
 public record IonAttributeDefSyntax(IonIdentifier Name, List<IonArgumentSyntax> Args) : IonSyntaxMember;
 
 public record IonFeatureSyntax(string featureName) : IonSyntaxMember;
+
+public sealed record IonTypeParameterSyntax(
+    IonIdentifier Name
+) : IonSyntaxBase;
 
 public record IonMethodSyntax(
     IonIdentifier methodName,
@@ -76,7 +83,8 @@ public record IonFileSyntax(
     List<IonFlagsSyntax> flagsSyntaxes,
     List<IonMessageSyntax> messageSyntaxes,
     List<IonTypedefSyntax> typedefSyntaxes,
-    List<IonServiceSyntax> serviceSyntaxes)
+    List<IonServiceSyntax> serviceSyntaxes,
+    List<IonSyntaxMember>? allTokens = null)
 {
     public List<IonSyntaxMember> Definitions => attributeDefSyntaxes
         .OfType<IonSyntaxMember>()
