@@ -1,5 +1,7 @@
 ﻿namespace ion.compiler;
 
+using System.Globalization;
+using System.Numerics;
 using ion.syntax;
 using runtime;
 
@@ -17,6 +19,7 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
         var typeDefs = CompileTypedefs(file);
         var messages = CompileMessages(file);
         var services = CompileService(file);
+        var flags = CompileFlags(file);
 
         return new IonModule()
         {
@@ -26,7 +29,7 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
             Syntax = file,
             Imports = [],
             Features = [],
-            Definitions = messages.Concat(typeDefs).ToList(),
+            Definitions = messages.Concat(typeDefs).Concat(enums).Concat(flags).ToList(),
             Services = services
         };
     }
@@ -55,9 +58,134 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
         return attributes.AsReadOnly();
     }
 
-    public IReadOnlyList<IonEnumType> CompileEnums(IonFileSyntax file)
+    public IEnumerable<IonFlags> CompileFlags(IonFileSyntax file) 
+        => file.flagsSyntaxes.Select(CompileFlags);
+
+    public IonFlags CompileFlags(IonFlagsSyntax syntax)
     {
-        var types = new List<IonEnumType>();
+        var constants = new List<IonConstant>();
+        var usedNames = new HashSet<string>(StringComparer.Ordinal);
+        var usedBits = new List<BigInteger>();
+
+        var baseType = context.ResolveBuiltinType(syntax.Type)!;
+
+        BigInteger nextValue = 1;
+
+        foreach (var (name, valueExpression) in syntax.Entries)
+        {
+            if (!usedNames.Add(name.Identifier))
+            {
+                Error(IonAnalyticCodes.ION0006_DuplicateEnumName, name, name.Identifier);
+                continue;
+            }
+
+            BigInteger value;
+
+            if (valueExpression.HasValue)
+            {
+                var expr = valueExpression.Value;
+
+                var evalResult = EvaluateConstantExpression(expr);
+                if (evalResult is null)
+                {
+                    Error(IonAnalyticCodes.ION0007_InvalidEnumValue, expr, expr.ToString());
+                    continue;
+                }
+
+                value = evalResult.Value;
+            }
+            else
+            {
+                while (valueHasOverlap(nextValue, usedBits) || nextValue == 0)
+                {
+                    nextValue <<= 1;
+                }
+
+                value = nextValue;
+                nextValue <<= 1;
+            }
+
+            foreach (var existing in usedBits.Where(existing => (existing & value) != 0))
+            {
+                Error(IonAnalyticCodes.ION0011_EnumBitwiseOverlap, name,
+                    name.Identifier,
+                    syntax.Name.Identifier,
+                    existing,
+                    value.ToString());
+                break;
+            }
+
+            usedBits.Add(value);
+
+            constants.Add(new IonConstant(
+                name,
+                baseType,
+                value.ToString(),
+                []
+            ));
+        }
+
+        return new IonFlags(syntax.Name, [], constants, baseType);
+
+        static bool valueHasOverlap(BigInteger value, List<BigInteger> existing)
+            => existing.Any(e => (e & value) != 0);
+    }
+
+    public BigInteger? EvaluateConstantExpression(IonExpression expr)
+    {
+        var raw = expr.value.Trim();
+
+        var parts = raw.Split("<<", StringSplitOptions.TrimEntries);
+
+        return parts.Length switch
+        {
+            1 => ParseBigInteger(parts[0]),
+            2 when ParseBigInteger(parts[0]) is { } left && ParseBigInteger(parts[1]) is { } right &&
+                   right >= 0 => left << (int)right,
+            _ => null
+        };
+
+        static BigInteger? ParseBigInteger(string s)
+        {
+            s = s.Trim();
+
+            if (s.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                return BigInteger.TryParse(s[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hex)
+                    ? hex
+                    : null;
+
+            if (s.StartsWith("0b", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    return ConvertBinary(s[2..]);
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+
+            return BigInteger.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var dec) ? dec : null;
+        }
+
+        static BigInteger ConvertBinary(string binary)
+        {
+            BigInteger result = 0;
+            foreach (var c in binary)
+            {
+                result <<= 1;
+                if (c == '1') result |= 1;
+                else if (c != '0') throw new FormatException("Invalid binary digit");
+            }
+
+            return result;
+        }
+    }
+
+    public IReadOnlyList<IonEnum> CompileEnums(IonFileSyntax file)
+    {
+        var types = new List<IonEnum>();
         foreach (var syntax in file.enumSyntaxes)
         {
             var baseType = context.ResolveBuiltinType(syntax.Type);
@@ -83,34 +211,39 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
                 attributes.Add(attr);
             }
 
-            types.Add(new IonEnumType(syntax.Name, baseType, CompileFlags(syntax), false, attributes));
+            types.Add(new IonEnum(syntax.Name, attributes, CompileFlags(syntax), baseType));
         }
 
         return types.AsReadOnly();
 
 
-        IReadOnlyDictionary<string, string> CompileFlags(IonEnumSyntax syntax)
+        IReadOnlyList<IonConstant> CompileFlags(IonEnumSyntax syntax)
         {
-            var result = new Dictionary<string, string>();
-            var usedValues = new HashSet<Int128>();
+            var constants = new List<IonConstant>();
             var usedNames = new HashSet<string>(StringComparer.Ordinal);
+            var usedValues = new HashSet<Int128>();
 
-            Int128? firstExplicit = null;
+            var baseType = context.ResolveBuiltinType(syntax.Type)!;
+
             Int128 nextValue = 0;
+            Int128? firstExplicit = null;
 
             foreach (var e in syntax.Entries)
             {
-                var name = e.Name;
-                var exprToken = e.ValueExpression;
-                if (!usedNames.Add(name.Identifier))
+                var (nameToken, exprToken) = e;
+                var name = nameToken.Identifier;
+
+                if (!usedNames.Add(name))
                 {
-                    Error(IonAnalyticCodes.ION0006_DuplicateEnumName, e, name);
+                    Error(IonAnalyticCodes.ION0006_DuplicateEnumName, nameToken, name);
                     continue;
                 }
 
-                if (!string.IsNullOrEmpty(exprToken))
+                Int128 value;
+
+                if (exprToken.HasValue)
                 {
-                    if (!Int128.TryParse(exprToken, out var value))
+                    if (!Int128.TryParse(exprToken.Value.value, out value))
                     {
                         Error(IonAnalyticCodes.ION0007_InvalidEnumValue, e, exprToken);
                         continue;
@@ -123,23 +256,30 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
                         Error(IonAnalyticCodes.ION0008_DuplicateEnumValue, e, value.ToString());
                         continue;
                     }
-
-                    result.Add(name.Identifier, value.ToString());
-                    nextValue = value + 1;
                 }
                 else
                 {
                     if (nextValue < firstExplicit)
                         nextValue = firstExplicit.Value;
 
-                    while (!usedValues.Add(nextValue)) nextValue++;
+                    while (!usedValues.Add(nextValue))
+                    {
+                        nextValue++;
+                    }
 
-                    result.Add(name.Identifier, nextValue.ToString());
+                    value = nextValue;
                     nextValue++;
                 }
+
+                constants.Add(new IonConstant(
+                    new IonIdentifier(name),
+                    baseType,
+                    value.ToString(),
+                    []
+                ));
             }
 
-            return result;
+            return constants;
         }
     }
 
@@ -166,12 +306,12 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
                 ? context.ResolveTypeFor(methodSyntax, methodSyntax.returnType, true) ?? context.Void
                 : context.Void
             let methodAttributes = CompileAttributeInstancesFor(methodSyntax)
-            select new IonMethod(methodSyntax.methodName, parsedArgs, returnType, methodAttributes)).ToList();
+            select new IonMethod(methodSyntax.methodName, parsedArgs, returnType, methodSyntax.modifiers, methodAttributes)).ToList();
 
-    public List<IonService> CompileService(IonFileSyntax file) 
+    public List<IonService> CompileService(IonFileSyntax file)
         => file.serviceSyntaxes.Select(serviceSyntax =>
-        new IonService(serviceSyntax.serviceName, PrependMethods(serviceSyntax),
-            CompileAttributeInstancesFor(serviceSyntax))).ToList();
+            new IonService(serviceSyntax.serviceName, PrependMethods(serviceSyntax),
+                CompileAttributeInstancesFor(serviceSyntax))).ToList();
 
 
     private IReadOnlyList<IonAttributeInstance> CompileAttributeInstancesFor(IonSyntaxMember member)

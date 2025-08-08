@@ -7,7 +7,6 @@ public class RestoreUnresolvedTypeStage(CompilationContext ctx) : CompilationSta
     public override void DoProcess()
     {
         var result = RebuildTypesGraph(ctx.ProcessedModules.AsReadOnly(), out var graph);
-        ctx.ProcessedModules.Clear();
         ctx.ProcessedModules.AddRange(result);
     }
 
