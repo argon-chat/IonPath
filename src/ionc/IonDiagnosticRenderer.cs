@@ -51,8 +51,8 @@ public static class IonDiagnosticRenderer
 
     private static int GetVisualOffset(string line, int col)
     {
-        int visual = 0;
-        for (int i = 0; i < col && i < line.Length; i++)
+        var visual = 0;
+        for (var i = 0; i < col && i < line.Length; i++)
             visual += line[i] == '\t' ? 4 : 1;
         return visual;
     }
@@ -80,21 +80,24 @@ public static class IonDiagnosticRenderer
             if (diagnostic.SourceFile != null && File.Exists(diagnostic.SourceFile.FullName))
             {
                 var lines = File.ReadAllLines(diagnostic.SourceFile.FullName);
+                var startLine = diagnostic.StartPosition.Line - 1;
+                var endLine = (diagnostic.EndPosition?.Line ?? diagnostic.StartPosition.Line) - 1;
 
-                if (diagnostic.StartPosition.Line - 1 < lines.Length)
+                if (startLine >= lines.Length)
                 {
-                    var lineIndex = diagnostic.StartPosition.Line - 1;
-                    var line = lines[lineIndex];
-                    AnsiConsole.MarkupLine("   |");
-
-                    AnsiConsole.MarkupLine($"{diagnostic.StartPosition.Line,2} | [white]{line.EscapeMarkup()}[/]");
-
-                    var underline = BuildUnderline(line, diagnostic.StartPosition, diagnostic.EndPosition, color);
-                    AnsiConsole.MarkupLine($"   | {underline}");
+                    AnsiConsole.MarkupLine($"  [grey](line {diagnostic.StartPosition.Line} out of bounds)[/]");
                 }
                 else
                 {
-                    AnsiConsole.MarkupLine($"  [grey](line {diagnostic.StartPosition.Line} out of bounds)[/]");
+                    AnsiConsole.MarkupLine("   |");
+                    for (var i = startLine; i <= endLine && i < lines.Length; i++)
+                    {
+                        var line = lines[i];
+                        AnsiConsole.MarkupLine($"{i + 1,2} | [white]{line.EscapeMarkup()}[/]");
+
+                        var underline = BuildUnderlineMultiline(line, i, diagnostic.StartPosition, diagnostic.EndPosition, color);
+                        AnsiConsole.MarkupLine($"   | {underline}");
+                    }
                 }
             }
             AnsiConsole.MarkupLine($"  [{color}]{diagnostic.Message}[/]");
@@ -102,17 +105,20 @@ public static class IonDiagnosticRenderer
         }
     }
 
-    private static string BuildUnderline(string line, SourcePos start, SourcePos? end, string color)
+    private static string BuildUnderlineMultiline(string line, int currentLineIndex, SourcePos start, SourcePos? end, string color)
     {
-        var startCol = Math.Max(start.Col - 1, 0);
-        var endCol = end?.Col - 1 ?? startCol;
+        var sb = new StringBuilder();
+        var startCol = 0;
+        var endCol = line.Length;
 
-        startCol = Math.Min(startCol, line.Length);
-        endCol = Math.Min(endCol, line.Length);
+        if (currentLineIndex == start.Line - 1)
+            startCol = Math.Max(start.Col - 1, 0);
+
+        if (end.HasValue && currentLineIndex == end.Value.Line - 1)
+            endCol = Math.Max(Math.Min(end.Value.Col - 1, line.Length), startCol);
 
         var length = Math.Max(endCol - startCol, 1);
 
-        var sb = new StringBuilder();
         sb.Append(' ', startCol);
         sb.Append($"[{color}]");
         sb.Append('^');
