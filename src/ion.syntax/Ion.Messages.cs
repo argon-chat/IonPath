@@ -13,17 +13,19 @@ public partial class IonParser
         Map(
             (start, first, rest, end) => new IonIdentifier(first + new string(rest)).WithPos(start, end),
             CurrentPos,
-            Letter,
-            LetterOrDigit.ManyString(),
+            Letter.Or(Char('_')),
+            LetterOrDigit.Or(Char('_')).ManyString(),
             CurrentPos
         ).Before(SkipWhitespaces);
 
     private static readonly Parser<char, IonUnderlyingTypeSyntax> Type =
         Map(
-            (pos, name, isOptional, isArray) =>
-                new IonUnderlyingTypeSyntax(name, isOptional.HasValue, isArray.HasValue).WithPos(pos),
+            (pos, name, generics, isOptional, isArray) => new IonUnderlyingTypeSyntax(name,
+                    generics.GetValueOrDefault() ?? [], isArray.HasValue, isOptional.HasValue)
+                .WithPos(pos),
             CurrentPos,
             Identifier.Before(SkipWhitespaces),
+            GenericParameterList.Optional(),
             Char('?').Before(SkipWhitespaces).Optional(),
             Try(String("[]")).Before(SkipWhitespaces).Optional()
         );
@@ -50,7 +52,7 @@ public partial class IonParser
 
     public static Parser<char, IonSyntaxMember> Message =>
         Map(IonSyntaxMember
-            (doc, attrs, pos, msgName, fields) =>
+                (doc, attrs, pos, msgName, fields) =>
                 new IonMessageSyntax(msgName, fields.ToList()).WithComments(doc).WithAttributes(attrs).WithPos(pos),
             LeadingDoc,
             Attributes,
