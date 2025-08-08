@@ -17,8 +17,3 @@ public record IonTagAttributeInstance(int tag) : IonAttributeInstance("tag", [ta
 
 
 public record IonAttributeType(IonIdentifier name, List<IonType> arguments) : IonBase(name, []);
-
-public record IonEnumType(IonIdentifier name, 
-    IonType baseType, 
-    IReadOnlyDictionary<string, string> kv, 
-    bool isFlags, IReadOnlyList<IonAttributeInstance> attributes) : IonBase(name, attributes);
