@@ -14,8 +14,9 @@ public class CompilationContext(IReadOnlyList<IonFileSyntax> files)
     public bool HasErrors => Diagnostics.Any(d => d.Severity == IonDiagnosticSeverity.Error);
 
 
-    public IonType Void => ResolveBuiltinType(new IonUnderlyingTypeSyntax(new IonIdentifier("void"), false, false))!;
-        
+    public IonType Void =>
+        ResolveBuiltinType(new IonUnderlyingTypeSyntax(new IonIdentifier("void"), [], false, false))!;
+
 
     public required IReadOnlyList<IonModule> GlobalModules { get; init; }
     public List<IonModule> ProcessedModules { get; } = [];
@@ -31,20 +32,71 @@ public class CompilationContext(IReadOnlyList<IonFileSyntax> files)
     // null only when allowUnresolved == false
     public IonType? ResolveTypeFor(IonSyntaxMember owner, IonUnderlyingTypeSyntax type, bool allowUnresolved)
     {
-        var builtin = ResolveBuiltinType(type);
+        var resolved = ResolveBuiltinType(type);
+        if (resolved is not null)
+            return WrapModifiers(resolved, type);
 
-        if (builtin is not null)
-            return builtin;
-
-
-        var result = ProcessedModules
-            .SelectMany(module => module.Definitions.Where(x => x.IsBuiltin))
+        var match = ProcessedModules
+            .SelectMany(m => m.Definitions)
             .FirstOrDefault(t => t.name.Identifier.Equals(type.Name.Identifier));
 
-        if (result is not null) return result;
+        switch (match)
+        {
+            case null:
+                return allowUnresolved
+                    ? WrapModifiers(new IonUnresolvedType(type.Name, [], owner), type)
+                    : null;
+            case IonGenericType genericDef:
+            {
+                var resolvedArgs = type.generics
+                    .Select(g => ResolveTypeFor(owner,
+                        new IonUnderlyingTypeSyntax(g.Name, [], false, false).WithPos(g.StartPosition,
+                            g.EndPosition!.Value), allowUnresolved))
+                    .ToList();
 
-        return allowUnresolved ? new IonUnresolvedType(type.Name, [], owner) : null;
+                if (!allowUnresolved && resolvedArgs.Any(x => x is null))
+                    return null;
+
+                var actualArgs = resolvedArgs
+                    .Select(x => x ?? new IonUnresolvedType(new IonIdentifier("?"), [], owner))
+                    .ToList();
+
+                return WrapModifiers(genericDef with { TypeArguments = actualArgs }, type);
+            }
+            default:
+                return WrapModifiers(match, type);
+        }
     }
+
+    private IonType WrapModifiers(IonType inner, IonUnderlyingTypeSyntax type)
+    {
+        var result = inner;
+
+        if (type.IsArray)
+            result = ResolveSpecialGeneric("Array", result) ?? result;
+
+        if (type.IsOptional)
+            result = ResolveSpecialGeneric("Maybe", result) ?? result;
+
+        return result;
+    }
+
+    private IonType? ResolveSpecialGeneric(string wrapperName, IonType inner)
+    {
+        var wrapper = GlobalModules
+            .SelectMany(m => m.Definitions)
+            .OfType<IonGenericType>()
+            .FirstOrDefault(t => t.name.Identifier == wrapperName);
+
+        if (wrapper is null)
+            return null;
+
+        return wrapper with
+        {
+            TypeArguments = [inner]
+        };
+    }
+
 
     public IonType? ResolveType(IonUnresolvedType unresolvedType)
     {
@@ -54,7 +106,7 @@ public class CompilationContext(IReadOnlyList<IonFileSyntax> files)
             return builtin;
 
         return ProcessedModules
-            .SelectMany(module => module.Definitions.Where(x => x.IsBuiltin))
+            .SelectMany(module => module.Definitions)
             .FirstOrDefault(t => t.name.Identifier.Equals(unresolvedType.name.Identifier));
     }
 
@@ -70,7 +122,7 @@ public class CompilationContext(IReadOnlyList<IonFileSyntax> files)
 
         return new CompilationContext(files)
         {
-            GlobalModules = [ ..targetIncludes ]
+            GlobalModules = [..targetIncludes]
         };
     }
 
@@ -135,7 +187,8 @@ public class CompilationContext(IReadOnlyList<IonFileSyntax> files)
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException($"Failed to parse argument '{rawArg}' as '{expectedType}': {ex.Message}", ex);
+                throw new InvalidOperationException(
+                    $"Failed to parse argument '{rawArg}' as '{expectedType}': {ex.Message}", ex);
             }
         }
 
@@ -177,16 +230,21 @@ public abstract class CompilationStage(CompilationContext context)
 {
     public void Error(string code, string message, IonSyntaxBase @base) =>
         context.Diagnostics.Add(new(code, IonDiagnosticSeverity.Error, message, @base));
+
     public void Warning(string code, string message, IonSyntaxBase @base) =>
         context.Diagnostics.Add(new(code, IonDiagnosticSeverity.Warning, message, @base));
+
     public void Info(string code, string message, IonSyntaxBase @base) =>
         context.Diagnostics.Add(new(code, IonDiagnosticSeverity.Info, message, @base));
 
 
     public void Error(IonAnalyticCode code, IonSyntaxBase @base, params object[] args) =>
         context.Diagnostics.Add(new(code.code, IonDiagnosticSeverity.Error, string.Format(code.template, args), @base));
+
     public void Warn(IonAnalyticCode code, IonSyntaxBase @base, params object[] args) =>
-        context.Diagnostics.Add(new(code.code, IonDiagnosticSeverity.Warning, string.Format(code.template, args), @base));
+        context.Diagnostics.Add(
+            new(code.code, IonDiagnosticSeverity.Warning, string.Format(code.template, args), @base));
+
     public void Info(IonAnalyticCode code, IonSyntaxBase @base, params object[] args) =>
         context.Diagnostics.Add(new(code.code, IonDiagnosticSeverity.Info, string.Format(code.template, args), @base));
 
