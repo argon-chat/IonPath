@@ -13,7 +13,8 @@ public partial class IonParser
 
     public static Parser<char, int> IntExpression =>
         Map(
-            (lhs, op, rhs) => {
+            (lhs, op, rhs) =>
+            {
                 return op switch
                 {
                     "<<" => lhs << rhs,
@@ -27,35 +28,48 @@ public partial class IonParser
 
     private static Parser<char, IonFlagEntrySyntax> FlagEntry =>
         Map(
-            (pos, name, expr) => new IonFlagEntrySyntax(name, expr.Trim()).WithPos(pos),
+            (pos, name, exprOpt) => new IonFlagEntrySyntax(name, exprOpt).WithPos(pos),
             CurrentPos,
-            Identifier.Before(Char('=').Before(SkipWhitespaces)),
-            AnyCharExcept(',', '}')
-                .AtLeastOnceString()
-                .Before(SkipWhitespaces)
+            Identifier.Before(SkipWhitespaces),
+            Try(
+                Char('=')
+                    .Before(SkipWhitespaces)
+                    .Then(Expression)
+                    .Before(SkipWhitespaces)
+            ).Optional()
         );
 
+    private static Parser<char, IonExpression> Expression =>
+        Map((startPos, exp, endPos) => new IonExpression(exp).WithPos(startPos, endPos),
+            CurrentPos,
+            AnyCharExcept(',', '}').AtLeastOnceString(),
+            CurrentPos
+        );
     public static Parser<char, IonSyntaxMember> Flags =>
+        EnumLike("flags", (identifier, syntax, members) => new IonFlagsSyntax(identifier, syntax, members.ToList()));
+
+    public static Parser<char, IonSyntaxMember> Enums =>
+        EnumLike("enum", (identifier, syntax, members) => new IonEnumSyntax(identifier, syntax, members.ToList()));
+
+
+    public static Parser<char, IonSyntaxMember> EnumLike(string keyword, Func<IonIdentifier, IonUnderlyingTypeSyntax, IEnumerable<IonFlagEntrySyntax>, IonSyntaxMember> ctor) =>
         Map(IonSyntaxMember (pos, doc, attrs, name, baseType, entries) =>
-                new IonFlagsSyntax(name, baseType, entries.ToList()).WithComments(doc).WithAttributes(attrs).WithPos(pos),
+                ctor(name, baseType.HasValue
+                        ? baseType.Value
+                        : new IonUnderlyingTypeSyntax(new IonIdentifier("u4"), [], false, false), entries)
+                    .WithComments(doc)
+                    .WithAttributes(attrs)
+                    .WithPos(pos),
             CurrentPos,
             LeadingDoc,
             Attributes,
-            String("flags").Before(SkipWhitespaces).Then(Identifier),
-            Char(':').Before(SkipWhitespaces).Then(Type),
+            String(keyword).Before(SkipWhitespaces).Then(Identifier),
+            Try(Char(':').Before(SkipWhitespaces).Then(Type)).Optional(),
             FlagEntry
                 .Separated(Char(',').Before(SkipWhitespaces))
                 .Between(Char('{').Before(SkipWhitespaces), Char('}').Before(SkipWhitespaces))
         );
 
-    public static Parser<char, IonFlagsSyntax> Enums =>
-        Map(
-            (pos, name, baseType, entries) => new IonFlagsSyntax(name, baseType, entries.ToList()).WithPos(pos),
-            CurrentPos,
-            String("enum").Before(SkipWhitespaces).Then(Identifier),
-            Char(':').Before(SkipWhitespaces).Then(Type),
-            FlagEntry
-                .Separated(Char(',').Before(SkipWhitespaces))
-                .Between(Char('{').Before(SkipWhitespaces), Char('}').Before(SkipWhitespaces))
-        );
+
+    
 }
