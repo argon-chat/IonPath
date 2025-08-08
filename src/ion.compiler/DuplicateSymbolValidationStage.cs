@@ -2,6 +2,16 @@
 
 using syntax;
 
+
+public sealed class VerifyInvalidStatementsStage(CompilationContext context) : CompilationStage(context)
+{
+    public override void DoProcess()
+    {
+        foreach (var invalidStatement in context.Files.SelectMany(x => x.allTokens ?? []).OfType<InvalidIonBlock>())
+            Error(IonAnalyticCodes.ION0010_InvalidStatement, invalidStatement);
+    }
+}
+
 public sealed class DuplicateSymbolValidationStage(CompilationContext context)
     : CompilationStage(context)
 {
