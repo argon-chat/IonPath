@@ -97,6 +97,12 @@ public class IonCSharpGenerator(string @namespace)
         global using timeonly = System.TimeOnly;
         global using duration = System.TimeSpan;
         global using datetime = System.DateTime;
+        
+        global using System.CodeDom.Compiler;
+        global using System.Runtime.CompilerServices;
+        
+        global using System.Formats.Cbor;
+        global using ion.runtime;
         """;
 
     public string GenerateModule(IonModule module)
@@ -136,6 +142,10 @@ public class IonCSharpGenerator(string @namespace)
     private static string GenerateEnum(IonEnum e)
     {
         var sb = new StringBuilder();
+        sb.AppendLine("""
+                      [GeneratedCode("IonPath Codegen", "0.0.0")]
+                      [CompilerGenerated]
+                      """);
         sb.AppendLine($"public enum {e.name.Identifier}");
         sb.AppendLine("{");
         foreach (var m in e.members)
@@ -147,6 +157,10 @@ public class IonCSharpGenerator(string @namespace)
     private static string GenerateFlags(IonFlags f)
     {
         var sb = new StringBuilder();
+        sb.AppendLine("""
+                      [GeneratedCode("IonPath Codegen", "0.0.0")]
+                      [CompilerGenerated]
+                      """);
         sb.AppendLine("[Flags]");
         sb.AppendLine($"public enum {f.name.Identifier}");
         sb.AppendLine("{");
@@ -165,7 +179,11 @@ public class IonCSharpGenerator(string @namespace)
     private static string GenerateMessage(IonType type)
     {
         var sb = new StringBuilder();
-        sb.Append($"public record {type.name.Identifier}(");
+        sb.AppendLine("""
+                      [GeneratedCode("IonPath Codegen", "0.0.0")]
+                      [CompilerGenerated]
+                      """);
+        sb.Append($"public sealed record {type.name.Identifier}(");
         sb.Append(string.Join(", ", type.fields.Select(f =>
             $"{GenerateField(f)}")));
         sb.AppendLine(");");
@@ -175,6 +193,10 @@ public class IonCSharpGenerator(string @namespace)
     private static string GenerateService(IonService service)
     {
         var sb = new StringBuilder();
+        sb.AppendLine("""
+                      [GeneratedCode("IonPath Codegen", "0.0.0")]
+                      [CompilerGenerated]
+                      """);
         sb.AppendLine($"public interface I{service.name.Identifier}");
         sb.AppendLine("{");
 
@@ -216,6 +238,8 @@ public class IonCSharpGenerator(string @namespace)
 
     public string FormatterTemplate =>
         """
+        [GeneratedCode("IonPath Codegen", "0.0.0")]
+        [CompilerGenerated]
         public sealed class Ion_{ionType}_Formatter : IonFormatter<{ionType}>
         {
             public {ionType} Read(CborReader reader)
@@ -258,6 +282,8 @@ public class IonCSharpGenerator(string @namespace)
 
     private static string GenerateFormatterForEnum(IonEnum @enum) =>
         """
+            [GeneratedCode("IonPath Codegen", "0.0.0")]
+            [CompilerGenerated]
             public sealed class Ion_{ionType}_Formatter : IonFormatter<{ionType}>
             {
                 public {ionType} Read(CborReader reader)
@@ -278,6 +304,8 @@ public class IonCSharpGenerator(string @namespace)
             .Replace("{writeEnumValue}", $"{FormatterTemplateRef(@enum.baseType)}.Write(writer, casted);");
     private static string GenerateFormatterForFlags(IonFlags @enum) =>
         """
+            [GeneratedCode("IonPath Codegen", "0.0.0")]
+            [CompilerGenerated]
             public sealed class Ion_{ionType}_Formatter : IonFormatter<{ionType}>
             {
                 public {ionType} Read(CborReader reader)
