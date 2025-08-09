@@ -4,6 +4,35 @@ using System.Buffers;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 
+public static class IonBinarySerializer
+{
+    public static void Serialize<T>(T value, Action<ReadOnlyMemory<byte>> onSerialized)
+    {
+        var writer = new CborWriter();
+
+        IonFormatterStorage<T>.Value.Write(writer, value);
+
+        using var mem = MemoryPool<byte>.Shared.Rent(writer.BytesWritten);
+
+        writer.Encode(mem.Memory.Span);
+
+        onSerialized(mem.Memory);
+    }
+
+    public static async Task SerializeAsync<T>(T value, Func<ReadOnlyMemory<byte>, Task> onSerialized)
+    {
+        var writer = new CborWriter();
+
+        IonFormatterStorage<T>.Value.Write(writer, value);
+
+        using var mem = MemoryPool<byte>.Shared.Rent(writer.BytesWritten);
+
+        writer.Encode(mem.Memory.Span);
+
+        await onSerialized(mem.Memory);
+    }
+}
+
 public interface IonFormatter<T>
 {
     T Read(CborReader reader);
