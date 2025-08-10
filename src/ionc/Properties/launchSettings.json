@@ -1,8 +1,9 @@
-{
+﻿{
   "profiles": {
     "ionc": {
       "commandName": "Project",
-      "commandLineArgs": "compile"
+      "commandLineArgs": "compile",
+      "workingDirectory": "Z:\\!argon\\Argon.Ion"
     }
   }
 }

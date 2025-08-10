@@ -1,9 +1,13 @@
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="src/Directory.Build.props" />
+    <File Path="GitVersion.yml" />
+  </Folder>
   <Project Path="src/ion.compiler.runtime/ion.compiler.runtime.csproj" />
   <Project Path="src/ion.compiler/ion.compiler.csproj" Id="85aacc21-6a08-47c6-88ef-c230fb783190" />
+  <Project Path="src/ion.runtime.network/ion.runtime.network.csproj" Id="2ee5e3fa-1394-4bf6-8daf-09afc10d8848" />
   <Project Path="src/ion.runtime/ion.runtime.csproj" Id="1cc9f360-5b38-4f43-90d8-c1ae22b1acd5" />
   <Project Path="src/ion.syntax.test/ion.syntax.test.csproj" Id="9ac45072-db94-43ff-a42f-4d53e6bb4206" />
   <Project Path="src/ion.syntax/ion.syntax.csproj" Id="1f05ffef-3ecd-426c-a60c-59e64e82144b" />
   <Project Path="src/ionc/ionc.csproj" Id="2b5a64d7-049c-4f85-98c3-c01811bbed45" />
-  <Project Path="src/testProject/ionTestProject.csproj" />
 </Solution>

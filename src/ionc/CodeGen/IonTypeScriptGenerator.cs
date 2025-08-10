@@ -129,13 +129,3 @@ public class IonTypeScriptGenerator
         return baseType;
     }
 }
-
-
-//public class TypeScriptGenerator : ILanguageGenerator
-//{
-//}
-
-//public interface ILanguageGenerator
-//{
-//    void GenerateStandardTypedefs();
-//}
