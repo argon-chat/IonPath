@@ -5,11 +5,15 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+		<Title>Ion Network Runtime Types for Server Generated Code</Title>
+		<PackageId>ionpath.runtime.network</PackageId>
 	</PropertyGroup>
 	<ItemGroup>
 		<FrameworkReference Include="Microsoft.AspNetCore.App" />
 	</ItemGroup>
 	<ItemGroup>
 	  <ProjectReference Include="..\ion.runtime\ion.runtime.csproj" />
-	</ItemGroup>
+	</ItemGroup>	
 </Project>
