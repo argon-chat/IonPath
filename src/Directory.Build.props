@@ -1,0 +1,38 @@
+﻿<Project>
+    <PropertyGroup>
+        <InvariantGlobalization>true</InvariantGlobalization>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <LangVersion>latest</LangVersion>
+        <EnablePreviewFeatures>true</EnablePreviewFeatures>
+    </PropertyGroup>
+    <PropertyGroup>
+        <CurrentYear>$([System.DateTime]::Now.ToString(yyyy))</CurrentYear>
+		<Authors>Argon Chat</Authors>
+		<Company>Argon Inc LLC</Company>
+		<Copyright>(C) 2024-$(CurrentYear) Argon Inc LLC</Copyright>
+		<PackageProjectUrl>https://github.com/argon-chat/IonPath</PackageProjectUrl>
+		<PackageIcon>icon-128.png</PackageIcon>
+		<RepositoryUrl>https://github.com/argon-chat/IonPath</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
+		<PackageTags>codegen, runtime, ionpath, argonchat, rpc</PackageTags>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
+		<IncludeSymbols>True</IncludeSymbols>
+		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
+	    <Version>$(GitVersion_SemVer)</Version>
+	    <PackageVersion>$(GitVersion_SemVer)</PackageVersion>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All"/>
+        <PackageReference Include="GitVersion.MsBuild" Version="6.*">
+	        <PrivateAssets>All</PrivateAssets>
+        </PackageReference>
+    </ItemGroup>
+	<ItemGroup>
+		<None Include="..\..\extensions\ionpath-toolkit\images\icon-128.png">
+			<Pack>True</Pack>
+			<PackagePath>\</PackagePath>
+		</None>
+	</ItemGroup>
+	
+</Project>
