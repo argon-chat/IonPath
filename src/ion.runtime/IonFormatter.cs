@@ -115,7 +115,7 @@ public static class IonFormatterStorageModuleInit
         IonFormatterStorage<byte>.Value = new Ion_u1_Formatter();
         IonFormatterStorage<sbyte>.Value = new Ion_i1_Formatter();
         IonFormatterStorage<short>.Value = new Ion_i2_Formatter();
-        IonFormatterStorage<short>.Value = new Ion_i2_Formatter();
+        IonFormatterStorage<ushort>.Value = new Ion_u2_Formatter();
         IonFormatterStorage<int>.Value = new Ion_i4_Formatter();
         IonFormatterStorage<uint>.Value = new Ion_u4_Formatter();
         IonFormatterStorage<long>.Value = new Ion_i8_Formatter();

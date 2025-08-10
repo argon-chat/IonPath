@@ -4,8 +4,10 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <Title>Ion Runtime Types for Server Generated Code</Title>
+    <PackageId>ionpath.runtime</PackageId>
   </PropertyGroup>
-
   <ItemGroup>
     <PackageReference Include="System.Formats.Cbor" Version="9.0.8" />
   </ItemGroup>
