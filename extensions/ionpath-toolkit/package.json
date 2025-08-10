@@ -2,24 +2,57 @@
   "name": "ionpath-toolkit",
   "displayName": "IonPathToolKit",
   "description": "Toolkit for IonPath Language",
-  "version": "0.0.1",
+  "version": "1.0.1",
+  "icon": "images/icon.png",
+  "publisher": "ArgonChat",
   "engines": {
     "vscode": "^1.102.0"
+  },
+  "bugs": {
+    "url": "https://github.com/argon-chat/IonPath/issues"
+  },
+  "homepage": "https://github.com/argon-chat/IonPath",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/argon-chat/IonPath.git"
   },
   "categories": [
     "Programming Languages"
   ],
   "contributes": {
-    "languages": [{
-      "id": "ion",
-      "aliases": ["IonPath", "ion"],
-      "extensions": ["ion"],
-      "configuration": "./language-configuration.json"
-    }],
-    "grammars": [{
-      "language": "ion",
-      "scopeName": "source.ion",
-      "path": "./syntaxes/ionpath.tmLanguage"
-    }]
+    "languages": [
+      {
+        "id": "ion",
+        "aliases": [
+          "IonPath",
+          "ion"
+        ],
+        "extensions": [
+          "ion"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "images/icon.png",
+          "dark": "images/icon.png"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "ion",
+        "scopeName": "source.ion",
+        "path": "./syntaxes/ionpath.tmLanguage"
+      }
+    ],
+    "jsonValidation": [
+      {
+        "fileMatch": [
+          "ion.config.json",
+          "/ion.config.json",
+          "*/ion.config.json"
+        ],
+        "url": "./schemas/ion-config.schema.json"
+      }
+    ]
   }
 }
