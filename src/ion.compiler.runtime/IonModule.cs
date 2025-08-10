@@ -106,12 +106,22 @@ public sealed class IonModule
     });
 }
 
+public interface ITypeWithName
+{
+    IonType Type { get; }
+    IonIdentifier Name { get; }
+}
+
 public record IonBase(IonIdentifier name, IReadOnlyList<IonAttributeInstance> attributes);
 
 public record IonField(
     IonIdentifier name,
     IonType type,
-    IReadOnlyList<IonAttributeInstance> attributes) : IonBase(name, attributes);
+    IReadOnlyList<IonAttributeInstance> attributes) : IonBase(name, attributes), ITypeWithName
+{
+    public IonType Type => type;
+    public IonIdentifier Name => name;
+}
 
 public record IonConstant(
     IonIdentifier name,
@@ -123,7 +133,12 @@ public record IonArgument(
     IonIdentifier name,
     IonType type,
     IReadOnlyList<IonAttributeInstance> attributes)
-    : IonBase(name, attributes);
+    : IonBase(name, attributes), ITypeWithName
+{
+    public IonType Type => type;
+    public IonIdentifier Name => name;
+}
+
 
 public abstract record IonTypeConstraint(IonIdentifier Name) : IonBase(Name, []);
 
