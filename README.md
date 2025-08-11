@@ -1,4 +1,5 @@
-# IonPath
+
+<img alt="image" src="/images/header.png" />
 
 **IonPath** is a unified communication protocol and contract language designed for modern distributed applications. It combines a compact binary message format (based on **CBOR**) with a strongly typed DSL for defining interfaces and data contracts.
 
