@@ -25,3 +25,22 @@ IonPath consists of two parts:
 - **Designed for low-latency systems** — suitable for WebSocket, QUIC, or custom transports
 
 ---
+
+## 📣 Project Roadmap 
+
+| 📜 Language             | Status | 🛠 Code Generation           | Status | 🌐 Transports & Platforms    | Status |
+|--------------------------|--------|------------------------------|--------|--------------------------|--------|
+| **Core DSL Grammar**     | ✅     | **C# \ Server**              | 🚧     | **HTTP Transport**       | ✅     |
+| **Services**             | ✅     | **C# \ Client**              | 🚧     | **QUIC Transport**       | 🔻     |
+| **POCO**                 | ✅     | **TypeScript \ Client**      | 🚧     | **NATS**                 | 🔻     |
+| **IonPath Protocol**     | ✅     | **TypeScript \ Server**      | 🔻     | **WebSocket Streaming**  | 🔻     |
+| **Unions**               | 🔻     | **Rust \ Client**            | 🔻     | **SteamNetworking**      | 🔻     |
+| **Unary Calls**          | ✅     | **Rust \ Server**            | 🔻     | **Unity Platform**       | 🔻     |
+| **Streaming Calls**      | 🔻     | **Go \ Client**              | 🔻     | **Orleans Platform**     | 🔻     |
+| **Streaming Hubs**       | 🔻     | **Go \ Server**              | 🔻     |
+|                          |         | **Json Serialization**       | 🔻     |
+|                          |         | **MsgPack Serialization**    | 🔻     |
+|                          |         | **CBOR Serialization**       | ✅     |
+---
+
+*Legend: 🚧 – in progress, ✅ – implemented, 🔻 – planned*
