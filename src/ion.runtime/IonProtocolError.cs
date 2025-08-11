@@ -2,7 +2,7 @@
 
 using System.Formats.Cbor;
 
-public record IonProtocolError(string code, string msg);
+public record struct IonProtocolError(string code, string msg);
 
 public class IonProtocolErrorFormatter : IonFormatter<IonProtocolError>
 {

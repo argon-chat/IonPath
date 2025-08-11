@@ -1,4 +1,6 @@
 ﻿namespace ion.runtime;
+
+using ion.runtime.network;
 #pragma warning disable CA2255
 using System.Buffers;
 using System.Numerics;
@@ -122,6 +124,7 @@ public static class IonFormatterStorageModuleInit
         IonFormatterStorage<ulong>.Value = new Ion_u8_Formatter();
         IonFormatterStorage<Int128>.Value = new Ion_i16_Formatter();
         IonFormatterStorage<UInt128>.Value = new Ion_u16_Formatter();
+        IonFormatterStorage<IonProtocolError>.Value = new IonProtocolErrorFormatter();
     }
 }
 
