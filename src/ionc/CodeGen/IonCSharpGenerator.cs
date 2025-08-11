@@ -64,7 +64,7 @@ public class IonCSharpGenerator(string @namespace)
                """;
     }
 
-    private static string ModuleInitTemplate =
+    private static readonly string ModuleInitTemplate =
         """
         public static class IonProjectFormatterStorageModuleInit
         {

@@ -19,7 +19,7 @@ await Host.CreateDefaultBuilder(args)
         config.SetApplicationCulture(CultureInfo.InvariantCulture);
         config.SetApplicationName("ionc");
 
-        config.AddCommand<CompileCommand>("compile");
+        config.AddCommand<CompileCommand>("compile").WithAlias("build");
     })
     .RunConsoleAsync();
 
