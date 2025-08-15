@@ -32,6 +32,9 @@ public static class FileEx
     public static FileInfo File(this DirectoryInfo directory, string file) =>
         new(Path.Combine(directory.FullName, file));
 
+    public static DirectoryInfo Directory(this DirectoryInfo directory, string dir) =>
+        new(Path.Combine(directory.FullName, dir));
+
     public static DirectoryInfo Combine(this DirectoryInfo directory, string atFolder)
     {
         if (atFolder.StartsWith("@"))
@@ -40,9 +43,16 @@ public static class FileEx
     }
 }
 
+public static class IonCSharpGeneratorEx
+{
+    private static readonly string CompileGenerateAttributes = // {compileGeneratedAttributes}
+        "[GeneratedCodeAttribute(\"ionc\", null), CompilerGeneratedAttribute]";
+    public static string ToCompiledString(this StringBuilder builder) 
+        => builder.ToString().Replace("{compileGeneratedAttributes}", CompileGenerateAttributes);
+}
+
 public class IonCSharpGenerator(string @namespace)
 {
-
     private string FileHeader()
     {
         return $"""
@@ -66,6 +76,7 @@ public class IonCSharpGenerator(string @namespace)
 
     private static readonly string ModuleInitTemplate =
         """
+        {compileGeneratedAttributes}
         public static class IonProjectFormatterStorageModuleInit
         {
             [ModuleInitializer]
@@ -76,7 +87,7 @@ public class IonCSharpGenerator(string @namespace)
         }
         """;
 
-    public string GenerateModuleInit(IEnumerable<IonType> types, IEnumerable<IonService> services)
+    public string GenerateModuleInit(IEnumerable<IonType> types, IReadOnlyList<IonService> services, bool clientToo, bool serverToo)
     {
         var candidates = types.Where(t => t is { IsBuiltin: false, IsScalar: false, IsVoid: false }).ToArray();
         var sorted = TopoSortByDependencies(candidates);
@@ -95,16 +106,30 @@ public class IonCSharpGenerator(string @namespace)
             formattersSb.AppendLine($"      IonFormatterStorage<{typeName}>.Value = new Ion_{typeName}_Formatter();");
         }
 
-        foreach (var service in services)
+        if (serverToo)
         {
-            var typeName = service.name.Identifier;
-            formattersSb.AppendLine(
-                $"      IonExecutorMetadataStorage.Add<Ion_{typeName}_ServiceExecutor>(\"I{typeName}\");");
+            foreach (var service in services)
+            {
+                var typeName = service.name.Identifier;
+                formattersSb.AppendLine(
+                    $"      IonExecutorMetadataStorage.AddExecutor<Ion_{typeName}_ServiceExecutor>(\"I{typeName}\");");
+            }
         }
+
+        if (clientToo)
+        {
+            foreach (var service in services)
+            {
+                var typeName = service.name.Identifier;
+                formattersSb.AppendLine(
+                    $"      IonExecutorMetadataStorage.AddClient<Ion_{typeName}_ClientImpl>(\"I{typeName}\");");
+            }
+        }
+
 
         sb.AppendLine(ModuleInitTemplate.Replace("{formatters}", formattersSb.ToString()));
 
-        return sb.ToString();
+        return sb.ToCompiledString();
     }
 
     public static void GenerateCsproj(string projectName, FileInfo outputFile)
@@ -170,6 +195,9 @@ public class IonCSharpGenerator(string @namespace)
         global using ion.runtime;
         global using ion.runtime.network;
         global using Microsoft.Extensions.DependencyInjection;
+        global using System.Diagnostics;
+        global using System.Reflection;
+        global using ion.runtime.client;
         """;
 
     public string GenerateModule(IonModule module)
@@ -190,7 +218,7 @@ public class IonCSharpGenerator(string @namespace)
             sb.AppendLine();
         }
 
-        return sb.ToString();
+        return sb.ToCompiledString();
     }
 
     private static string GenerateType(IonType type)
@@ -209,10 +237,7 @@ public class IonCSharpGenerator(string @namespace)
     private static string GenerateEnum(IonEnum e)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("""
-                      [GeneratedCode("IonPath Codegen", "0.0.0")]
-                      [CompilerGenerated]
-                      """);
+        sb.AppendLine("{compileGeneratedAttributes}");
         sb.AppendLine($"public enum {e.name.Identifier}");
         sb.AppendLine("{");
         foreach (var m in e.members)
@@ -224,10 +249,7 @@ public class IonCSharpGenerator(string @namespace)
     private static string GenerateFlags(IonFlags f)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("""
-                      [GeneratedCode("IonPath Codegen", "0.0.0")]
-                      [CompilerGenerated]
-                      """);
+        sb.AppendLine("{compileGeneratedAttributes}");
         sb.AppendLine("[Flags]");
         sb.AppendLine($"public enum {f.name.Identifier}");
         sb.AppendLine("{");
@@ -240,16 +262,14 @@ public class IonCSharpGenerator(string @namespace)
     private static string GenerateTypedef(IonType type)
     {
         var underlying = ResolveTypeName(type.fields.FirstOrDefault()?.type);
-        return $"public readonly record struct {type.name.Identifier}({underlying} Value);";
+        return "{compileGeneratedAttributes}" +
+               $"public readonly record struct {type.name.Identifier}({underlying} Value);";
     }
 
     private static string GenerateMessage(IonType type)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("""
-                      [GeneratedCode("IonPath Codegen", "0.0.0")]
-                      [CompilerGenerated]
-                      """);
+        sb.AppendLine("{compileGeneratedAttributes}");
         sb.Append($"public sealed record {type.name.Identifier}(");
         sb.Append(string.Join(", ", type.fields.Select(f =>
             $"{GenerateField(f)}")));
@@ -260,11 +280,8 @@ public class IonCSharpGenerator(string @namespace)
     private static string GenerateService(IonService service)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("""
-                      [GeneratedCode("IonPath Codegen", "0.0.0")]
-                      [CompilerGenerated]
-                      """);
-        sb.AppendLine($"public interface I{service.name.Identifier}");
+        sb.AppendLine("{compileGeneratedAttributes}");
+        sb.AppendLine($"public interface I{service.name.Identifier} : IIonService");
         sb.AppendLine("{");
 
         foreach (var method in service.methods)
@@ -305,16 +322,17 @@ public class IonCSharpGenerator(string @namespace)
 
     public string FormatterTemplate =>
         """
-        [GeneratedCode("IonPath Codegen", "0.0.0")]
-        [CompilerGenerated]
+        {compileGeneratedAttributes}
         public sealed class Ion_{ionType}_Formatter : IonFormatter<{ionType}>
         {
+            {compileGeneratedAttributes}
             public {ionType} Read(CborReader reader)
             {
                 {fieldReadExpression}
                 return new({ctorFields});
             }
-
+            
+            {compileGeneratedAttributes}
             public void Write(CborWriter writer, {ionType} value)
             {
                 {fieldWriteExpression}
@@ -341,8 +359,25 @@ public class IonCSharpGenerator(string @namespace)
             sb.AppendLine(GenerateServiceExecutor(ionService));
             sb.AppendLine();
         }
-        return sb.ToString();
+        return sb.ToCompiledString();
     }
+
+    public string GenerateAllServiceClientImpl(IEnumerable<IonService> service)
+    {
+        var sb = new StringBuilder();
+
+        sb.AppendLine(FileHeader());
+        sb.AppendLine();
+
+        foreach (var ionService in service)
+        {
+            sb.AppendLine(GenerateServiceClientImpl(ionService));
+            sb.AppendLine();
+        }
+        return sb.ToCompiledString();
+    }
+
+
 
     public string GenerateAllFormatters(IEnumerable<IonType> types)
     {
@@ -359,20 +394,21 @@ public class IonCSharpGenerator(string @namespace)
             sb.AppendLine();
         }
 
-        return sb.ToString();
+        return sb.ToCompiledString();
     }
 
     private static string GenerateFormatterForEnum(IonEnum @enum) =>
         """
-            [GeneratedCode("IonPath Codegen", "0.0.0")]
-            [CompilerGenerated]
+            {compileGeneratedAttributes}
             public sealed class Ion_{ionType}_Formatter : IonFormatter<{ionType}>
             {
+                {compileGeneratedAttributes}
                 public {ionType} Read(CborReader reader)
                 {
                      return ({ionType})({readEnumValue}.Read(reader));
                 }
-
+                
+                {compileGeneratedAttributes}
                 public void Write(CborWriter writer, {ionType} value)
                 {
                     var casted = ({baseTypeName})value;
@@ -386,8 +422,7 @@ public class IonCSharpGenerator(string @namespace)
             .Replace("{writeEnumValue}", $"{FormatterTemplateRef(@enum.baseType)}.Write(writer, casted);");
     private static string GenerateFormatterForFlags(IonFlags @enum) =>
         """
-            [GeneratedCode("IonPath Codegen", "0.0.0")]
-            [CompilerGenerated]
+            {compileGeneratedAttributes}
             public sealed class Ion_{ionType}_Formatter : IonFormatter<{ionType}>
             {
                 public {ionType} Read(CborReader reader)
@@ -450,6 +485,15 @@ public class IonCSharpGenerator(string @namespace)
             _ => $"var __{argument.name.Identifier.ToLowerInvariant()} = {FormatterTemplateRef(argument.type)}.Read(reader);"
         };
 
+
+    private static string GenerateWriteArgument(IonArgument argument) =>
+        argument switch
+        {
+            { type: { IsArray: true } } => GenerateWriteArrayField(argument),
+            { type: { IsMaybe: true } } => GenerateWriteMaybeField(argument),
+            _ => $"{FormatterTemplateRef(argument.type)}.Write(writer, __{argument.name.Identifier.ToLowerInvariant()});"
+        };
+
     private static string GenerateReadArrayField(ITypeWithName field)
     {
         if (field.Type is not IonGenericType { IsArray: true } arrayType)
@@ -464,6 +508,24 @@ public class IonCSharpGenerator(string @namespace)
             throw new InvalidOperationException();
         return
             $"var __{field.Name.Identifier.ToLowerInvariant()} = IonFormatterStorage<{ResolveTypeName(arrayType.TypeArguments[0])}>.ReadMaybe(reader);";
+    }
+
+
+
+    private static string GenerateWriteArrayField(ITypeWithName field)
+    {
+        if (field.Type is not IonGenericType { IsArray: true } arrayType)
+            throw new InvalidOperationException();
+        return
+            $"IonFormatterStorage<{ResolveTypeName(arrayType.TypeArguments[0])}>.WriteArray(writer, __{field.Name.Identifier.ToLowerInvariant()});";
+    }
+
+    private static string GenerateWriteMaybeField(ITypeWithName field)
+    {
+        if (field.Type is not IonGenericType { IsMaybe: true } arrayType)
+            throw new InvalidOperationException();
+        return
+            $"IonFormatterStorage<{ResolveTypeName(arrayType.TypeArguments[0])}>.WriteMaybe(writer, __{field.Name.Identifier.ToLowerInvariant()});";
     }
 
     private static string GenerateWriteReturnValue(IonType returnType) =>
@@ -502,6 +564,9 @@ public class IonCSharpGenerator(string @namespace)
 
     private static string GenerateReadArguments(IonMethod method)
         => string.Join($"\n{new string(' ', 8)}", method.arguments.Select(GenerateReadArgument));
+
+    private static string GenerateWriteArguments(IonMethod method)
+        => string.Join($"\n{new string(' ', 8)}", method.arguments.Select(GenerateWriteArgument));
 
     private static string GenerateWriteArrayField(IonField field)
     {
@@ -550,15 +615,13 @@ public class IonCSharpGenerator(string @namespace)
 
     private static readonly string ServiceExecutorTemplate =
         """
-        [GeneratedCode("IonPath Codegen", "0.0.0")]
-        [CompilerGenerated]
+        {compileGeneratedAttributes}
         public sealed class Ion_{serviceTypename}_ServiceExecutor(AsyncServiceScope scope) : IServiceExecutorRouter
         {
             {body}
             
             
-            [GeneratedCode("IonPath Codegen", "0.0.0")]
-            [CompilerGenerated]
+            {compileGeneratedAttributes}
             public Task RouteExecuteAsync(string methodName, CborReader reader, CborWriter writer)
             {
                 {serviceRouteBranch}
@@ -570,8 +633,7 @@ public class IonCSharpGenerator(string @namespace)
 
     private static readonly string ServiceExecutorMethodNoReturnTemplate =
         """
-            [GeneratedCode("IonPath Codegen", "0.0.0")]
-            [CompilerGenerated]
+            {compileGeneratedAttributes}
             public async Task {methodName}_Execute(CborReader reader, CborWriter writer)
             {
                 var service = scope.ServiceProvider.GetRequiredService<I{serviceTypename}>();
@@ -594,8 +656,7 @@ public class IonCSharpGenerator(string @namespace)
 
     private static readonly string ServiceExecutorMethodWithReturnTemplate =
         """
-            [GeneratedCode("IonPath Codegen", "0.0.0")]
-            [CompilerGenerated]
+            {compileGeneratedAttributes}
             public async Task {methodName}_Execute(CborReader reader, CborWriter writer)
             {
                 var service = scope.ServiceProvider.GetRequiredService<I{serviceTypename}>();
@@ -675,4 +736,123 @@ public class IonCSharpGenerator(string @namespace)
             .Replace("{body}", methodsBuilder.ToString())
             .Replace("{serviceRouteBranch}", branchBuilder.ToString());
     }
+
+
+
+    private static readonly string ServiceClientImplTemplate =
+        """
+        {compileGeneratedAttributes}
+        public sealed class Ion_{serviceTypename}_ClientImpl(IonClientContext context) : I{serviceTypename}
+        {
+            {MethodInfoDecls}
+
+            {body}
+        }
+        """;
+
+    private static readonly string ServiceClientMethodInfoDecl =
+        """
+            private static readonly Lazy<MethodInfo> {methodName}_Ref = new(() =>
+                typeof(I{serviceTypename}).GetMethod(nameof({methodName}), BindingFlags.Public | BindingFlags.Instance)!);
+        """;
+
+    private static readonly string ServiceClientMethodDecl =
+        """
+            {compileGeneratedAttributes}
+            public async Task<{methodReturnType}> {methodName}({args})
+            {
+                var req = new IonRequest(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
+            
+                var writer = new CborWriter();
+                
+                const int argsSize = {argSize};
+            
+                writer.WriteStartArray(argsSize);
+                
+                {argsWrite}
+                
+                writer.WriteEndArray();
+            
+                return await req.CallAsync<{methodReturnType}>(writer.Encode());
+            }
+        """;
+
+    private static readonly string ServiceClientMethodDeclNoReturn =
+        """
+            {compileGeneratedAttributes}
+            public async Task {methodName}({args})
+            {
+                var req = new IonRequest(context, typeof({serviceTypename}), {methodName}_Ref.Value);
+
+                var writer = new CborWriter();
+                
+                const int argsSize = {argSize};
+
+                writer.WriteStartArray(argsSize);
+                
+                {argsWrite}
+                
+                writer.WriteEndArray();
+
+                await req.CallAsync(writer.Encode());
+            }
+        """;
+
+    private string GenerateServiceClientImpl(IonService service)
+    {
+        var methodsBuilder = new StringBuilder();
+        var methodInfoDecl = new StringBuilder();
+        var serviceTypename = service.name.Identifier;
+        var builder = ServiceClientImplTemplate;
+
+        methodInfoDecl.AppendLine();
+        methodsBuilder.AppendLine();
+
+        foreach (var method in service.methods)
+        {
+            if (method.IsStreamable)
+                continue;
+
+            var methodName = method.name.Identifier;
+            var argSize = method.arguments.Count;
+
+            var writeArgsExpression = GenerateWriteArguments(method);
+
+            var methodArgs = string.Join(", ", method.arguments.Select(GenerateClientMethodArgument));
+
+            var template = method.returnType.IsVoid
+                ? ServiceClientMethodDeclNoReturn
+                : ServiceClientMethodDecl;
+
+            var templateMethod =
+                template
+                    .Replace("{serviceTypename}", serviceTypename)
+                    .Replace("{methodName}", methodName)
+                    .Replace("{argSize}", argSize.ToString())
+                    .Replace("{argsWrite}", writeArgsExpression)
+                    .Replace("{args}", methodArgs);
+
+            if (!method.returnType.IsVoid)
+                templateMethod = templateMethod
+                    .Replace("{methodReturnType}", UnwrapType(method.returnType));
+
+            methodsBuilder.AppendLine(templateMethod);
+
+
+            var methodInfoDeclaration = 
+                ServiceClientMethodInfoDecl
+                    .Replace("{methodName}", methodName)
+                    .Replace("{serviceTypename}", serviceTypename);
+
+
+            methodInfoDecl.AppendLine(methodInfoDeclaration);
+        }
+
+        return builder
+            .Replace("{MethodInfoDecls}", methodInfoDecl.ToString())
+            .Replace("{body}", methodsBuilder.ToString())
+            .Replace("{serviceTypename}", serviceTypename);
+
+        static string GenerateClientMethodArgument(IonArgument field) => $"{UnwrapType(field.type)} __{field.name.Identifier.ToLowerInvariant()}";
+}
 }

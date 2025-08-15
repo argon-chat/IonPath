@@ -28,16 +28,3 @@ public sealed class IonDescriptorStorage(IServiceProvider serviceProvider, IOpti
     }
 }
 
-public static class IonExecutorMetadataStorage
-{
-    public static readonly Dictionary<string, Type> Types = new();
-    public static void Add<T>(string typeName) where T : IServiceExecutorRouter 
-        => Types.Add(typeName, typeof(T));
-
-    public static IServiceExecutorRouter Take(string serviceName, AsyncServiceScope scope)
-    {
-        if (Types.TryGetValue(serviceName, out var type))
-            return (IServiceExecutorRouter)Activator.CreateInstance(type, scope)!;
-        throw new InvalidOperationException();
-    }
-}
