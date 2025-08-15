@@ -1,0 +1,13 @@
+service VectorMathInteraction(leftOperand: Vector) {
+    Abs(): Vector;
+    Add(rightOperand: Vector): Vector;
+    AndNot(rightOperand: Vector): Vector;
+    Clamp(min: Vector, max: Vector): Vector;
+}
+
+
+msg Vector {
+    x: f4;
+    y: f4;
+    z: f4;
+}

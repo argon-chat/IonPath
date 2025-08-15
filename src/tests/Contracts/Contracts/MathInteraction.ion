@@ -1,0 +1,7 @@
+service MathInteraction(leftOperand: i4) {
+    Add(rightOperand: i4): i4;
+    Mul(rightOperand: i4): i4;
+    Sub(rightOperand: i4): i4;
+    Div(rightOperand: i4): i4;
+    Pow(rightOperand: i4): i4;
+}

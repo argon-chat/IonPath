@@ -1,0 +1,12 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>TestContracts</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\ion.runtime.client\ion.runtime.client.csproj" />
+    <ProjectReference Include="..\..\ion.runtime.network\ion.runtime.network.csproj" />
+  </ItemGroup>
+</Project>
