@@ -1,44 +1,110 @@
 ﻿namespace ion.runtime.client;
 
+using Microsoft.Extensions.DependencyInjection;
 using network;
 using System.Diagnostics;
 using System.Formats.Cbor;
 using System.Net.Http.Headers;
+using System.Reflection;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
-public static class IonClient
+public class IonClient
 {
+    private readonly IonClientContext _context;
+
+    private IonClient(IonClientContext context) => _context = context;
+
+    public static IonClient Create(string endpoint, HttpClientHandler? httpHandle) 
+        => new(new IonClientContext(new HttpClient(httpHandle ?? new HttpClientHandler())
+        {
+            BaseAddress = new Uri(endpoint)
+        }));
+
+    public static IonClient Create(HttpClient client)
+        => new(new IonClientContext(client));
+
+    public IonClient WithInterceptor<T>() where T : IIonInterceptor, new()
+    {
+        _context.Use(Activator.CreateInstance<T>());
+        return this;
+    }
+
+    public IonClient WithInterceptor<T>(T interceptor) where T : IIonInterceptor
+    {
+        _context.Use(interceptor);
+        return this;
+    }
+
+    public T ForService<T>(AsyncServiceScope scope) where T : IIonService => IonExecutorMetadataStorage.TakeClient<T>(scope, _context);
 }
 
-public class IonRequest(HttpClient client, string endpoint, string interfaceName, string methodName)
+public interface IFooBarService : IIonService
 {
-    public static string IonContentType = "application/ion; charset=binary; ver=1";
-    private readonly List<IIonInterceptor> interceptors = new();
+    Task<int> GetIntFuck(string s);
+}
+public sealed class FooBarServiceImpl(IonClientContext context) : IFooBarService
+{
+    private static readonly Lazy<MethodInfo> GetIntFuck_Ref = new(() =>
+        typeof(IFooBarService).GetMethod(nameof(GetIntFuck), BindingFlags.Public | BindingFlags.Instance)!);
 
-    public IonRequest Use(IIonInterceptor interceptor)
+    public async Task<int> GetIntFuck(string s)
+    {
+        var req = new IonRequest(context, typeof(IFooBarService), GetIntFuck_Ref.Value);
+
+        var writer = new CborWriter();
+
+        const int argsSize = 4;
+
+        writer.WriteStartArray(argsSize);
+
+        IonFormatterStorage<string>.Write(writer, s);
+
+        writer.WriteEndArray();
+
+        return await req.CallAsync<int>(writer.Encode());
+    }
+}
+
+
+
+public class IonClientContext(HttpClient client)
+{
+    private readonly List<IIonInterceptor> interceptors = [];
+
+    public IonClientContext Use(IIonInterceptor interceptor)
     {
         interceptors.Add(interceptor);
         return this;
     }
-    public IonRequest Use(params IIonInterceptor[] args)
+    public IonClientContext Use(params IIonInterceptor[] args)
     {
         interceptors.AddRange(args);
         return this;
     }
 
-    public async Task<TResponse> CallAsync<TRequest, TResponse>(
-        TRequest request,
+    public HttpClient HttpClient => client;
+
+    public IReadOnlyList<IIonInterceptor> Interceptors => interceptors;
+}
+
+
+
+public class IonRequest(IonClientContext context, Type interfaceName, MethodInfo methodName)
+{
+    public static string IonContentType = "application/ion";
+    
+    public async Task<TResponse> CallAsync<TResponse>(
+        ReadOnlyMemory<byte> payload,
         CancellationToken ct = default)
     {
-        var writer = new CborWriter();
-        IonFormatterStorage<TRequest>.Write(writer, request);
-        var payload = writer.Encode();
+        var httpClient = context.HttpClient;
 
-        var ctx = new IonCallContext(client, endpoint, interfaceName, methodName, typeof(TRequest), typeof(TResponse), payload);
+        var ctx = new IonCallContext(httpClient, interfaceName, methodName, typeof(TResponse), payload);
 
         var next = TerminalAsync;
-        for (var i = interceptors.Count - 1; i >= 0; i--)
+        for (var i = context.Interceptors.Count - 1; i >= 0; i--)
         {
-            var interceptor = interceptors[i];
+            var interceptor = context.Interceptors[i];
             var currentNext = next;
             next = (c, token) => interceptor.InvokeAsync(c, currentNext, token);
         }
@@ -50,9 +116,9 @@ public class IonRequest(HttpClient client, string endpoint, string interfaceName
 
         async Task TerminalAsync(IonCallContext c, CancellationToken token)
         {
-            c.HttpRequest ??= new HttpRequestMessage(HttpMethod.Post, $"{c.Endpoint.TrimEnd('/')}/ion/{c.InterfaceName}/{c.MethodName}")
+            c.HttpRequest ??= new HttpRequestMessage(HttpMethod.Post, $"/ion/{c.InterfaceName.Name}/{c.MethodName.Name}")
             {
-                Content = new ByteArrayContent(c.RequestPayload)
+                Content = new ReadOnlyMemoryContent(c.RequestPayload)
                 {
                     Headers = { ContentType = new MediaTypeHeaderValue(IonContentType) }
                 }
@@ -66,8 +132,15 @@ public class IonRequest(HttpClient client, string endpoint, string interfaceName
 
             if (!c.HttpResponse.IsSuccessStatusCode)
             {
-                var error = IonFormatterStorage<IonProtocolError>.Read(new CborReader(respBytes));
-                throw new IonRequestException(error);
+                try
+                {
+                    var error = IonFormatterStorage<IonProtocolError>.Read(new CborReader(respBytes));
+                    throw new IonRequestException(error);
+                }
+                catch (Exception)
+                {
+                    throw new IonRequestException(IonProtocolError.PROTOCOL_ERROR(c.HttpResponse.ReasonPhrase ?? c.HttpResponse.StatusCode.ToString()));
+                }
             }
         }
     }
@@ -83,23 +156,19 @@ public interface IIonInterceptor
 
 public sealed class IonCallContext(
     HttpClient client,
-    string endpoint,
-    string iface,
-    string method,
-    Type req,
+    Type iface,
+    MethodInfo method,
     Type resp,
-    byte[] requestPayload)
+    ReadOnlyMemory<byte> requestPayload)
 {
     public HttpClient Client { get; } = client;
-    public string Endpoint { get; } = endpoint;
-    public string InterfaceName { get; } = iface;
-    public string MethodName { get; } = method;
+    public Type InterfaceName { get; } = iface;
+    public MethodInfo MethodName { get; } = method;
 
-    public Type RequestType { get; } = req;
     public Type ResponseType { get; } = resp;
 
     /// <summary>Сериализованное тело запроса (CBOR). Интерцептор может заменить/перезаписать.</summary>
-    public byte[] RequestPayload { get; set; } = requestPayload;
+    public ReadOnlyMemory<byte> RequestPayload { get; set; } = requestPayload;
 
     /// <summary>Сериализованное тело ответа (CBOR).</summary>
     public byte[]? ResponsePayload { get; set; }
