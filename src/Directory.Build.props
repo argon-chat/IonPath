@@ -29,7 +29,7 @@
         </PackageReference>
     </ItemGroup>
 	<ItemGroup>
-		<None Include="..\..\extensions\ionpath-toolkit\images\icon-128.png">
+		<None Include="$(SolutionDir)extensions\ionpath-toolkit\images\icon-128.png">
 			<Pack>True</Pack>
 			<PackagePath>\</PackagePath>
 		</None>

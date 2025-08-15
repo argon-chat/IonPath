@@ -3,6 +3,11 @@
     <File Path="src/Directory.Build.props" />
     <File Path="GitVersion.yml" />
   </Folder>
+  <Folder Name="/TestProjects/">
+    <Project Path="src/tests/Contracts/TestContracts.csproj" />
+    <Project Path="src/tests/IonTestClientServer/IonTestClientServer.csproj" Id="a5143628-44b2-433c-8b8b-02bcee0a65bf" />
+    <Project Path="src/tests/TestServer/TestServer.csproj" Id="462ca741-f3bc-4314-9c20-4a358d658f05" />
+  </Folder>
   <Project Path="src/ion.compiler.runtime/ion.compiler.runtime.csproj" />
   <Project Path="src/ion.compiler/ion.compiler.csproj" Id="85aacc21-6a08-47c6-88ef-c230fb783190" />
   <Project Path="src/ion.runtime.client/ion.runtime.client.csproj" Id="0ab4ba14-7e23-41a0-8583-9d3ace585344" />
