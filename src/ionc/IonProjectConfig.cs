@@ -12,7 +12,7 @@ public sealed record IonProjectConfig
 
     [JsonPropertyName("features")] public required HashSet<IonGeneratorFeature> Features { get; init; }
 
-    [JsonPropertyName("generators")] public required List<IonGeneratorConfig> Generators { get; init; }
+    [JsonPropertyName("generators")] public List<IonGeneratorConfig> Generators { get; init; } = new List<IonGeneratorConfig>();
 
     public static string ToJson(IonProjectConfig config, bool indented = true)
         => JsonSerializer.Serialize(config, JsonOptions(indented));
@@ -31,9 +31,7 @@ public sealed record IonProjectConfig
             WriteIndented = writeIndented,
             PropertyNameCaseInsensitive = false,
             AllowTrailingCommas = false,
-#if NET7_0_OR_GREATER
-            UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow, // additionalProperties=false
-#endif
+            UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow
         };
 
         options.Converters.Add(new FeatureJsonConverter());

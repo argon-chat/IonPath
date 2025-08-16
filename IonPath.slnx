@@ -10,6 +10,7 @@
   </Folder>
   <Project Path="src/ion.compiler.runtime/ion.compiler.runtime.csproj" />
   <Project Path="src/ion.compiler/ion.compiler.csproj" Id="85aacc21-6a08-47c6-88ef-c230fb783190" />
+  <Project Path="src/ion.lock/ion.runtime.locking.csproj" />
   <Project Path="src/ion.runtime.client/ion.runtime.client.csproj" Id="0ab4ba14-7e23-41a0-8583-9d3ace585344" />
   <Project Path="src/ion.runtime.network/ion.runtime.network.csproj" Id="2ee5e3fa-1394-4bf6-8daf-09afc10d8848" />
   <Project Path="src/ion.runtime/ion.runtime.csproj" Id="1cc9f360-5b38-4f43-90d8-c1ae22b1acd5" />

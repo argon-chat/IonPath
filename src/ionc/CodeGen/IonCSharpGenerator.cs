@@ -77,10 +77,10 @@ public class IonCSharpGenerator(string @namespace)
     private static readonly string ModuleInitTemplate =
         """
         {compileGeneratedAttributes}
-        public static class IonProjectFormatterStorageModuleInit
+        internal static class IonProjectFormatterStorageModuleInit
         {
             [ModuleInitializer]
-            public static void Init()
+            internal static void Init()
             {
                 {formatters}
             }

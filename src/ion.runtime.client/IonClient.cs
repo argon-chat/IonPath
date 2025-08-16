@@ -139,7 +139,7 @@ public class IonRequest(IonClientContext context, Type interfaceName, MethodInfo
                 }
                 catch (Exception)
                 {
-                    throw new IonRequestException(IonProtocolError.PROTOCOL_ERROR(c.HttpResponse.ReasonPhrase ?? c.HttpResponse.StatusCode.ToString()));
+                    throw new IonRequestException(IonProtocolError.UPSTREAM_ERROR(c.HttpResponse.ReasonPhrase ?? c.HttpResponse.StatusCode.ToString()));
                 }
             }
         }
