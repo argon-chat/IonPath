@@ -60,7 +60,8 @@ public sealed class IonModule
             new("scalar", []),
             new("tag", [new IonType("i4", ["scalar", "builtin"], [], true)]),
             new("deadline", [new IonType("i4", ["scalar", "builtin"], [], true)]),
-            new("deprecated", [])
+            new("deprecated", []),
+            new("internal", [])
         ],
         Imports = [],
         Services = []
