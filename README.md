@@ -7,6 +7,10 @@ IonPath enables seamless code generation, efficient serialization, and clear sep
 
 ---
 
+
+> [!CAUTION]
+> Currently not suitable for use in a production environment, API and language have not yet been stabilized.
+
 ## 🔧 What is IonPath?
 
 IonPath consists of two parts:
