@@ -1,0 +1,6 @@
+{
+    "name": "ion.runtime.locking",
+    "features": [
+        "std"
+    ]
+}

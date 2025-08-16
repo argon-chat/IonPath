@@ -1,0 +1,46 @@
+@internal
+msg LockFileEntity {
+    lockFormat: i4;
+    schemaId: string;
+    toolVersion: string;
+    bodySha256: u1[];
+    types: TypeEntity[];
+}
+
+@internal
+msg TypeEntity {
+    name: string;
+    fields: FieldEntity[];
+    attrs: AttributeEntity[];
+}
+
+@internal
+msg FieldEntity {
+    name: string;
+    type: string;
+    isOptional: bool;
+    pos: i4;
+    attrs: AttributeEntity[];
+}
+
+@internal
+msg MethodEntity {
+    name: string;
+    returnType: string;
+    pos: i4;
+    args: ArgumentEntity[];
+    attrs: AttributeEntity[];
+}
+
+@internal
+msg ArgumentEntity {
+    name: string;
+    type: string;
+    attrs: AttributeEntity[];
+}
+
+@internal
+msg AttributeEntity {
+    name: string;
+    args: string[];
+}
