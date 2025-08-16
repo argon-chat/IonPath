@@ -27,6 +27,8 @@ IonPath consists of two parts:
 - **Compact CBOR encoding** — fast, binary, schema-based
 - **Streaming & RPC ready** — defines request/response/event shapes
 - **Designed for low-latency systems** — suitable for WebSocket, QUIC, or custom transports
+- **Strong static typing & contract lockfiles** — lockfiles pin contract versions across services/CI, guarantee consistency, and prevent accidental breaking changes
+- **Backward-compatible evolution** — strict compatibility checks; the protocol safely ignores unknown fields when a consumer uses an older contract version
 
 ---
 
