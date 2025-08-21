@@ -63,6 +63,18 @@ public record IonMethodSyntax(
     List<IonArgumentSyntax> arguments,
     IonUnderlyingTypeSyntax? returnType) : IonSyntaxMember;
 
+public record IonUnionSyntax(
+    IonIdentifier unionName,
+    List<IonArgumentSyntax> baseFields,
+    List<IonUnionTypeCaseSyntax> cases) : IonSyntaxMember;
+
+public record IonUnionTypeCaseSyntax(
+    IonUnderlyingTypeSyntax caseName,
+    List<IonArgumentSyntax> arguments,
+    bool IsTypeRef) : IonSyntaxMember
+{
+}
+
 public record IonServiceSyntax(IonIdentifier serviceName, List<IonArgumentSyntax> BaseArguments, List<IonMethodSyntax> Methods)
     : IonSyntaxMember;
 
@@ -84,6 +96,7 @@ public record IonFileSyntax(
     List<IonMessageSyntax> messageSyntaxes,
     List<IonTypedefSyntax> typedefSyntaxes,
     List<IonServiceSyntax> serviceSyntaxes,
+    List<IonUnionSyntax> unionSyntaxes,
     List<IonSyntaxMember>? allTokens = null)
 {
     public List<IonSyntaxMember> Definitions => attributeDefSyntaxes
@@ -92,6 +105,7 @@ public record IonFileSyntax(
         .Concat(enumSyntaxes)
         .Concat(messageSyntaxes)
         .Concat(serviceSyntaxes)
+        .Concat(unionSyntaxes)
         .Concat(typedefSyntaxes).ToList();
 }
 

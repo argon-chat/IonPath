@@ -16,6 +16,7 @@ public partial class IonParser
             Try(Enums.OfType<IonSyntaxMember>()),
             Try(Typedef.OfType<IonSyntaxMember>()),
             Try(AttributeDef.OfType<IonSyntaxMember>()),
+            Try(Union.OfType<IonSyntaxMember>()),
             InvalidBlockFallback
         ).Before(SkipWhitespaces);
 
@@ -48,6 +49,7 @@ public partial class IonParser
             result.Value.OfType<IonMessageSyntax>().ToList(),
             result.Value.OfType<IonTypedefSyntax>().ToList(),
             result.Value.OfType<IonServiceSyntax>().ToList(),
+            result.Value.OfType<IonUnionSyntax>().ToList(),
             result.Value.ToList()
         );
     }
@@ -68,6 +70,7 @@ public partial class IonParser
             result.Value.OfType<IonMessageSyntax>().ToList(),
             result.Value.OfType<IonTypedefSyntax>().ToList(),
             result.Value.OfType<IonServiceSyntax>().ToList(),
+            result.Value.OfType<IonUnionSyntax>().ToList(),
             result.Value.ToList()
         );
     }

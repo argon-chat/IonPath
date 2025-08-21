@@ -20,7 +20,7 @@ public partial class IonParser
             Identifier.Labelled("identifier"),
             ArgList.Labelled("args"),
             Char(':').Before(SkipWhitespaces).Then(Type.Labelled("returnType")).Optional(),
-            Char(';').Before(SkipWhitespaces)
+            Char(';').Or(Char(',')).Before(SkipWhitespaces)
         );
 
     private static Parser<char, IonMethodModifiers> MethodModifierOne =>
