@@ -75,9 +75,12 @@ public class CompileCommand : AsyncCommand<CompileOptions>
         var graph = new IonDependencyGraph(ctx.ProcessedModules.Concat(ctx.GlobalModules));
         graph.Generate();
 
+        var generator = CreateGenerator(IonGeneratorPlatform.Dotnet, project.Name);
+
+
         if (!options.NoEmitCsProj)
-            IonCSharpGenerator.GenerateCsproj(project.Name, projectFile.Directory!.File($"{project.Name}.csproj"));
-        File.WriteAllText(projectFile.Directory!.File($"globals.cs").FullName, IonCSharpGenerator.GenerateGlobalTypes());
+            generator.GenerateProjectFile(project.Name, projectFile.Directory!.File($"{project.Name}.csproj"));
+        File.WriteAllText(projectFile.Directory!.File($"globals.cs").FullName, generator.GenerateGlobalTypes());
 
         GenerateDefault(currentDir, project, ctx, projectFile.Directory!.Directory("models"));
 
@@ -86,9 +89,9 @@ public class CompileCommand : AsyncCommand<CompileOptions>
             if (generatorCfg.Platform is IonGeneratorPlatform.Go or IonGeneratorPlatform.Rust)
                 throw new NotSupportedException($"Platform {generatorCfg.Platform} currently is not support");
             if (generatorCfg.Type == IonGeneratorType.Server)
-                GenerateServer(currentDir, project, ctx, generatorCfg);
+                GenerateServer(generator, currentDir, ctx, generatorCfg);
             if (generatorCfg.Type == IonGeneratorType.Client)
-                GenerateClient(currentDir, project, ctx, generatorCfg);
+                GenerateClient(generator, currentDir, ctx, generatorCfg);
         }
 
         AnsiConsole.MarkupLine($"\n:sparkles: Done in [lime]{watch.Elapsed.TotalSeconds:00.000}s[/].");
@@ -120,13 +123,12 @@ public class CompileCommand : AsyncCommand<CompileOptions>
                 project.Generators.Any(x => x.Type == IonGeneratorType.Server)));
     }
 
-    private void GenerateClient(DirectoryInfo currentDir, IonProjectConfig project, CompilationContext context, IonGeneratorConfig generatorCfg)
+    private void GenerateClient(IIonCodeGenerator generator, DirectoryInfo currentDir, CompilationContext context, IonGeneratorConfig generatorCfg)
     {
         var outputDirectory = currentDir.Combine(generatorCfg.Output);
 
         if (!outputDirectory.Exists)
             outputDirectory.Create();
-        var generator = new IonCSharpGenerator(project.Name);
 
         foreach (var module in context.ProcessedModules)
         {
@@ -134,10 +136,9 @@ public class CompileCommand : AsyncCommand<CompileOptions>
         }
     }
 
-    private void GenerateServer(DirectoryInfo currentDir, IonProjectConfig project, CompilationContext context, IonGeneratorConfig generatorCfg)
+    private void GenerateServer(IIonCodeGenerator generator, DirectoryInfo currentDir, CompilationContext context, IonGeneratorConfig generatorCfg)
     {
         var outputDirectory = currentDir.Combine(generatorCfg.Output);
-        var generator = new IonCSharpGenerator(project.Name);
         if (!outputDirectory.Exists)
             outputDirectory.Create();
 
@@ -147,6 +148,14 @@ public class CompileCommand : AsyncCommand<CompileOptions>
         }
     }
 
+
+    private static IIonCodeGenerator CreateGenerator(IonGeneratorPlatform platform, string @namespace)
+    {
+        if (platform is IonGeneratorPlatform.Dotnet)
+            return new IonCSharpGenerator(@namespace);
+
+        throw new InvalidOperationException();
+    }
 
     private static void Checks(CompilationContext ctx)
     {
