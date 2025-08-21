@@ -19,12 +19,21 @@ public sealed record Vector(f4 x, f4 y, f4 z);
 
 
 [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+public sealed record VectorOfVector(Vector x, Vector y, Vector z);
+
+
+[GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+public sealed record VectorOfVectorOfVector(VectorOfVector z, VectorOfVector w);
+
+
+[GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
 public interface IVectorMathInteraction : IIonService
 {
     Task<Vector> Abs(Vector leftOperand);
     Task<Vector> Add(Vector leftOperand, Vector rightOperand);
     Task<Vector> AndNot(Vector leftOperand, Vector rightOperand);
     Task<Vector> Clamp(Vector leftOperand, Vector min, Vector max);
+    Task<VectorOfVectorOfVector> Do(Vector leftOperand);
 }
 
 

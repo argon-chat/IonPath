@@ -19,18 +19,70 @@ public sealed class Ion_Vector_Formatter : IonFormatter<Vector>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public Vector Read(CborReader reader)
     {
+        reader.ReadStartArray();
         var __x = IonFormatterStorage<f4>.Read(reader);
         var __y = IonFormatterStorage<f4>.Read(reader);
         var __z = IonFormatterStorage<f4>.Read(reader);
+        reader.ReadEndArray();
         return new(__x, __y, __z);
     }
     
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public void Write(CborWriter writer, Vector value)
     {
+        writer.WriteStartArray(null);
         IonFormatterStorage<f4>.Write(writer, value.x);
         IonFormatterStorage<f4>.Write(writer, value.y);
         IonFormatterStorage<f4>.Write(writer, value.z);
+        writer.WriteEndArray();
+    }
+}
+
+[GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+public sealed class Ion_VectorOfVector_Formatter : IonFormatter<VectorOfVector>
+{
+    [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+    public VectorOfVector Read(CborReader reader)
+    {
+        reader.ReadStartArray();
+        var __x = IonFormatterStorage<Vector>.Read(reader);
+        var __y = IonFormatterStorage<Vector>.Read(reader);
+        var __z = IonFormatterStorage<Vector>.Read(reader);
+        reader.ReadEndArray();
+        return new(__x, __y, __z);
+    }
+    
+    [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+    public void Write(CborWriter writer, VectorOfVector value)
+    {
+        writer.WriteStartArray(null);
+        IonFormatterStorage<Vector>.Write(writer, value.x);
+        IonFormatterStorage<Vector>.Write(writer, value.y);
+        IonFormatterStorage<Vector>.Write(writer, value.z);
+        writer.WriteEndArray();
+    }
+}
+
+[GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+public sealed class Ion_VectorOfVectorOfVector_Formatter : IonFormatter<VectorOfVectorOfVector>
+{
+    [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+    public VectorOfVectorOfVector Read(CborReader reader)
+    {
+        reader.ReadStartArray();
+        var __z = IonFormatterStorage<VectorOfVector>.Read(reader);
+        var __w = IonFormatterStorage<VectorOfVector>.Read(reader);
+        reader.ReadEndArray();
+        return new(__z, __w);
+    }
+    
+    [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+    public void Write(CborWriter writer, VectorOfVectorOfVector value)
+    {
+        writer.WriteStartArray(null);
+        IonFormatterStorage<VectorOfVector>.Write(writer, value.z);
+        IonFormatterStorage<VectorOfVector>.Write(writer, value.w);
+        writer.WriteEndArray();
     }
 }
 

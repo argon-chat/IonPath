@@ -7,11 +7,18 @@ builder.Services.AddIonProtocol(i =>
 {
     i.AddService<IMathInteraction, MathImpl>();
     i.AddService<IVectorMathInteraction, VectorImpl>();
+    i.AddService<IRandomStreamInteraction, RandomStreamImpl>();
 });
 
 var app = builder.Build();
 
+app.Use(async (context, func) =>
+{
+    await func(context);
+});
+
 app.MapRpcEndpoints();
+app.UseWebSockets();
 
 app.Run();
 
@@ -39,4 +46,24 @@ public class VectorImpl : IVectorMathInteraction
 
     public Task<Vector> AndNot(Vector leftOperand, Vector rightOperand) => Task.FromResult(leftOperand);
     public Task<Vector> Clamp(Vector leftOperand, Vector min, Vector max) => Task.FromResult(leftOperand);
+    public Task<VectorOfVectorOfVector> Do(Vector leftOperand) =>
+        Task.FromResult(new VectorOfVectorOfVector(new VectorOfVector(leftOperand, leftOperand, leftOperand),
+            new VectorOfVector(leftOperand, leftOperand, leftOperand)));
+}
+
+public class RandomStreamImpl : IRandomStreamInteraction
+{
+    public async IAsyncEnumerable<Int32> Integer(int seed)
+    {
+        for (var i = 0; i < 10; i++)
+        {
+            yield return await YieldInt();
+        }
+    }
+
+    private static async Task<int> YieldInt()
+    {
+        await Task.Delay(200);
+        return Random.Shared.Next();
+    }
 }

@@ -124,3 +124,31 @@ public sealed class Ion_MathInteraction_ClientImpl(IonClientContext context) : I
 
 }
 
+[GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+public sealed class Ion_RandomStreamInteraction_ClientImpl(IonClientContext context) : IRandomStreamInteraction
+{
+    
+    private static readonly Lazy<MethodInfo> Integer_Ref = new(() =>
+        typeof(IRandomStreamInteraction).GetMethod(nameof(Integer), BindingFlags.Public | BindingFlags.Instance)!);
+
+
+    
+    public IAsyncEnumerable<i4> Integer(i4 __seed)
+    {
+        var ws = new IonWsClient(context, typeof(IRandomStreamInteraction), Integer_Ref.Value);
+    
+        var writer = new CborWriter();
+
+        const int argsSize = 1;
+        
+        writer.WriteStartArray(argsSize);
+        
+        IonFormatterStorage<i4>.Write(writer, __seed);
+        
+        writer.WriteEndArray();
+    
+        return ws.CallServerStreamingAsync<i4>(writer.Encode());
+    }
+
+}
+

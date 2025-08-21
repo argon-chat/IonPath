@@ -25,3 +25,10 @@ public interface IMathInteraction : IIonService
 }
 
 
+[GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+public interface IRandomStreamInteraction : IIonService
+{
+    IAsyncEnumerable<i4> Integer(i4 seed);
+}
+
+
