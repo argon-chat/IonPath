@@ -20,6 +20,7 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
         var messages = CompileMessages(file);
         var services = CompileService(file);
         var flags = CompileFlags(file);
+        var unions = CompileUnions(file);
 
         return new IonModule()
         {
@@ -29,7 +30,7 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
             Syntax = file,
             Imports = [],
             Features = [],
-            Definitions = messages.Concat(typeDefs).Concat(enums).Concat(flags).ToList(),
+            Definitions = messages.Concat(typeDefs).Concat(enums).Concat(flags).Concat(unions).ToList(),
             Services = services
         };
     }
@@ -58,18 +59,20 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
         return attributes.AsReadOnly();
     }
 
-    public IEnumerable<IonFlags> CompileFlags(IonFileSyntax file) 
+    public IEnumerable<IonFlags> CompileFlags(IonFileSyntax file)
         => file.flagsSyntaxes.Select(CompileFlags);
 
     public IonFlags CompileFlags(IonFlagsSyntax syntax)
     {
+
+
         var constants = new List<IonConstant>();
         var usedNames = new HashSet<string>(StringComparer.Ordinal);
         var usedBits = new List<BigInteger>();
 
         var baseType = context.ResolveBuiltinType(syntax.Type)!;
 
-        BigInteger nextValue = 1;
+        BigInteger nextValue = 0;
 
         foreach (var (name, valueExpression) in syntax.Entries)
         {
@@ -295,6 +298,11 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
             let fieldType = context.ResolveTypeFor(syntax, field.Type, true)
             select new IonField(field.Name, fieldType!, CompileAttributeInstancesFor(field))).ToList().AsReadOnly();
 
+    private IReadOnlyList<IonField> PrependFields(IonUnionSyntax union, IonUnionTypeCaseSyntax syntax) =>
+        (from field in union.baseFields.Concat(syntax.arguments)
+            let fieldType = context.ResolveTypeFor(syntax, field.type, true)
+            select new IonField(field.argName, fieldType!, CompileAttributeInstancesFor(field))).ToList().AsReadOnly();
+
     private IReadOnlyList<IonMethod> PrependMethods(IonServiceSyntax syntax) =>
         (from methodSyntax in syntax.Methods
             let combinedArgs = syntax.BaseArguments.Concat(methodSyntax.arguments).ToList()
@@ -306,13 +314,38 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
                 ? context.ResolveTypeFor(methodSyntax, methodSyntax.returnType, true) ?? context.Void
                 : context.Void
             let methodAttributes = CompileAttributeInstancesFor(methodSyntax)
-            select new IonMethod(methodSyntax.methodName, parsedArgs, returnType, methodSyntax.modifiers, methodAttributes)).ToList();
+            select new IonMethod(methodSyntax.methodName, parsedArgs, returnType, methodSyntax.modifiers,
+                methodAttributes)).ToList();
 
     public List<IonService> CompileService(IonFileSyntax file)
         => file.serviceSyntaxes.Select(serviceSyntax =>
             new IonService(serviceSyntax.serviceName, PrependMethods(serviceSyntax),
                 CompileAttributeInstancesFor(serviceSyntax))).ToList();
 
+
+    public List<IonUnion> CompileUnions(IonFileSyntax file) =>
+        file.unionSyntaxes
+            .Select(x => new IonUnion(x.unionName, PrependUnionTypes(x),
+                [..CompileAttributeInstancesFor(x), new IonUnionAttributeInstance()])).ToList();
+
+    private List<IonType> PrependUnionTypes(IonUnionSyntax syntax)
+    {
+        if (syntax.baseFields.Count != 0 && syntax.cases.Any(x => x.IsTypeRef))
+        {
+            var ec = syntax.cases.First(x => x.IsTypeRef);
+            Error(IonAnalyticCodes.ION0012_UnionSharedFieldsWithReferencedCase, syntax, syntax.unionName.Identifier,
+                ec.caseName.Name.Identifier);
+            return [];
+        }
+
+        return syntax.cases.Select(x => PrependUnionType(syntax, x)).ToList();
+    }
+
+    private IonType PrependUnionType(IonUnionSyntax syntax, IonUnionTypeCaseSyntax @case) =>
+        @case.IsTypeRef
+            ? context.ResolveTypeFor(syntax, @case.caseName, true)!
+            : new IonType(@case.caseName.Name,
+                [..CompileAttributeInstancesFor(@case), new IonUnionCaseAttributeInstance()], PrependFields(syntax, @case));
 
     private IReadOnlyList<IonAttributeInstance> CompileAttributeInstancesFor(IonSyntaxMember member)
     {
