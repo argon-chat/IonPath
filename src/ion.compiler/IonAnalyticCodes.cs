@@ -25,6 +25,9 @@ public static class IonAnalyticCodes
         = new("ION0010", "Invalid statement.");
     public static readonly IonAnalyticCode ION0011_EnumBitwiseOverlap
         = new("ION0011", "Enum item '{0}' in '{1}' has overlapping bits with '{2}', both resolve to value '{3}'");
+
+    public static readonly IonAnalyticCode ION0012_UnionSharedFieldsWithReferencedCase
+        = new("ION0012", "Union '{0}' declares shared fields but contains case '{1}' that is a type reference; unions with referenced cases cannot declare shared fields.");
 }
 
 public record IonAnalyticCode(string code, string template);
