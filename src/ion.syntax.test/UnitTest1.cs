@@ -238,4 +238,49 @@ public class Tests
 
         That(result.Success);
     }
+
+    [Test]
+    public void Test15()
+    {
+        const string input = """
+                             union FooUnion {
+                                Case1(id: i4),
+                                Case2(name: string)
+                             }
+                             """;
+
+        var result = IonParser.Union.Parse(input);
+
+        That(result.Success);
+    }
+
+    [Test]
+    public void Test16()
+    {
+        const string input = """
+                             union FooUnion(token: string) {
+                                Case1(id: i4),
+                                Case2(name: string)
+                             }
+                             """;
+
+        var result = IonParser.Union.Parse(input);
+
+        That(result.Success);
+    }
+
+    [Test]
+    public void Test17()
+    {
+        const string input = """
+                             union FooUnion(token: string) {
+                                Case1,
+                                Case2(name: string)
+                             }
+                             """;
+
+        var result = IonParser.Union.Parse(input);
+
+        That(result.Success);
+    }
 }

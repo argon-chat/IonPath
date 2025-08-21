@@ -26,5 +26,17 @@ public sealed class IonDescriptorStorage(IServiceProvider serviceProvider, IOpti
             return null;
         }
     }
+
+    public IServiceStreamExecutorRouter? GetStreamRouter(string serviceName, AsyncServiceScope scope)
+    {
+        try
+        {
+            return IonExecutorMetadataStorage.TakeStream(serviceName, scope);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
 }
 
