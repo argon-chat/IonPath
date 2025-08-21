@@ -1,11 +1,16 @@
 ﻿namespace ion.runtime.network;
 
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Components.Routing;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System;
+using System.Buffers;
 using System.Formats.Cbor;
+using System.Net.WebSockets;
+using System.Reflection.PortableExecutable;
 
 public static class RpcEndpoints
 {
@@ -37,10 +42,92 @@ public static class RpcEndpoints
     public static string RequestSignatureHeader = "X-Sig-Key";
     public static string IonStatusCode = "X-Ion-Status";
 
+    static class IonWs
+    {
+        public const byte OPCODE_DATA = 0x00;
+        public const byte OPCODE_END = 0x01;
+        public const byte OPCODE_ERROR = 0x02;
+    }
+
 
     public static IEndpointRouteBuilder MapRpcEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/ion/{interfaceName}/{methodName}", async (string interfaceName, string methodName,
+        app.Map("/ion/{interfaceName}/{methodName}.ws", async (HttpContext http,
+            string interfaceName,
+            string methodName,
+            IonDescriptorStorage store,
+            IServiceProvider provider,
+            ILoggerFactory lf,
+            CancellationToken ct) =>
+        {
+            var log = lf.CreateLogger("RPC.WS");
+
+            if (!http.WebSockets.IsWebSocketRequest)
+            {
+                http.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await http.Response.WriteAsync("WebSocket expected", ct);
+                return;
+            }
+            await using var scope = provider.CreateAsyncScope();
+            var router = store.GetStreamRouter(interfaceName, scope);
+            using var ws = await http.WebSockets.AcceptWebSocketAsync();
+
+            if (router is null)
+            {
+                await CloseErrorGracefully(ws, $"Method {methodName} is not server-streaming", ct);
+                return;
+            }
+
+            var invokeMsg = await ReceiveSetupMessageAsync(ws, ct);
+
+            if (invokeMsg.messageType == WebSocketMessageType.Close)
+            {
+                await CloseGracefully(ws, ct);
+                return;
+            }
+
+            if (invokeMsg.messageType != WebSocketMessageType.Binary || invokeMsg.payload.Length == 0)
+            {
+                await CloseErrorGracefully(ws, "Expected binary INVOKE frame", ct);
+                return;
+            }
+            
+            var reader = new CborReader(invokeMsg.payload);
+
+            try
+            {
+                await foreach (var encodedItem in router.StreamRouteExecuteAsync(methodName, reader, ct))
+                {
+                    await SendOpFrameAsync(ws, IonWs.OPCODE_DATA, encodedItem, ct);
+                }
+
+                await SendOpFrameAsync(ws, IonWs.OPCODE_END, ReadOnlyMemory<byte>.Empty, ct);
+                await CloseGracefully(ws, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "cancel", CancellationToken.None); } 
+                catch { }
+            }
+            catch (Exception ex)
+            {
+                log.LogError(ex, "WS handler failed");
+                try
+                {
+                    var err = IonProtocolError.INTERNAL_ERROR(ex.ToString());
+                    var writer = new CborWriter();
+                    IonFormatterStorage<IonProtocolError>.Write(writer, err);
+                    var bytes = writer.Encode();
+                    await SendOpFrameAsync(ws, IonWs.OPCODE_ERROR, bytes, ct);
+                }
+                catch { }
+                try { await ws.CloseAsync(WebSocketCloseStatus.InternalServerError, "exception", CancellationToken.None); } 
+                catch { }
+            }
+        });
+
+        
+        app.MapPost("/ion/{interfaceName}/{methodName}.unary", async (string interfaceName, string methodName,
                 HttpRequest req, HttpResponse resp, 
                 IonDescriptorStorage store,
                 IServiceProvider provider,
@@ -81,6 +168,8 @@ public static class RpcEndpoints
                     await router.RouteExecuteAsync(methodName, reader, writer);
                     resp.StatusCode = StatusCodes.Status200OK;
                     resp.ContentType = IonContentType;
+
+                    var res = Convert.ToBase64String(writer.Encode());
                     await resp.BodyWriter.WriteAsync(writer.Encode(), ct);
                     await resp.BodyWriter.FlushAsync(ct);
                 }
@@ -114,5 +203,78 @@ public static class RpcEndpoints
         {
             await resp.BodyWriter.WriteAsync(memory);
         });
+    }
+    private static async Task SendOpFrameAsync(
+        WebSocket ws,
+        byte opcode,
+        ReadOnlyMemory<byte> cborPayload,
+        CancellationToken ct)
+    {
+        if (cborPayload.IsEmpty)
+        {
+            var one = new byte[] { opcode };
+            await ws.SendAsync(one, WebSocketMessageType.Binary, true, ct).ConfigureAwait(false);
+            return;
+        }
+
+        var rented = ArrayPool<byte>.Shared.Rent(cborPayload.Length + 1);
+        try
+        {
+            rented[0] = opcode;
+            cborPayload.Span.CopyTo(rented.AsSpan(1));
+            await ws.SendAsync(new ArraySegment<byte>(rented, 0, cborPayload.Length + 1), WebSocketMessageType.Binary, true, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+        }
+    }
+
+
+    private static async Task<(WebSocketMessageType messageType, ReadOnlyMemory<byte> payload)> ReceiveSetupMessageAsync(
+       WebSocket ws,
+       CancellationToken ct)
+    {
+        var buffer = ArrayPool<byte>.Shared.Rent(64 * 1024);
+        try
+        {
+            using var ms = new MemoryStream(64 * 1024);
+            WebSocketReceiveResult result;
+            do
+            {
+                var seg = new ArraySegment<byte>(buffer);
+                result = await ws.ReceiveAsync(seg, ct).ConfigureAwait(false);
+                if (result.MessageType == WebSocketMessageType.Close)
+                    return (result.MessageType, ReadOnlyMemory<byte>.Empty);
+                if (result.Count > 0)
+                    ms.Write(buffer, 0, result.Count);
+            } while (!result.EndOfMessage);
+
+            return (WebSocketMessageType.Binary, new ReadOnlyMemory<byte>(ms.GetBuffer(), 0, (int)ms.Length));
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    private static async Task CloseGracefully(WebSocket ws, CancellationToken ct)
+    {
+        if (ws.State == WebSocketState.CloseReceived)
+            try { await ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "ack", ct).ConfigureAwait(false); }
+            catch { }
+        else if (ws.State == WebSocketState.Open)
+            try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", ct).ConfigureAwait(false); } 
+            catch { }
+    }
+
+    private static async Task CloseErrorGracefully(WebSocket ws, string error, CancellationToken ct)
+    {
+        if (ws.State == WebSocketState.CloseReceived)
+            try { await ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, error, ct).ConfigureAwait(false); }
+            catch { }
+        else if (ws.State == WebSocketState.Open)
+            try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, error, ct).ConfigureAwait(false); }
+            catch { }
     }
 }
