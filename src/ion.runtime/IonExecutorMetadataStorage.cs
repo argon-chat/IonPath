@@ -7,8 +7,13 @@ public static class IonExecutorMetadataStorage
 {
     public static readonly Dictionary<string, Type> ServerTypes = new();
     public static readonly Dictionary<string, Type> ClientTypes = new();
-    public static void AddExecutor<T>(string typeName) where T : IServiceExecutorRouter
-        => ServerTypes.Add(typeName, typeof(T));
+    public static void AddExecutor<T>(string typeName)
+    {
+        if (typeof(T).GetInterfaces().Contains(typeof(IServiceExecutorRouter)) || typeof(T).GetInterfaces().Contains(typeof(IServiceStreamExecutorRouter)))
+            ServerTypes.Add(typeName, typeof(T));
+        else
+            throw new InvalidOperationException();
+    }
 
     public static void AddClient<T>(string typeName) where T : IIonService
         => ClientTypes.Add(typeName, typeof(T));
@@ -17,6 +22,12 @@ public static class IonExecutorMetadataStorage
     {
         if (ServerTypes.TryGetValue(serviceName, out var type))
             return (IServiceExecutorRouter)Activator.CreateInstance(type, scope)!;
+        throw new InvalidOperationException();
+    }
+    public static IServiceStreamExecutorRouter TakeStream(string serviceName, AsyncServiceScope scope)
+    {
+        if (ServerTypes.TryGetValue(serviceName, out var type))
+            return (IServiceStreamExecutorRouter)Activator.CreateInstance(type, scope)!;
         throw new InvalidOperationException();
     }
 
