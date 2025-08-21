@@ -181,6 +181,10 @@ public record IonType(
     public bool IsVoid => this.name.Identifier.Equals("void");
     public bool IsMaybe => this.name.Identifier.Equals("Maybe");
     public bool IsArray => this.name.Identifier.Equals("Array");
+
+    public bool IsUnion => attributes.Any(x => x.IsUnion);
+    public bool IsUnionCase => attributes.Any(x => x.IsUnionCase);
+
 }
 
 public record IonArray(IonType type, int rank, bool IsFixedSize) : IonType(type.name, type.attributes, type.fields, type.isTypedef);
@@ -220,3 +224,8 @@ public sealed record IonUnresolvedType(
     IonSyntaxMember syntax,
     bool isTypedef = false)
     : IonType(name, attributes, [], isTypedef);
+
+public record IonUnion(IonIdentifier name,
+    List<IonType> types,
+    IReadOnlyList<IonAttributeInstance> attributes)
+    : IonType(name, attributes, [], false);
