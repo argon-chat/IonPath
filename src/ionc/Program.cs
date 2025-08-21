@@ -10,8 +10,6 @@ using Microsoft.Extensions.Logging;
 using Spectre.Console.Cli;
 
 
-IonLockFile.Write(new IonLockFile(), new FileInfo("./ion.lock"));
-
 Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
     Console.OutputEncoding = Encoding.Unicode;

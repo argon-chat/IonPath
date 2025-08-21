@@ -3,7 +3,7 @@
     "ionc": {
       "commandName": "Project",
       "commandLineArgs": "compile -n",
-      "workingDirectory": "Z:\\!argon\\IonPath\\src\\ion.lock"
+      "workingDirectory": "Z:\\!argon\\IonPath\\src\\tests\\Contracts"
     }
   }
 }
