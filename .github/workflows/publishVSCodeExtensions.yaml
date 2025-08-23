@@ -1,0 +1,47 @@
+name: Publish VSCode Extension
+
+on:
+  push:
+    paths:
+      - "extensions/ionpath-toolkit/**"
+  workflow_dispatch: {}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: extensions/ionpath-toolkit
+        run: npm install
+
+      - name: Increment build version
+        id: bump
+        working-directory: extensions/ionpath-toolkit
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          NEW_VERSION=$(echo $VERSION | awk -F. -v OFS=. '{$NF++;print}')
+          echo "New version: $NEW_VERSION"
+          npm version $NEW_VERSION --no-git-tag-version
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Commit updated package.json
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "ci: bump version to ${{ steps.bump.outputs.new_version }}"
+          file_pattern: extensions/ionpath-toolkit/package.json
+
+      - name: Install vsce
+        run: npm install -g @vscode/vsce
+
+      - name: Publish extension
+        working-directory: extensions/ionpath-toolkit
+        run: vsce publish --pat ${{ secrets.VSCE_TOKEN }}

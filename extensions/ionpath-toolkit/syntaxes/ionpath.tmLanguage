@@ -62,6 +62,10 @@
 			<key>include</key>
 			<string>#enumMembers</string>
 		</dict>
+		<dict>
+			<key>include</key>
+			<string>#unionCases</string>
+		</dict>
 	</array>
 	<key>repository</key>
 	<dict>
@@ -115,7 +119,7 @@
 			<array>
 				<dict>
 					<key>match</key>
-					<string>\b(?&lt;=\b(msg|enum|flags|service|typedef)\s+)\w+\b</string>
+					<string>\b(?&lt;=\b(msg|enum|flags|service|typedef|union)\s+)\w+\b</string>
 					<key>name</key>
 					<string>entity.name.type.ionpath</string>
 				</dict>
@@ -175,7 +179,7 @@
 			<array>
 				<dict>
 					<key>match</key>
-					<string>\b(msg|flags|enum|typedef|service|attribute|#use|#feature)\b</string>
+					<string>\b(msg|flags|enum|typedef|service|union|attribute|#use|#feature)\b</string>
 					<key>name</key>
 					<string>keyword.control.ionpath</string>
 				</dict>
@@ -260,6 +264,18 @@
 					<string>\b(i8|i16|i32|i64|u8|u16|u32|u64|f32|f64|bool|string|guid)\b</string>
 					<key>name</key>
 					<string>storage.type.ionpath</string>
+				</dict>
+			</array>
+		</dict>
+		<key>unionCases</key>
+		<dict>
+			<key>patterns</key>
+			<array>
+				<dict>
+					<key>match</key>
+					<string>(?&lt;=\{\s*|\s+)([A-Z][a-zA-Z0-9_]*)(?=\s*\()</string>
+					<key>name</key>
+					<string>entity.name.unioncase.ionpath</string>
 				</dict>
 			</array>
 		</dict>
