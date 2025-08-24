@@ -156,7 +156,12 @@ public class CompileCommand : AsyncCommand<CompileOptions>
               IonMaybe,
             
               IIonService,
-              IIonUnion
+              IIonUnion,
+              
+              ServiceExecutor,
+              IonClientContext,
+              IonRequest,
+              IonWsClient
             } from "./cbor";
             
             type guid = Guid;
@@ -191,13 +196,7 @@ public class CompileCommand : AsyncCommand<CompileOptions>
         foreach (var module in context.ProcessedModules) 
             fileBuilder.AppendLine(generator.GenerateServices(module));
 
-        //foreach (var module in context.ProcessedModules)
-        //{
-        //    fileBuilder.AppendLine(generator.GenerateAllFormatters(module.Definitions));
-        //}
-
-
-
+        fileBuilder.AppendLine(generator.GenerateAllServiceClientImpl(context.ProcessedModules.SelectMany(x => x.Services).DistinctBy(x => x.name.Identifier)));
 
         File.WriteAllText(outputFile.FullName, fileBuilder.ToString());
     }

@@ -366,7 +366,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
     }
 
     private static string GenerateReadMaybeField(ITypeWithName field)
-    {
+    {   
         if (field.Type is not IonGenericType { IsMaybe: true } arrayType)
             throw new InvalidOperationException();
         return
@@ -379,7 +379,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         if (field.Type is not IonGenericType { IsArray: true } arrayType)
             throw new InvalidOperationException();
         return
-            $"IonFormatterStorage.writeArray<{ResolveTypeName(arrayType.TypeArguments[0])}>(writer, {field.Name.Identifier});";
+            $"IonFormatterStorage.writeArray<{ResolveTypeName(arrayType.TypeArguments[0])}>(writer, {field.Name.Identifier}, '{ResolveTypeName(arrayType.TypeArguments[0])}');";
     }
 
     private static string GenerateWriteMaybeField(ITypeWithName field)
@@ -387,7 +387,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         if (field.Type is not IonGenericType { IsMaybe: true } arrayType)
             throw new InvalidOperationException();
         return
-            $"IonFormatterStorage.writeMaybe<{ResolveTypeName(arrayType.TypeArguments[0])}>(writer, {field.Name.Identifier});";
+            $"IonFormatterStorage.writeMaybe<{ResolveTypeName(arrayType.TypeArguments[0])}>(writer, {field.Name.Identifier}, '{ResolveTypeName(arrayType.TypeArguments[0])}');";
     }
 
     private static string GenerateWriteReturnValue(IonType returnType) =>
@@ -409,7 +409,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
     {
         if (returnType is not IonGenericType { IsMaybe: true } maybeType)
             throw new InvalidOperationException();
-        return $"{FormatterTemplateRef(maybeType.TypeArguments.First())}.writeMaybe(writer, result, '{FormatterTemplateRef(arrayType.TypeArguments.First())}');";
+        return $"{FormatterTemplateRef(maybeType.TypeArguments.First())}.writeMaybe(writer, result, '{FormatterTemplateRef(maybeType.TypeArguments.First())}');";
     }
 
     private static string GenerateWriteField(IonType type)
@@ -436,7 +436,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         if (field.type is not IonGenericType { IsArray: true } arrayType)
             throw new InvalidOperationException();
         return
-            $"IonFormatterStorage.writeArray<{ResolveTypeName(arrayType.TypeArguments[0])}>(writer, value.{field.name.Identifier});";
+            $"IonFormatterStorage.writeArray<{ResolveTypeName(arrayType.TypeArguments[0])}>(writer, value.{field.name.Identifier}, '{ResolveTypeName(arrayType.TypeArguments[0])}');";
     }
 
     private static string GenerateWriteMaybeField(IonField field)
@@ -444,7 +444,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         if (field.type is not IonGenericType { IsMaybe: true } arrayType)
             throw new InvalidOperationException();
         return
-            $"IonFormatterStorage.writeMaybe<{ResolveTypeName(arrayType.TypeArguments[0])}>(writer, value.{field.name.Identifier});";
+            $"IonFormatterStorage.writeMaybe<{ResolveTypeName(arrayType.TypeArguments[0])}>(writer, value.{field.name.Identifier}, '{ResolveTypeName(arrayType.TypeArguments[0])}');";
     }
 
     private static IReadOnlyList<IonType> TopoSortByDependencies(IReadOnlyList<IonType> types)
@@ -480,81 +480,64 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string ServiceClientImplTemplate =
         """
-        {compileGeneratedAttributes}
-        public sealed class Ion_{serviceTypename}_ClientImpl(IonClientContext context) : I{serviceTypename}
-        {
-            {MethodInfoDecls}
-
+        export class {serviceTypename}_Executor extends ServiceExecutor<I{serviceTypename}> implements I{serviceTypename} {
+            constructor(public ctx: IonClientContext, private signal: AbortSignal) {
+                super();
+            }
+        
             {body}
         }
         """;
 
-    private static readonly string ServiceClientMethodInfoDecl =
-        """
-            private static readonly Lazy<MethodInfo> {methodName}_Ref = new(() =>
-                typeof(I{serviceTypename}).GetMethod(nameof({methodName}), BindingFlags.Public | BindingFlags.Instance)!);
-        """;
-
     private static readonly string ServiceClientMethodDecl =
         """
-            {compileGeneratedAttributes}
-            public async Task<{methodReturnType}> {methodName}({args})
-            {
-                var req = new IonRequest(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
-            
-                var writer = new CborWriter();
+            {methodName}({args}): Promise<{methodReturnType}> {
+                const req = new IonRequest(this.ctx, "I{serviceTypename}", "{methodName}");
+                    
+                const writer = new CborWriter();
                 
-                const int argsSize = {argSize};
-            
-                writer.WriteStartArray(argsSize);
-                
+                writer.writeStartArray({argSize});
+                    
                 {argsWrite}
                 
-                writer.WriteEndArray();
-            
-                return await req.CallAsync<{methodReturnType}>(writer.Encode());
+                writer.writeEndArray();
+                    
+                return req.callAsyncT<{methodReturnType}>("{methodReturnType}", writer.data, this.signal);
             }
         """;
 
     private static readonly string ServiceClientMethodDeclNoReturn =
         """
-            {compileGeneratedAttributes}
-            public async Task {methodName}({args})
-            {
-                var req = new IonRequest(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
-
-                var writer = new CborWriter();
+            {methodName}({args}): Promise<void> {
+                const req = new IonRequest(this.ctx, "I{serviceTypename}", "{methodName}");
+                    
+                const writer = new CborWriter();
                 
-                const int argsSize = {argSize};
-
-                writer.WriteStartArray(argsSize);
-                
+                writer.writeStartArray({argSize});
+                    
                 {argsWrite}
                 
-                writer.WriteEndArray();
-
-                await req.CallAsync(writer.Encode());
+                writer.writeEndArray();
+                    
+                req.callAsync(writer.data, this.signal);
             }
         """;
 
     private static readonly string ServiceClientMethodDeclStream =
         """
-            public IAsyncEnumerable<{methodReturnType}> {methodName}({args})
-            {
-                var ws = new IonWsClient(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
-            
-                var writer = new CborWriter();
+        {methodName}({args}): AsyncIterable<{methodReturnType}> {
+            const ws = new IonWsClient(this.ctx.baseUrl, "I{serviceTypename}", "{methodName}");
         
-                const int argsSize = {argSize};
-                
-                writer.WriteStartArray(argsSize);
-                
-                {argsWrite}
-                
-                writer.WriteEndArray();
+            const writer = new CborWriter();
             
-                return ws.CallServerStreamingAsync<{methodReturnType}>(writer.Encode());
-            }
+            writer.writeStartArray({argSize});
+        
+            {argsWrite}
+            
+            writer.writeEndArray();
+        
+            return ws.callServerStreaming<{methodReturnType}>("{methodReturnType}", writer.data, this.signal);
+        }
         """;
 
     private string GenerateServiceClientImpl(IonService service)
@@ -596,15 +579,6 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
                     .Replace("{methodReturnType}", UnwrapType(method.returnType));
 
             methodsBuilder.AppendLine(templateMethod);
-
-
-            var methodInfoDeclaration =
-                ServiceClientMethodInfoDecl
-                    .Replace("{methodName}", methodName)
-                    .Replace("{serviceTypename}", serviceTypename);
-
-
-            methodInfoDecl.AppendLine(methodInfoDeclaration);
         }
 
         return builder
@@ -613,7 +587,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
             .Replace("{serviceTypename}", serviceTypename);
 
         static string GenerateClientMethodArgument(IonArgument field) =>
-            $"{UnwrapType(field.type)} __{field.name.Identifier}";
+            $"{field.name.Identifier}: {UnwrapType(field.type)}";
     }
 
     private string GenerateUnion(IonUnion union)

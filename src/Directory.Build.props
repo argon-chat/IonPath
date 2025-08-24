@@ -20,6 +20,7 @@
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
 	    <Version>$(GitVersion_SemVer)</Version>
 	    <PackageVersion>$(GitVersion_SemVer)</PackageVersion>
+	    <PackageIcon>icon-128.png</PackageIcon>
     </PropertyGroup>
     <ItemGroup>
         <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All"/>
@@ -27,4 +28,11 @@
 	        <PrivateAssets>All</PrivateAssets>
         </PackageReference>
     </ItemGroup>
+	<ItemGroup>
+		<None Include="$(SolutionDir)extensions\ionpath-toolkit\images\icon-128.png">
+			<Pack>True</Pack>
+			<PackagePath>\</PackagePath>
+		</None>
+	</ItemGroup>
+
 </Project>
