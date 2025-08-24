@@ -12,14 +12,18 @@ public class IonProtocolErrorFormatter : IonFormatter<IonProtocolError>
 {
     public IonProtocolError Read(CborReader reader)
     {
+        reader.ReadStartArray();
         var code = reader.ReadTextString();
         var msg = reader.ReadTextString();
+        reader.ReadEndArray();
         return new(code, msg);
     }
 
     public void Write(CborWriter writer, IonProtocolError value)
     {
+        writer.WriteStartArray(2);
         writer.WriteTextString(value.code);
         writer.WriteTextString(value.msg);
+        writer.WriteEndArray();
     }
 }

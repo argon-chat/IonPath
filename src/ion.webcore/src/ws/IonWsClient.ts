@@ -1,12 +1,6 @@
 import { CborReader } from "../cbor";
 import { IonFormatterStorage } from "../logic/IonFormatter";
-
-type IonProtocolError = { code: number; message: string };
-class IonRequestException extends Error {
-  constructor(public error: IonProtocolError) {
-    super(error.message);
-  }
-}
+import { IonProtocolError, IonRequestException } from "../unary/IonUnaryRequest";
 
 function toWebSocketUrl(httpUrl: string): string {
   const u = new URL(httpUrl);
@@ -90,7 +84,7 @@ export class IonWsClient {
           } catch (ex: any) {
             wss.close();
             throw new IonRequestException({
-              code: -1,
+              code: "-1",
               message: `Invalid WS frame: ${ex.message}`,
             });
           }

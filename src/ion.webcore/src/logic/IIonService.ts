@@ -1,3 +1,1 @@
-export interface IIonService {
-    
-}
+export interface IIonService {}

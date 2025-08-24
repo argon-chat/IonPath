@@ -10,28 +10,19 @@ import { IonFormatterStorage } from "./logic/IonFormatter";
 
 export { IonMaybe, IonArray } from "./logic/IonFormatter";
 
-export interface IIonService {}
+
 export interface IIonUnion<T extends IIonUnion<T>> {}
 
 export { IonFormatterStorage };
 
 export { IonWsClient } from "./ws/IonWsClient";
 export {
-  IonCallContext,
-  IonClientContext,
   IonContentType,
-  IonInterceptor,
-  IonProtocolError,
   IonRequest,
   IonRequestException,
 } from "./unary/IonUnaryRequest";
 
-export interface IServerInteraction extends IIonService
-{
-  GetTestUnit(i: number): AsyncIterator<number>;
-}
+import type { IonCallContext, IonClientContext, IonInterceptor, IonProtocolError } from "./unary/IonUnaryRequest";
 
 
-export class ServiceExecutor<T extends IIonService> {
-
-}
+export { IonCallContext, IonClientContext, IonInterceptor, IonProtocolError }

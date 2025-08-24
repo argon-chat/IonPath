@@ -1,6 +1,6 @@
 {
   "name": "@argon-chat/ion.webcore",
-  "version": "1.0.3",
+  "version": "1.0.6",
   "main": "./dist/ion.webcore.cjs",
   "module": "./dist/ion.webcore.js",
   "devDependencies": {

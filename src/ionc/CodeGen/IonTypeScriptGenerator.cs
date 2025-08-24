@@ -481,63 +481,65 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
     private static readonly string ServiceClientImplTemplate =
         """
         export class {serviceTypename}_Executor extends ServiceExecutor<I{serviceTypename}> implements I{serviceTypename} {
-            constructor(public ctx: IonClientContext, private signal: AbortSignal) {
-                super();
-            }
-        
-            {body}
+          constructor(public ctx: IonClientContext, private signal: AbortSignal) {
+              super();
+          }
+      
+          {body}
         }
+        
+        IonFormatterStorage.registerClientExecutor<I{serviceTypename}>('{serviceTypename}', {serviceTypename}_Executor);
         """;
 
     private static readonly string ServiceClientMethodDecl =
         """
-            {methodName}({args}): Promise<{methodReturnType}> {
-                const req = new IonRequest(this.ctx, "I{serviceTypename}", "{methodName}");
-                    
-                const writer = new CborWriter();
-                
-                writer.writeStartArray({argSize});
-                    
-                {argsWrite}
-                
-                writer.writeEndArray();
-                    
-                return req.callAsyncT<{methodReturnType}>("{methodReturnType}", writer.data, this.signal);
-            }
+          async {methodName}({args}): Promise<{methodReturnType}> {
+            const req = new IonRequest(this.ctx, "I{serviceTypename}", "{methodName}");
+                  
+            const writer = new CborWriter();
+              
+            writer.writeStartArray({argSize});
+                  
+            {argsWrite}
+              
+            writer.writeEndArray();
+                  
+            return await req.callAsyncT<{methodReturnType}>("{methodReturnType}", writer.data, this.signal);
+          }
         """;
 
     private static readonly string ServiceClientMethodDeclNoReturn =
         """
-            {methodName}({args}): Promise<void> {
-                const req = new IonRequest(this.ctx, "I{serviceTypename}", "{methodName}");
-                    
-                const writer = new CborWriter();
-                
-                writer.writeStartArray({argSize});
-                    
-                {argsWrite}
-                
-                writer.writeEndArray();
-                    
-                req.callAsync(writer.data, this.signal);
-            }
+          async {methodName}({args}): Promise<void> {
+            const req = new IonRequest(this.ctx, "I{serviceTypename}", "{methodName}");
+                  
+            const writer = new CborWriter();
+              
+            writer.writeStartArray({argSize});
+                  
+            {argsWrite}
+              
+            writer.writeEndArray();
+                  
+            await req.callAsync(writer.data, this.signal);
+          }
         """;
 
     private static readonly string ServiceClientMethodDeclStream =
         """
-        {methodName}({args}): AsyncIterable<{methodReturnType}> {
+          {methodName}({args}): AsyncIterable<{methodReturnType}> {
             const ws = new IonWsClient(this.ctx.baseUrl, "I{serviceTypename}", "{methodName}");
-        
+            
             const writer = new CborWriter();
             
             writer.writeStartArray({argSize});
-        
+            
             {argsWrite}
             
             writer.writeEndArray();
-        
+            
             return ws.callServerStreaming<{methodReturnType}>("{methodReturnType}", writer.data, this.signal);
-        }
+          }
         """;
 
     private string GenerateServiceClientImpl(IonService service)
@@ -743,5 +745,52 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         """
             else if (value.UnionIndex == {caseIndex})
               IonFormatterStorage.get<{caseTypeName}>("{caseTypeName}").write(writer, value as {caseTypeName});
+        """;
+
+
+
+    public string GenerateClientProxy(List<IonService> services)
+    {
+        var kvBuilder = new StringBuilder();
+        var propsBuilder = new StringBuilder();
+        // {kv} ServerInteraction: IServerInteraction;
+        // {props} if (propKey === "ServerInteraction") return IonFormatterStorage.createExecutor("ServerInteraction", ctx, new AbortSignal());
+
+        foreach (var service in services)
+        {
+            var srvName = service.name.Identifier;
+            kvBuilder.AppendLine($"    {srvName}: I{srvName};");
+            propsBuilder
+                .AppendLine($"        if (propKey === \"{srvName}\") " +
+                            $"return IonFormatterStorage.createExecutor(\"{srvName}\", ctx, new AbortSignal());");
+        }
+
+        return ProxyTemplate
+            .Replace("{kv}", kvBuilder.ToString())
+            .Replace("{props}", propsBuilder.ToString());
+    }
+
+    private static readonly string ProxyTemplate =
+        """
+        export function createClient(endpoint: string, interceptors: IonInterceptor[]) {
+          const ctx = {
+            baseUrl: endpoint,
+            interceptors: interceptors
+          } as IonClientContext;
+
+          return new Proxy(
+            {},
+            {
+              get(_target, propKey) {
+                if (typeof propKey !== "string") return undefined;
+        {props}
+
+                throw new Error(`${propKey} service is not defined`);
+              },
+            }
+          ) as {
+        {kv}
+          };
+        }
         """;
 }

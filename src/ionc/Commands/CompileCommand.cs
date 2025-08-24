@@ -198,6 +198,9 @@ public class CompileCommand : AsyncCommand<CompileOptions>
 
         fileBuilder.AppendLine(generator.GenerateAllServiceClientImpl(context.ProcessedModules.SelectMany(x => x.Services).DistinctBy(x => x.name.Identifier)));
 
+        fileBuilder.AppendLine(generator.GenerateClientProxy(context.ProcessedModules.SelectMany(x => x.Services)
+            .DistinctBy(x => x.name.Identifier).ToList()));
+
         File.WriteAllText(outputFile.FullName, fileBuilder.ToString());
     }
 

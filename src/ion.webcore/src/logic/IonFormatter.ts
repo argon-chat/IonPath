@@ -1,17 +1,40 @@
 import { CborReader, CborWriter } from "../cbor";
 import { CborReaderState } from "../cbor/CborReader";
+import { IonClientContext } from "../unary/IonUnaryRequest";
 import { IIonService } from "./IIonService";
+import { ServiceExecutor } from "./ServiceExecutor";
 
 export interface IonFormatter<T> {
   read(reader: CborReader): T;
   write(writer: CborWriter, value: T): void;
 }
 
+export type ExecutorConstructor<T extends IIonService> =
+  new (ctx: IonClientContext, signal: AbortSignal) => ServiceExecutor<T> & T;
+     
 export class IonFormatterStorage {
   private static map = new Map<string, IonFormatter<any>>();
+  private static mapExecutors = new Map<string, ExecutorConstructor<any>>();
 
   static register<T>(name: string, formatter: IonFormatter<T>) {
     this.map.set(name, formatter);
+  }
+
+  static registerClientExecutor<T extends IIonService>(
+    name: string,
+    executorCtor: ExecutorConstructor<T>
+  ) {
+    this.mapExecutors.set(name, executorCtor);
+  }
+
+  static createExecutor<T extends IIonService>(
+    name: string,
+    ctx: IonClientContext,
+    signal: AbortSignal
+  ): ServiceExecutor<T> & T {
+    const ctor = this.mapExecutors.get(name);
+    if (!ctor) throw new Error(`Executor not registered: ${name}`);
+    return new ctor(ctx, signal);
   }
 
   static get<T>(name: string): IonFormatter<T> {

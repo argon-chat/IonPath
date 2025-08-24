@@ -125,16 +125,32 @@ export interface IonClientContext {
   interceptors: IonInterceptor[];
 }
 
-export type IonProtocolError = { code: number; message: string };
+export type IonProtocolError = { code: string; message: string };
 
 export class IonRequestException extends Error {
   constructor(public error: IonProtocolError) {
     super(error.message);
   }
 }
+IonFormatterStorage.register<IonProtocolError>("IonProtocolError", {
+  read(reader) {
+    reader.readStartArray();
+    const code = reader.readTextString();
+    const msg = reader.readTextString();
+    reader.readEndArray();
+    return { code, message: msg };
+  },
+  write(writer, value) {
+    writer.writeStartArray(2);
+    writer.writeTextString(value.code);
+    writer.writeTextString(value.message);
+    writer.writeEndArray();
+  },
+})
+
 export const IonProtocolError = {
   UPSTREAM_ERROR: (msg: string): IonProtocolError => ({
-    code: -1,
+    code: "-1",
     message: msg,
   }),
 };
