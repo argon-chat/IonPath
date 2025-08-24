@@ -36,13 +36,13 @@ IonPath consists of two parts:
 
 | 📜 Language             | Status | 🛠 Code Generation           | Status | 🌐 Transports & Platforms    | Status |
 |--------------------------|--------|------------------------------|--------|--------------------------|--------|
-| **Core DSL Grammar**     | ✅     | **C# \ Server**              | 🚧     | **HTTP Transport**       | ✅     |
-| **Services**             | ✅     | **C# \ Client**              | 🚧     | **QUIC Transport**       | 🔻     |
-| **POCO**                 | ✅     | **TypeScript \ Client**      | 🚧     | **NATS**                 | 🔻     |
+| **Core DSL Grammar**     | ✅     | **C# \ Server**              | ✅     | **HTTP Transport**       | ✅     |
+| **Services**             | ✅     | **C# \ Client**              | ✅     | **QUIC Transport**       | 🔻     |
+| **POCO**                 | ✅     | **TypeScript \ Client**      | ✅     | **NATS**                 | 🔻     |
 | **IonPath Protocol**     | ✅     | **TypeScript \ Server**      | 🔻     | **WebSocket Streaming**  | 🔻     |
-| **Unions**               | 🔻     | **Rust \ Client**            | 🔻     | **SteamNetworking**      | 🔻     |
+| **Unions**               | ✅     | **Rust \ Client**            | 🔻     | **SteamNetworking**      | 🔻     |
 | **Unary Calls**          | ✅     | **Rust \ Server**            | 🔻     | **Unity Platform**       | 🔻     |
-| **Streaming Calls**      | 🔻     | **Go \ Client**              | 🔻     | **Orleans Platform**     | 🔻     |
+| **Streaming Calls**      | ✅     | **Go \ Client**              | 🔻     | **Orleans Platform**     | 🔻     |
 | **Streaming Hubs**       | 🔻     | **Go \ Server**              | 🔻     |
 |                          |         | **Json Serialization**       | 🔻     |
 |                          |         | **MsgPack Serialization**    | 🔻     |
