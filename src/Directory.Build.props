@@ -11,7 +11,6 @@
 		<Company>Argon Inc LLC</Company>
 		<Copyright>(C) 2024-$(CurrentYear) Argon Inc LLC</Copyright>
 		<PackageProjectUrl>https://github.com/argon-chat/IonPath</PackageProjectUrl>
-		<PackageIcon>icon-128.png</PackageIcon>
 		<RepositoryUrl>https://github.com/argon-chat/IonPath</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>codegen, runtime, ionpath, argonchat, rpc</PackageTags>
@@ -28,11 +27,4 @@
 	        <PrivateAssets>All</PrivateAssets>
         </PackageReference>
     </ItemGroup>
-	<ItemGroup>
-		<None Include="$(SolutionDir)extensions\ionpath-toolkit\images\icon-128.png">
-			<Pack>True</Pack>
-			<PackagePath>\</PackagePath>
-		</None>
-	</ItemGroup>
-	
 </Project>

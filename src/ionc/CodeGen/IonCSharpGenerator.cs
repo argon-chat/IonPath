@@ -1,4 +1,4 @@
-﻿namespace ion.compiler.CodeGen;
+namespace ion.compiler.CodeGen;
 
 using ion.runtime;
 using Microsoft.Build.Construction;
@@ -57,7 +57,7 @@ public interface IIonCodeGenerator
 {
     void GenerateProjectFile(string projectName, FileInfo outputFile);
 
-
+    string GenerateAllFormatters(IEnumerable<IonType> types);
     string GenerateModuleInit(IEnumerable<IonType> types, IReadOnlyList<IonService> services, bool clientToo,
         bool serverToo);
 

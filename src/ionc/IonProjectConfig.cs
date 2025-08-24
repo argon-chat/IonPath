@@ -12,17 +12,15 @@ public sealed record IonProjectConfig
 
     [JsonPropertyName("features")] public required HashSet<IonGeneratorFeature> Features { get; init; }
 
-    [JsonPropertyName("generators")] public List<IonGeneratorConfig> Generators { get; init; } = new List<IonGeneratorConfig>();
+    [JsonPropertyName("generators")]
+    public required Dictionary<IonGeneratorPlatform, IonPlatformConfig> Generators { get; init; }
 
     public static string ToJson(IonProjectConfig config, bool indented = true)
         => JsonSerializer.Serialize(config, JsonOptions(indented));
 
     public static IonProjectConfig FromJson(string json)
-    {
-        var cfg = JsonSerializer.Deserialize<IonProjectConfig>(json, JsonOptions(true))
-                  ?? throw new ValidationException("JSON is null or invalid for ArgonConfig.");
-        return cfg;
-    }
+        => JsonSerializer.Deserialize<IonProjectConfig>(json, JsonOptions())
+           ?? throw new ValidationException("JSON is null or invalid for ArgonConfig.");
 
     public static JsonSerializerOptions JsonOptions(bool writeIndented = true)
     {
@@ -35,24 +33,9 @@ public sealed record IonProjectConfig
         };
 
         options.Converters.Add(new FeatureJsonConverter());
-        options.Converters.Add(new GeneratorTypeJsonConverter());
-        options.Converters.Add(new PlatformJsonConverter());
+        options.Converters.Add(new PlatformKeyConverter());
+        options.Converters.Add(new IonPlatformConfigConverter());
         return options;
-    }
-}
-
-public sealed record IonGeneratorConfig
-{
-    [JsonPropertyName("type")] public required IonGeneratorType Type { get; init; }
-
-    [JsonPropertyName("platform")] public required IonGeneratorPlatform Platform { get; init; }
-
-    [JsonPropertyName("output")] public required string Output { get; init; }
-
-    public void Validate()
-    {
-        if (string.IsNullOrWhiteSpace(Output))
-            throw new ValidationException("Generator 'output' must be a non-empty string.");
     }
 }
 
@@ -64,25 +47,10 @@ public enum IonGeneratorFeature
     Vector
 }
 
-[JsonConverter(typeof(GeneratorTypeJsonConverter))]
-public enum IonGeneratorType
-{
-    Server,
-    Client
-}
-
-[JsonConverter(typeof(PlatformJsonConverter))]
-public enum IonGeneratorPlatform
-{
-    Dotnet,
-    Browser,
-    Rust,
-    Go
-}
-
 internal sealed class FeatureJsonConverter : JsonConverter<IonGeneratorFeature>
 {
-    public override IonGeneratorFeature Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    public override IonGeneratorFeature Read(ref Utf8JsonReader reader, Type typeToConvert,
+        JsonSerializerOptions options)
     {
         if (reader.TokenType != JsonTokenType.String)
             throw new JsonException("Feature must be a string.");
@@ -92,7 +60,7 @@ internal sealed class FeatureJsonConverter : JsonConverter<IonGeneratorFeature>
             "orleans" => IonGeneratorFeature.Orleans,
             "std" => IonGeneratorFeature.Std,
             "vector" => IonGeneratorFeature.Vector,
-            _ => throw new JsonException("Invalid feature. Allowed: 'orleans', 'std', 'vector'.")
+            _ => throw new JsonException("Invalid feature. Allowed: 'orleans','std','vector'.")
         };
     }
 
@@ -109,60 +77,104 @@ internal sealed class FeatureJsonConverter : JsonConverter<IonGeneratorFeature>
     }
 }
 
-internal sealed class GeneratorTypeJsonConverter : JsonConverter<IonGeneratorType>
+[JsonConverter(typeof(PlatformKeyConverter))]
+public enum IonGeneratorPlatform
 {
-    public override IonGeneratorType Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        if (reader.TokenType != JsonTokenType.String)
-            throw new JsonException("Generator.type must be a string.");
-
-        return reader.GetString() switch
-        {
-            "server" => IonGeneratorType.Server,
-            "client" => IonGeneratorType.Client,
-            _ => throw new JsonException("Invalid generator.type. Allowed: 'server', 'client'.")
-        };
-    }
-
-    public override void Write(Utf8JsonWriter writer, IonGeneratorType value, JsonSerializerOptions options)
-    {
-        var s = value switch
-        {
-            IonGeneratorType.Server => "server",
-            IonGeneratorType.Client => "client",
-            _ => throw new JsonException($"Unknown GeneratorType: {value}")
-        };
-        writer.WriteStringValue(s);
-    }
+    Dotnet,
+    Browser,
+    Rust,
+    Go
 }
-
-internal sealed class PlatformJsonConverter : JsonConverter<IonGeneratorPlatform>
+internal sealed class PlatformKeyConverter : JsonConverter<IonGeneratorPlatform>
 {
     public override IonGeneratorPlatform Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        if (reader.TokenType != JsonTokenType.String)
-            throw new JsonException("Generator.platform must be a string.");
-
-        return reader.GetString() switch
-        {
-            "dotnet" => IonGeneratorPlatform.Dotnet,
-            "browser" => IonGeneratorPlatform.Browser,
-            "rust" => IonGeneratorPlatform.Rust,
-            "go" => IonGeneratorPlatform.Go,
-            _ => throw new JsonException("Invalid generator.platform. Allowed: 'dotnet', 'browser', 'rust', 'go'.")
-        };
-    }
+        => reader.TokenType == JsonTokenType.String
+            ? Parse(reader.GetString())
+            : throw new JsonException("Platform key must be a string.");
 
     public override void Write(Utf8JsonWriter writer, IonGeneratorPlatform value, JsonSerializerOptions options)
+        => writer.WriteStringValue(ToString(value));
+
+    public override IonGeneratorPlatform ReadAsPropertyName(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        => Parse(reader.GetString()!);
+
+    public override void WriteAsPropertyName(Utf8JsonWriter writer, IonGeneratorPlatform value, JsonSerializerOptions options)
+        => writer.WritePropertyName(ToString(value));
+
+    private static IonGeneratorPlatform Parse(string s) => s switch
     {
-        var s = value switch
+        "dotnet" => IonGeneratorPlatform.Dotnet,
+        "browser" => IonGeneratorPlatform.Browser,
+        "rust" => IonGeneratorPlatform.Rust,
+        "go" => IonGeneratorPlatform.Go,
+        _ => throw new JsonException($"Invalid platform key '{s}'. Allowed: 'dotnet','browser','rust','go'.")
+    };
+
+    private static string ToString(IonGeneratorPlatform value) => value switch
+    {
+        IonGeneratorPlatform.Dotnet => "dotnet",
+        IonGeneratorPlatform.Browser => "browser",
+        IonGeneratorPlatform.Rust => "rust",
+        IonGeneratorPlatform.Go => "go",
+        _ => throw new JsonException($"Unknown Platform: {value}")
+    };
+}
+
+public abstract record IonPlatformConfig;
+
+public sealed record DotnetGeneratorConfig : IonPlatformConfig
+{
+    [JsonPropertyName("features")] public required HashSet<DotnetFeature> Features { get; init; }
+
+    [JsonPropertyName("outputs")] public required string Outputs { get; init; }
+}
+
+public sealed record BrowserGeneratorConfig : IonPlatformConfig
+{
+    [JsonPropertyName("outputFile")] public required string OutputFile { get; init; }
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum DotnetFeature
+{
+    Server,
+    Client,
+    Models
+}
+internal sealed class IonPlatformConfigConverter : JsonConverter<IonPlatformConfig>
+{
+    public override IonPlatformConfig? Read(ref Utf8JsonReader reader, Type typeToConvert,
+        JsonSerializerOptions options)
+    {
+        using var doc = JsonDocument.ParseValue(ref reader);
+        var root = doc.RootElement;
+
+        if (root.TryGetProperty("outputs", out _))
         {
-            IonGeneratorPlatform.Dotnet => "dotnet",
-            IonGeneratorPlatform.Browser => "browser",
-            IonGeneratorPlatform.Rust => "rust",
-            IonGeneratorPlatform.Go => "go",
-            _ => throw new JsonException($"Unknown Platform: {value}")
-        };
-        writer.WriteStringValue(s);
+            return JsonSerializer.Deserialize<DotnetGeneratorConfig>(root.GetRawText(), options);
+        }
+        else if (root.TryGetProperty("outputFile", out _))
+        {
+            return JsonSerializer.Deserialize<BrowserGeneratorConfig>(root.GetRawText(), options);
+        }
+        else
+        {
+            throw new JsonException("Unknown platform config format.");
+        }
+    }
+
+    public override void Write(Utf8JsonWriter writer, IonPlatformConfig value, JsonSerializerOptions options)
+    {
+        switch (value)
+        {
+            case DotnetGeneratorConfig d:
+                JsonSerializer.Serialize(writer, d, options);
+                break;
+            case BrowserGeneratorConfig b:
+                JsonSerializer.Serialize(writer, b, options);
+                break;
+            default:
+                throw new JsonException($"Unsupported platform config type: {value.GetType().Name}");
+        }
     }
 }
