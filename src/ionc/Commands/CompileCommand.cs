@@ -13,6 +13,10 @@ using System.Text;
 public class CompileOptions : CommandSettings
 {
     [CommandOption("-n|--no-emit-csproj")] public bool NoEmitCsProj { get; set; }
+
+    [CommandOption("-o|--only")]
+    public string OnlyTarget { get; set; }
+
 }
 
 public class CompileCommand : AsyncCommand<CompileOptions>
@@ -93,6 +97,15 @@ public class CompileCommand : AsyncCommand<CompileOptions>
         {
             if (key is IonGeneratorPlatform.Go or IonGeneratorPlatform.Rust)
                 throw new NotSupportedException($"Platform {key} currently is not support");
+
+            if (!string.IsNullOrEmpty(options.OnlyTarget))
+            {
+                if (!options.OnlyTarget.Equals(key.ToString()))
+                {
+                    AnsiConsole.MarkupLine($"Target [lime]{key}[/] skip because onlyTarget selected for [lime]'{options.OnlyTarget}'[/].");
+                    continue;
+                }
+            }
             
 
             if (key is IonGeneratorPlatform.Dotnet)
@@ -161,8 +174,9 @@ public class CompileCommand : AsyncCommand<CompileOptions>
               ServiceExecutor,
               IonClientContext,
               IonRequest,
-              IonWsClient
-            } from "./cbor";
+              IonWsClient,
+              IonInterceptor
+            } from "@argon-chat/ion.webcore";
             
             type guid = Guid;
             type timeonly = TimeOnly;
