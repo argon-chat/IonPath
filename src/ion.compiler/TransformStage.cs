@@ -64,8 +64,6 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
 
     public IonFlags CompileFlags(IonFlagsSyntax syntax)
     {
-
-
         var constants = new List<IonConstant>();
         var usedNames = new HashSet<string>(StringComparer.Ordinal);
         var usedBits = new List<BigInteger>();
@@ -322,10 +320,12 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
             new IonService(serviceSyntax.serviceName, PrependMethods(serviceSyntax),
                 CompileAttributeInstancesFor(serviceSyntax))).ToList();
 
-
     public List<IonUnion> CompileUnions(IonFileSyntax file) =>
         file.unionSyntaxes
             .Select(x => new IonUnion(x.unionName, PrependUnionTypes(x),
+                x.baseFields
+                    .Select(fq => new IonArgument(fq.argName, context.ResolveTypeFor(x, fq.type, true)!, []))
+                    .ToList(),
                 [..CompileAttributeInstancesFor(x), new IonUnionAttributeInstance()])).ToList();
 
     private List<IonType> PrependUnionTypes(IonUnionSyntax syntax)
@@ -345,7 +345,8 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
         @case.IsTypeRef
             ? context.ResolveTypeFor(syntax, @case.caseName, true)!
             : new IonType(@case.caseName.Name,
-                [..CompileAttributeInstancesFor(@case), new IonUnionCaseAttributeInstance()], PrependFields(syntax, @case));
+                [..CompileAttributeInstancesFor(@case), new IonUnionCaseAttributeInstance()],
+                PrependFields(syntax, @case));
 
     private IReadOnlyList<IonAttributeInstance> CompileAttributeInstancesFor(IonSyntaxMember member)
     {
