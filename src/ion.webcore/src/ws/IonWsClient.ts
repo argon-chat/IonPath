@@ -38,9 +38,8 @@ export class IonWsClient {
     requestPayload: Uint8Array,
     signal?: AbortSignal
   ): AsyncGenerator<TResponse, void, unknown> {
-    if (typeof WebSocketStream === "undefined") {
-      throw new Error("WebSocketStream не поддерживается в этом браузере");
-    }
+    if (typeof WebSocketStream === "undefined") 
+      throw new Error("WebSocketStream is not supported in this browser");
 
     const wsUrl = `${toWebSocketUrl(this.baseUrl)}/ion/${this.interfaceName}/${this.methodName}.ws`;
     const wss = new WebSocketStream(wsUrl, { signal });
@@ -53,8 +52,6 @@ export class IonWsClient {
     try {
       while (true) {
         const { value, done } = await reader.read();
-        if (value instanceof String)
-            throw new Error("invalid operation exception, websocket return string type, not a buffer");
         if (!(value instanceof Uint8Array))
             throw new Error("invalid operation exception, websocket return string type, not a buffer");
 
@@ -65,8 +62,6 @@ export class IonWsClient {
         const opcode = msg[0];
         const body = msg.slice(1);
         const cborReader = new CborReader(body);
-
-        
 
         if (opcode === 0x00) {
           yield IonFormatterStorage.get<TResponse>(responseTypename).read(cborReader);
