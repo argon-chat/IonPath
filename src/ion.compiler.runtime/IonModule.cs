@@ -227,5 +227,6 @@ public sealed record IonUnresolvedType(
 
 public record IonUnion(IonIdentifier name,
     List<IonType> types,
+    List<IonArgument> sharedFields,
     IReadOnlyList<IonAttributeInstance> attributes)
     : IonType(name, attributes, [], false);
