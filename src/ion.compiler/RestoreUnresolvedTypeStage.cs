@@ -19,6 +19,7 @@ public class RestoreUnresolvedTypeStage(CompilationContext ctx) : CompilationSta
         foreach (var module in modules)
         {
             var updatedDefinitions = new List<IonType>();
+
             foreach (var def in module.Definitions)
             {
                 var newFields = new List<IonField>();
@@ -26,26 +27,36 @@ public class RestoreUnresolvedTypeStage(CompilationContext ctx) : CompilationSta
 
                 foreach (var field in def.fields)
                 {
-                    var resolvedType = field.type;
-
-                    if (field.type is IonUnresolvedType unresolved)
-                    {
-                        resolvedType = ctx.ResolveType(unresolved);
-
-                        if (resolvedType is null)
-                        {
-                            Error(IonAnalyticCodes.ION0009_UnresolvedTypeReference,
-                                unresolved.name, unresolved.name.Identifier);
-                            continue;
-                        }
-                    }
-
+                    var resolvedType = ResolveTypeDeep(field.type);
                     newFields.Add(field with { type = resolvedType });
-                    referencedTypes.Add(resolvedType);
+                    CollectReferencedTypes(resolvedType, referencedTypes);
                 }
 
-                var updatedType = def with { fields = newFields.AsReadOnly() };
+                var newDef = def;
+
+                if (def is IonUnion union)
+                {
+                    var newUnionSharedFields = new List<IonArgument>();
+                    foreach (var field in union.sharedFields)
+                    {
+                        var resolvedType = ResolveTypeDeep(field.type);
+                        newUnionSharedFields.Add(field with { type = resolvedType });
+                        CollectReferencedTypes(resolvedType, referencedTypes);
+                    }
+
+                    newDef = union with { sharedFields = newUnionSharedFields };
+                }
+
+                if (newDef is IonGenericType { TypeArguments.Count: > 0 } gdef)
+                {
+                    var updatedArgs = gdef.TypeArguments.Select(ResolveTypeDeep).ToList();
+                    newDef = gdef with { TypeArguments = updatedArgs };
+                    foreach (var a in updatedArgs) CollectReferencedTypes(a, referencedTypes);
+                }
+
+                var updatedType = newDef with { fields = newFields.AsReadOnly() };
                 updatedDefinitions.Add(updatedType);
+
                 typeGraph[updatedType] = referencedTypes.Distinct().ToList();
             }
 
@@ -53,9 +64,11 @@ public class RestoreUnresolvedTypeStage(CompilationContext ctx) : CompilationSta
             module.Definitions.AddRange(updatedDefinitions);
 
             var updatedServices = new List<IonService>();
+
             foreach (var service in module.Services)
             {
                 var updatedMethods = new List<IonMethod>();
+
                 foreach (var method in service.methods)
                 {
                     var resolvedArgs = new List<IonArgument>();
@@ -63,49 +76,17 @@ public class RestoreUnresolvedTypeStage(CompilationContext ctx) : CompilationSta
 
                     foreach (var arg in method.arguments)
                     {
-                        var resolvedType = arg.type;
-                        if (arg.type is IonUnresolvedType unresolved)
-                        {
-                            resolvedType = ctx.ResolveType(unresolved);
-                            if (resolvedType is null)
-                            {
-                                Error(IonAnalyticCodes.ION0009_UnresolvedTypeReference,
-                                    unresolved.name, unresolved.name.Identifier);
-                                continue;
-                            }
-                        }
-
+                        var resolvedType = ResolveTypeDeep(arg.type);
                         resolvedArgs.Add(arg with { type = resolvedType });
-                        referencedTypes.Add(resolvedType);
+                        CollectReferencedTypes(resolvedType, referencedTypes);
                     }
 
-                    var returnType = method.returnType;
-                    if (method.returnType is IonUnresolvedType unresolvedReturn)
-                    {
-                        var resolvedReturn = ctx.ResolveType(unresolvedReturn);
-                        if (resolvedReturn is not null)
-                        {
-                            returnType = resolvedReturn;
-                            referencedTypes.Add(resolvedReturn);
-                        }
-                        else
-                        {
-                            Error(IonAnalyticCodes.ION0009_UnresolvedTypeReference,
-                                unresolvedReturn.name, unresolvedReturn.name.Identifier);
-                        }
-                    }
-                    else
-                    {
-                        referencedTypes.Add(returnType);
-                    }
+                    var returnType = ResolveTypeDeep(method.returnType);
+                    CollectReferencedTypes(returnType, referencedTypes);
 
-                    var updatedMethod = method with
-                    {
-                        arguments = resolvedArgs,
-                        returnType = returnType
-                    };
-
+                    var updatedMethod = method with { arguments = resolvedArgs, returnType = returnType };
                     updatedMethods.Add(updatedMethod);
+
                     typeGraph[updatedMethod.returnType] = referencedTypes.Distinct().ToList();
                 }
 
@@ -117,5 +98,66 @@ public class RestoreUnresolvedTypeStage(CompilationContext ctx) : CompilationSta
         }
 
         return modules;
+    }
+
+    private IonType ResolveTypeDeep(IonType type)
+    {
+        switch (type)
+        {
+            case IonUnresolvedType u:
+            {
+                var resolvedBase = ctx.ResolveType(u);
+                if (resolvedBase is null)
+                {
+                    Error(IonAnalyticCodes.ION0009_UnresolvedTypeReference, u.name, u.name.Identifier);
+                    return type; 
+                }
+
+                if (resolvedBase is IonGenericType gdef)
+                {
+                    var unresolvedArgs = gdef.TypeArguments ?? [];
+
+                    if (unresolvedArgs.Count > 0)
+                    {
+                        var resolvedArgs = unresolvedArgs.Select(ResolveTypeDeep).ToList();
+                        var instantiated = gdef with { TypeArguments = resolvedArgs };
+                        return instantiated;
+                    }
+                }
+                return ResolveTypeDeep(resolvedBase);
+            }
+
+            case IonGenericType { TypeArguments.Count: > 0 } g:
+            {
+                var newArgs = g.TypeArguments.Select(ResolveTypeDeep).ToList();
+
+                var changed = !newArgs.SequenceEqual(g.TypeArguments, ReferenceEqualityComparer.Default);
+                return changed ? g with { TypeArguments = newArgs } : g;
+            }
+
+            default:
+                return type;
+        }
+    }
+
+    private static void CollectReferencedTypes(IonType type, List<IonType> acc)
+    {
+        acc.Add(type);
+
+        if (type is not IonGenericType { TypeArguments.Count: > 0 } g) return;
+        foreach (var ta in g.TypeArguments)
+            CollectReferencedTypes(ta, acc);
+    }
+
+    private sealed class ReferenceEqualityComparer : IEqualityComparer<IonBase>
+    {
+        public static readonly ReferenceEqualityComparer Default = new();
+
+        public bool Equals(IonBase? x, IonBase? y)
+        {
+            return ReferenceEquals(x!.name.Identifier, y!.name.Identifier);
+        }
+
+        public int GetHashCode(IonBase obj) => obj.name.GetHashCode();
     }
 }
