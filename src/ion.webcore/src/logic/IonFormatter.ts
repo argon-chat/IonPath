@@ -1,3 +1,4 @@
+import { IonArray } from "../baseTypes";
 import { CborReader, CborWriter } from "../cbor";
 import { CborReaderState } from "../cbor/CborReader";
 import { IonClientContext } from "../unary/IonUnaryRequest";
@@ -77,7 +78,7 @@ export class IonFormatterStorage {
     }
 
     reader.readEndArray();
-    return new IonArray(values);
+    return values;
   }
 
   static writeArray<T>(
@@ -85,14 +86,14 @@ export class IonFormatterStorage {
     array: IonArray<T>,
     typeName: string
   ): void {
-    writer.writeStartArray(array.size);
-    if (array.size === 0) {
+    writer.writeStartArray(array.length);
+    if (array.length === 0) {
       writer.writeEndArray();
       return;
     }
 
-    for (let i = 0; i < array.size; i++) {
-      IonFormatterStorage.get<T>(typeName).write(writer, array.values[i]);
+    for (let i = 0; i < array.length; i++) {
+      IonFormatterStorage.get<T>(typeName).write(writer, array[i]);
     }
 
     writer.writeEndArray();
@@ -122,28 +123,11 @@ export class IonMaybe<T> {
     if (value === null || value === undefined) return IonMaybe.None<T>();
     return IonMaybe.Some(value);
   }
-}
 
-export class IonArray<T> {
-  readonly values: ReadonlyArray<T>;
-
-  constructor(values: T[] | ReadonlyArray<T>) {
-    this.values = Array.from(values);
-  }
-
-  static Empty<T>(): IonArray<T> {
-    return new IonArray<T>([]);
-  }
-
-  get size(): number {
-    return this.values.length;
-  }
-
-  get(index: number): T {
-    return this.values[index];
+  unwrapOrDefault(): T | null {
+    return this.value as T | null;
   }
 }
-
 export interface IS extends IIonService{
     asdasd: Int16Array,
     aqweqwe: 12,
