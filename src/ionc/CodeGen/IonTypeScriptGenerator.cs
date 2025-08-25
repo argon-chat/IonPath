@@ -150,8 +150,9 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 
     private static string UnwrapType(IonType type) => type switch
     {
-        IonGenericType { IsMaybe: true } maybe => $"IonMaybe<{ResolveTypeName(maybe.TypeArguments[0])}>",
-        IonGenericType { IsArray: true } array => $"IonArray<{ResolveTypeName(array.TypeArguments[0])}>",
+        //IonUnresolvedType unresolved => throw new InvalidOperationException("Detected unresolved type"),
+        IonGenericType { IsMaybe: true } maybe => $"IonMaybe<{UnwrapType(maybe.TypeArguments[0])}>",
+        IonGenericType { IsArray: true } array => $"IonArray<{UnwrapType(array.TypeArguments[0])}>",
         IonGenericType generic => GenerateGenericTypeName(generic),
         _ => ResolveTypeName(type)
     };
@@ -592,13 +593,38 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
             $"{field.name.Identifier}: {UnwrapType(field.type)}";
     }
 
+    private string UnwrapUnionName(IonUnion union, IonType caseType)
+    {
+        return caseType.name.Identifier;
+        // TODO
+        return $"U{union.name.Identifier}_{caseType.name.Identifier}";
+    }
+
     private string GenerateUnion(IonUnion union)
     {
         var builder = new StringBuilder();
+        var checkBuilder = new StringBuilder();
+        var absBuilder = new StringBuilder();
+
+        checkBuilder.AppendLine();
+        foreach (var unionCase in union.types)
+        {
+            checkBuilder.AppendLine(Union_InterfaceCheck
+                .Replace("{normalizedCaseTypeName}", UnwrapUnionName(union, unionCase))
+                .Replace("{caseTypeName}", unionCase.name.Identifier)
+            );
+        }
+
+        foreach (var field in union.sharedFields)
+        {
+            absBuilder.AppendLine($"  abstract {field.Name.Identifier}: {UnwrapType(field.type)};");
+        }
 
         var unionInterface =
             Union_InterfaceBody
-                .Replace("{unionName}", union.name.Identifier);
+                .Replace("{unionName}", union.name.Identifier)
+                .Replace("{checks}", checkBuilder.ToString())
+                .Replace("{abstractSharedFields}", absBuilder.ToString());
 
 
         builder.AppendLine();
@@ -655,21 +681,32 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string Union_InterfaceBody =
         """
-        export interface I{unionName} extends IIonUnion<I{unionName}>
+        export abstract class I{unionName} implements IIonUnion<I{unionName}>
         {
-          UnionKey: string;
-          UnionIndex: number;
+          abstract UnionKey: string;
+          abstract UnionIndex: number;
+          
+          {abstractSharedFields}
+          
+          {checks}
         }
         """;
     private static readonly string Union_CaseBody =
         """
-        export class {caseTypeName} implements I{unionName}
+        export class {caseTypeName} extends I{unionName}
         {
-          constructor({fields}) { }
+          constructor({fields}) { super(); }
         
           UnionKey: string = "{caseTypeName}";
           UnionIndex: number = {caseIndex};
         }
+        """;
+
+    private static readonly string Union_InterfaceCheck =
+        """
+          public is{caseTypeName}(): this is {normalizedCaseTypeName} {
+            return this.UnionKey === "{normalizedCaseTypeName}";
+          }
         """;
 
     private string GenerateUnionFormatterFraction(IonUnion union)
