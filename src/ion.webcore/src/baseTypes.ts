@@ -1,5 +1,7 @@
 export type Guid = string;
 
+export type IonArray<T> = T[];
+
 export interface DateOnly {
   year: number;
   month: number;

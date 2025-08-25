@@ -8,9 +8,12 @@ export * from "./cbor";
 
 import { IonFormatterStorage } from "./logic/IonFormatter";
 
-export { IonMaybe, IonArray } from "./logic/IonFormatter";
+export { IonMaybe } from "./logic/IonFormatter";
 
 
+
+export type { IIonService }
+export { ServiceExecutor }
 export interface IIonUnion<T extends IIonUnion<T>> {}
 
 export { IonFormatterStorage };
@@ -23,6 +26,9 @@ export {
 } from "./unary/IonUnaryRequest";
 
 import type { IonCallContext, IonClientContext, IonInterceptor, IonProtocolError } from "./unary/IonUnaryRequest";
+import { IIonService } from "./logic/IIonService";
+import { ServiceExecutor } from "./logic/ServiceExecutor";
+export type { IonArray } from "./baseTypes";
 
 
 export { IonCallContext, IonClientContext, IonInterceptor, IonProtocolError }
