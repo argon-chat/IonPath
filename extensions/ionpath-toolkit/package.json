@@ -2,7 +2,7 @@
   "name": "ionpath-toolkit",
   "displayName": "IonPathToolKit",
   "description": "Toolkit for IonPath Language",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "icon": "images/icon.png",
   "publisher": "ArgonChat",
   "engines": {

@@ -1,0 +1,51 @@
+name: Publish NuGet Packages
+
+on:
+  push:
+    paths:
+      - "src/ion.runtime/**"
+      - "src/ion.runtime.client/**"
+      - "src/ion.runtime.network/**"
+      - "src/ion.compiler/**"
+      - "GitVersion.yml"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Pack ion.runtime
+        run: dotnet pack src/ion.runtime/ion.runtime.csproj -c Release -o ./nupkgs
+
+      - name: Pack ion.runtime.client
+        run: dotnet pack src/ion.runtime.client/ion.runtime.client.csproj -c Release -o ./nupkgs
+
+      - name: Pack ion.runtime.network
+        run: dotnet pack src/ion.runtime.network/ion.runtime.network.csproj -c Release -o ./nupkgs
+
+      - name: Pack ion.compiler (tools)
+        run: dotnet pack src/ion.compiler/ion.compiler.csproj -c Release -o ./nupkgs /p:PackageId=tools
+
+      - name: Push packages
+        run: |
+          for pkg in ./nupkgs/*.nupkg; do
+            echo "Publishing $pkg"
+            dotnet nuget push "$pkg" \
+              --api-key ${{ secrets.NUGET_API_KEY }} \
+              --source https://api.nuget.org/v3/index.json \
+              --skip-duplicate \
+              || true
+          done
