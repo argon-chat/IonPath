@@ -11,5 +11,10 @@
 		<ProjectReference Include="..\ion.compiler.runtime\ion.compiler.runtime.csproj" />
 		<ProjectReference Include="..\ion.syntax\ion.syntax.csproj" />
 	</ItemGroup>
-
+	<ItemGroup>
+		<None Update="icon-128.png">
+			<Pack>True</Pack>
+			<PackagePath>\</PackagePath>
+		</None>
+	</ItemGroup>
 </Project>
