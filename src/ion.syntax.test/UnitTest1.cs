@@ -1,6 +1,7 @@
 ﻿namespace ion.syntax.test;
 
 using Pidgin;
+using System;
 using static Assert;
 
 public class Tests
@@ -283,4 +284,46 @@ public class Tests
 
         That(result.Success);
     }
+
+    [Test]
+    public void Test18()
+    {
+        const string input = """
+                             attribute @AllowAnonymous();
+                             """;
+
+        var result = IonParser.AttributeDef.Parse(input);
+
+        That(result.Success);
+    }
+
+    [Test]
+    public void Test19()
+    {
+        const string input = """
+                             attribute @AllowAnonymous();
+                             """;
+
+        var result = IonParser.Definition.Parse(input);
+
+        That(result.Success);
+    }
+
+
+    [Test]
+    public void Test20()
+    {
+        const string input = """
+                             
+                             
+                             attribute @AllowAnonymous();
+                             attribute @MachineIdOptional();
+                             """;
+
+        var result = IonParser.IonFile.Parse(input);
+
+        That(result.Success);
+    }
+
+    
 }

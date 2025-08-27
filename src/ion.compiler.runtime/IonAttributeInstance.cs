@@ -20,4 +20,4 @@ public record IonUnionAttributeInstance() : IonAttributeInstance("union", []);
 public record IonUnionCaseAttributeInstance() : IonAttributeInstance("unionCase", []);
 
 
-public record IonAttributeType(IonIdentifier name, List<IonType> arguments) : IonBase(name, []);
+public record IonAttributeType(IonIdentifier name, List<IonArgument> arguments) : IonBase(name, []);

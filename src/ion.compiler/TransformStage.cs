@@ -40,7 +40,7 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
         var attributes = new List<IonAttributeType>();
         foreach (var syntax in file.attributeDefSyntaxes)
         {
-            var args = new List<IonType>();
+            var args = new List<IonArgument>();
             foreach (var arg in syntax.Args)
             {
                 var t = context.ResolveBuiltinType(arg.type);
@@ -48,7 +48,7 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
                 if (t is null)
                     Error(IonAnalyticCodes.ION0003_TypeNotFoundOrNotBuiltin, arg, arg.type.Name);
                 else
-                    args.Add(t);
+                    args.Add(new IonArgument(arg.argName, t, []));
             }
 
             var attr = new IonAttributeType(syntax.Name, args);

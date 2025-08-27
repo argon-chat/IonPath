@@ -1,16 +1,27 @@
 ﻿namespace ion.runtime.network;
 
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Components.Routing;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Buffers;
+using System.Diagnostics;
 using System.Formats.Cbor;
+using System.Linq;
 using System.Net.WebSockets;
-using System.Reflection.PortableExecutable;
+using System.Reflection;
+
+public class ServerSideCallContext(Type @interface, MethodInfo @method) : IIonCallContext
+{
+    public Type InterfaceName { get; } = @interface;
+    public MethodInfo MethodName { get; } = @method;
+    public IDictionary<string, string> RequestItems { get; } = new Dictionary<string, string>();
+    public IDictionary<string, string> ResponseItems { get; } = new Dictionary<string, string>();
+    public Stopwatch Stopwatch { get; } = Stopwatch.StartNew();
+}
+
 
 public static class RpcEndpoints
 {
@@ -30,6 +41,15 @@ public static class RpcEndpoints
         services.AddScoped<TInterface, TImplementation>();
         services.Configure<IonTransportOptions>(options => 
             options.Services.Add(typeof(TInterface), typeof(TImplementation)));
+        return services;
+    }
+
+    public static IServiceCollection AddIonInterceptor<TImplementation>(this IServiceCollection services)
+        where TImplementation : class, IIonInterceptor
+    {
+        services.AddScoped<IIonInterceptor, TImplementation>();
+        services.Configure<IonTransportOptions>(options =>
+            options.Interceptors.Add(typeof(TImplementation)));
         return services;
     }
 
@@ -131,6 +151,7 @@ public static class RpcEndpoints
                 HttpRequest req, HttpResponse resp, 
                 IonDescriptorStorage store,
                 IServiceProvider provider,
+                IReadOnlyList<IIonInterceptor> interceptors,
                 ILoggerFactory lf, CancellationToken ct) 
                 =>
             {
@@ -142,41 +163,68 @@ public static class RpcEndpoints
                     await WriteError(resp, "UNSUPPORTED_MEDIA", $"Content-Type must be {IonContentType}");
                     return;
                 }
+                await using var scope = provider.CreateAsyncScope();
 
-                
                 using var msStream = new MemoryStream();
                 await req.Body.CopyToAsync(msStream, ct);
 
                 var memory = new Memory<byte>(msStream.GetBuffer(), 0, (int)msStream.Length);
 
-                await using var scope = provider.CreateAsyncScope();
-
+                var @interface = store.GetTransportInterface(interfaceName);
+                var method = store.GetTransportMethod(interfaceName, methodName);
                 var router = store.GetRouter(interfaceName, scope);
 
-                if (router is null)
+                if (router is null || @interface is null || method is null)
                 {
                     resp.StatusCode = StatusCodes.Status405MethodNotAllowed;
                     await WriteError(resp, "INTERFACE_NOT_FOUND", $"Interface {interfaceName} is not found");
                     return;
                 }
 
+                var callCtx = new ServerSideCallContext(@interface, method);
+
+
+                foreach (var header in req.Headers) 
+                    callCtx.RequestItems.Add(header.Key, header.Value.ToString());
+
                 var reader = new CborReader(memory);
                 var writer = new CborWriter();
 
-                try
+                async Task TerminalAsync(IIonCallContext _, CancellationToken token)
                 {
                     await router.RouteExecuteAsync(methodName, reader, writer);
                     resp.StatusCode = StatusCodes.Status200OK;
                     resp.ContentType = IonContentType;
 
-                    var res = Convert.ToBase64String(writer.Encode());
-                    await resp.BodyWriter.WriteAsync(writer.Encode(), ct);
-                    await resp.BodyWriter.FlushAsync(ct);
+                    foreach (var (k, v) in _.ResponseItems) 
+                        resp.Headers.Append(k, v);
+
+                    await resp.BodyWriter.WriteAsync(writer.Encode(), token);
+                    await resp.BodyWriter.FlushAsync(token);
+                }
+
+                try
+                {
+                    var next = TerminalAsync;
+                    for (var i = interceptors.Count - 1; i >= 0; i--)
+                    {
+                        var interceptor = interceptors[i];
+                        var currentNext = next;
+                        next = (c, token) => interceptor.InvokeAsync(c, currentNext, token);
+                    }
+
+                    await next(callCtx, ct).ConfigureAwait(false);
+
+                }
+                catch (IonRequestException ionException)
+                {
+                    resp.StatusCode = StatusCodes.Status400BadRequest;
+                    await WriteError(resp, ionException.Error.code, ionException.Error.msg);
                 }
                 catch (OperationCanceledException)
                 {
                     resp.StatusCode = StatusCodes.Status504GatewayTimeout;
-                    await WriteError(resp, "DEADLINE_EXCEEDED", "Deadline exceeded");
+                    await WriteError(resp, IonProtocolError.DEADLINE_EXCEEDED());
                 }
                 catch (Exception ex)
                 {
@@ -204,6 +252,15 @@ public static class RpcEndpoints
             await resp.BodyWriter.WriteAsync(memory);
         });
     }
+    private static async Task WriteError(HttpResponse resp, IonProtocolError error)
+    {
+        resp.ContentType = IonContentType;
+        resp.Headers.Append(IonStatusCode, error.code);
+        await IonBinarySerializer.SerializeAsync(error, async memory => {
+            await resp.BodyWriter.WriteAsync(memory);
+        });
+    }
+
     private static async Task SendOpFrameAsync(
         WebSocket ws,
         byte opcode,

@@ -17,4 +17,10 @@ public readonly struct IonDescriptorRegistration(IServiceCollection col) : IIonT
         col.AddIonService<TInterface, TImpl>();
         return this;
     }
+
+    public IIonTransportRegistration AddInterceptor<TImpl>() where TImpl : class, IIonInterceptor
+    {
+        col.AddIonInterceptor<TImpl>();
+        return this;
+    }
 }

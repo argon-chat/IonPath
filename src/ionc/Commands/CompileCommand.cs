@@ -112,18 +112,18 @@ public class CompileCommand : AsyncCommand<CompileOptions>
             {
                 var cfg = value as DotnetGeneratorConfig;
                 var generator = CreateGenerator(IonGeneratorPlatform.Dotnet, project.Name);
-
+                var outputDirectoryForFiles = new DirectoryInfo(projectFile.Directory!.Combine(cfg!.Outputs).FullName);
 
                 if (!options.NoEmitCsProj)
-                    generator.GenerateProjectFile(project.Name, projectFile.Directory!.File($"{project.Name}.csproj"));
-                File.WriteAllText(projectFile.Directory!.Combine(cfg!.Outputs).File($"globals.cs").FullName, generator.GenerateGlobalTypes());
+                    generator.GenerateProjectFile(project.Name, outputDirectoryForFiles.File($"{project.Name}.csproj"));
+                File.WriteAllText(outputDirectoryForFiles.File($"globals.cs").FullName, generator.GenerateGlobalTypes());
 
-                GenerateDotNetDefault(generator, currentDir, project, ctx, projectFile.Directory!.Combine(cfg!.Outputs).Directory("models"), cfg);
+                GenerateDotNetDefault(generator, currentDir, project, ctx, outputDirectoryForFiles.Directory("models"), cfg);
 
                 if (cfg.Features.Contains(DotnetFeature.Client))
-                    GenerateClient(generator, currentDir, ctx, cfg);
+                    GenerateClient(generator, outputDirectoryForFiles, ctx);
                 if (cfg.Features.Contains(DotnetFeature.Client))
-                    GenerateServer(generator, currentDir, ctx, cfg);
+                    GenerateServer(generator, outputDirectoryForFiles, ctx);
             }
 
             if (key is IonGeneratorPlatform.Browser)
@@ -243,10 +243,9 @@ public class CompileCommand : AsyncCommand<CompileOptions>
                 cfg.Features.Contains(DotnetFeature.Server)));
     }
 
-    private void GenerateClient(IIonCodeGenerator generator, DirectoryInfo currentDir, CompilationContext context,
-        DotnetGeneratorConfig generatorCfg)
+    private void GenerateClient(IIonCodeGenerator generator, DirectoryInfo currentDir, CompilationContext context)
     {
-        var outputDirectory = currentDir.Combine(generatorCfg.Outputs).Combine("client");
+        var outputDirectory = currentDir.Directory("client");
 
         if (!outputDirectory.Exists)
             outputDirectory.Create();
@@ -258,10 +257,9 @@ public class CompileCommand : AsyncCommand<CompileOptions>
         }
     }
 
-    private void GenerateServer(IIonCodeGenerator generator, DirectoryInfo currentDir, CompilationContext context,
-        DotnetGeneratorConfig generatorCfg)
+    private void GenerateServer(IIonCodeGenerator generator, DirectoryInfo currentDir, CompilationContext context)
     {
-        var outputDirectory = currentDir.Combine(generatorCfg.Outputs).Combine("server");
+        var outputDirectory = currentDir.Directory("server");
         if (!outputDirectory.Exists)
             outputDirectory.Create();
 

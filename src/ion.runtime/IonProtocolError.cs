@@ -6,6 +6,7 @@ public record struct IonProtocolError(string code, string msg)
 {
     public static IonProtocolError UPSTREAM_ERROR(string msg) => new("UPSTREAM_ERROR", msg);
     public static IonProtocolError INTERNAL_ERROR(string msg) => new("INTERNAL_ERROR", msg);
+    public static IonProtocolError DEADLINE_EXCEEDED() => new("DEADLINE_EXCEEDED", "Deadline exceeded");
 }
 
 public class IonProtocolErrorFormatter : IonFormatter<IonProtocolError>

@@ -19,11 +19,11 @@ public readonly record struct IonMaybe<T>
         throw new InvalidOperationException("Cannot convert a None value.");
     }
 
-    public static implicit operator IonMaybe<T>(T value) =>
-        EqualityComparer<T>.Default.Equals(value, default) ? None : Some(value);
+    public static implicit operator IonMaybe<T>(T? value) =>
+        EqualityComparer<T>.Default.Equals(value, default) ? None : Some(value!);
 
     public static IonMaybe<T> Some(T value) => new(value, true);
-    public static IonMaybe<T> None => new(default(T), false);
+    public static IonMaybe<T> None => new(default!, false);
 }
 
 public readonly record struct IonArray<T>

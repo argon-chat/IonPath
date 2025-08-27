@@ -799,7 +799,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
             kvBuilder.AppendLine($"    {srvName}: I{srvName};");
             propsBuilder
                 .AppendLine($"        if (propKey === \"{srvName}\") " +
-                            $"return IonFormatterStorage.createExecutor(\"{srvName}\", ctx, new AbortSignal());");
+                            $"return IonFormatterStorage.createExecutor(\"{srvName}\", ctx, controller.signal);");
         }
 
         return ProxyTemplate
@@ -814,6 +814,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
             baseUrl: endpoint,
             interceptors: interceptors
           } as IonClientContext;
+          const controller = new AbortController();
 
           return new Proxy(
             {},

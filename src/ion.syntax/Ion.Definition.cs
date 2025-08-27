@@ -8,6 +8,7 @@ public partial class IonParser
 {
     public static Parser<char, IonSyntaxMember> Definition =>
         OneOf(
+            Try(AttributeDef.OfType<IonSyntaxMember>()),
             Try(Service.OfType<IonSyntaxMember>()),
             Try(UseDirective.OfType<IonSyntaxMember>()),
             Try(FeatureDirective.OfType<IonSyntaxMember>()),
@@ -30,7 +31,9 @@ public partial class IonParser
         select (IonSyntaxMember)new InvalidIonBlock(content.Trim()).WithPos(startPos, endPos);
 
     public static Parser<char, IEnumerable<IonSyntaxMember>> IonFile =>
-        Definition.Many().Before(End);
+        SkipWhitespaces
+            .Then(Definition.Many(), (_, defs) => defs)
+            .Before(End);
 
 
     public static IonFileSyntax Parse(string name, string content)

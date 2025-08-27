@@ -1,5 +1,6 @@
 ﻿namespace ion.runtime.network;
 
+using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -14,6 +15,12 @@ public sealed class IonDescriptorStorage(IServiceProvider serviceProvider, IOpti
             throw new InvalidOperationException($"Service '{serviceName}' not found.");
         return service;
     }
+
+    public Type? GetTransportInterface(string serviceName) 
+        => options.Value.Services.FirstOrDefault(x => x.Key.Name.Equals(serviceName)).Key;
+
+    public MethodInfo? GetTransportMethod(string serviceName, string methodName)
+        => options.Value.Services.FirstOrDefault(x => x.Key.Name.Equals(serviceName)).Key?.GetMethod(methodName, BindingFlags.Public | BindingFlags.Instance);
 
     public IServiceExecutorRouter? GetRouter(string serviceName, AsyncServiceScope scope)
     {

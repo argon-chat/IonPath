@@ -247,8 +247,11 @@ public class IonRequest(IonClientContext context, Type interfaceName, MethodInfo
 
         return;
 
-        async Task TerminalAsync(IonCallContext c, CancellationToken token)
+        async Task TerminalAsync(IIonCallContext callCtx, CancellationToken token)
         {
+            if (callCtx is not IonCallContext c)
+                throw new InvalidOperationException($"Invalid configuration, call context broken");
+
             c.HttpRequest ??=
                 new HttpRequestMessage(HttpMethod.Post, $"/ion/{c.InterfaceName.Name}/{c.MethodName.Name}.unary")
                 {
@@ -257,6 +260,9 @@ public class IonRequest(IonClientContext context, Type interfaceName, MethodInfo
                         Headers = { ContentType = new MediaTypeHeaderValue(IonContentType) }
                     }
                 };
+
+            foreach (var (hKey, hValue) in c.RequestItems) 
+                c.HttpRequest.Headers.Add(hKey, hValue);
 
             c.HttpResponse?.Dispose();
             c.HttpResponse = await c.Client.SendAsync(c.HttpRequest, HttpCompletionOption.ResponseHeadersRead, token)
@@ -302,8 +308,11 @@ public class IonRequest(IonClientContext context, Type interfaceName, MethodInfo
         var reader = new CborReader(ctx.ResponsePayload!);
         return IonFormatterStorage<TResponse>.Read(reader);
 
-        async Task TerminalAsync(IonCallContext c, CancellationToken token)
+        async Task TerminalAsync(IIonCallContext callCtx, CancellationToken token)
         {
+            if (callCtx is not IonCallContext c)
+                throw new InvalidOperationException($"Invalid configuration, call context broken");
+
             c.HttpRequest ??=
                 new HttpRequestMessage(HttpMethod.Post, $"/ion/{c.InterfaceName.Name}/{c.MethodName.Name}.unary")
                 {
@@ -312,6 +321,9 @@ public class IonRequest(IonClientContext context, Type interfaceName, MethodInfo
                         Headers = { ContentType = new MediaTypeHeaderValue(IonContentType) }
                     }
                 };
+
+            foreach (var (hKey, hValue) in c.RequestItems)
+                c.HttpRequest.Headers.Add(hKey, hValue);
 
             c.HttpResponse?.Dispose();
             c.HttpResponse = await c.Client.SendAsync(c.HttpRequest, HttpCompletionOption.ResponseHeadersRead, token)
@@ -337,45 +349,26 @@ public class IonRequest(IonClientContext context, Type interfaceName, MethodInfo
     }
 }
 
-public class IonRequestException(IonProtocolError error)
-    : Exception($"Ion request throw exception, {error.code}: {error.msg}");
-
-public interface IIonInterceptor
-{
-    Task InvokeAsync(IonCallContext context, Func<IonCallContext, CancellationToken, Task> next, CancellationToken ct);
-}
-
 public sealed class IonCallContext(
     HttpClient client,
     Type iface,
     MethodInfo method,
     Type resp,
-    ReadOnlyMemory<byte> requestPayload)
+    ReadOnlyMemory<byte> requestPayload) : IIonCallContext
 {
     public HttpClient Client { get; } = client;
     public Type InterfaceName { get; } = iface;
     public MethodInfo MethodName { get; } = method;
+    public IDictionary<string, string> RequestItems { get; } = new Dictionary<string, string>();
+    public IDictionary<string, string> ResponseItems { get; } = new Dictionary<string, string>();
 
     public Type ResponseType { get; } = resp;
 
-    /// <summary>Сериализованное тело запроса (CBOR). Интерцептор может заменить/перезаписать.</summary>
     public ReadOnlyMemory<byte> RequestPayload { get; set; } = requestPayload;
 
-    /// <summary>Сериализованное тело ответа (CBOR).</summary>
     public byte[]? ResponsePayload { get; set; }
-
-    /// <summary>HttpRequest, можно модифицировать до отправки (заголовки и т.п.).</summary>
     public HttpRequestMessage? HttpRequest { get; set; }
-
-    /// <summary>HttpResponse, доступен после ответа.</summary>
     public HttpResponseMessage? HttpResponse { get; set; }
-
-    /// <summary>Произвольные данные для обмена между интерцепторами.</summary>
-    public IDictionary<string, object?> Items { get; } = new Dictionary<string, object?>();
-
-    /// <summary>Количество попыток (для ретраев).</summary>
     public int Attempt { get; set; } = 1;
-
-    /// <summary>Общий Stopwatch для метрик/логов.</summary>
     public Stopwatch Stopwatch { get; } = Stopwatch.StartNew();
 }

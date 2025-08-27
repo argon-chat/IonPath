@@ -58,8 +58,8 @@ public sealed class IonModule
         [
             new("builtin", []),
             new("scalar", []),
-            new("tag", [new IonType("i4", ["scalar", "builtin"], [], true)]),
-            new("deadline", [new IonType("i4", ["scalar", "builtin"], [], true)]),
+            new("tag", [new IonArgument("tagId", new IonType("i4", ["scalar", "builtin"], [], true), [])]),
+            new("deadline", [new IonArgument("time", new IonType("i4", ["scalar", "builtin"], [], true), [])]),
             new("deprecated", []),
             new("internal", [])
         ],

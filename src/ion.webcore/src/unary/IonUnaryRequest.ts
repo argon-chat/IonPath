@@ -67,7 +67,7 @@ export class IonRequest {
     };
 
     let next: (c: IonCallContext, s?: AbortSignal) 
-        => Promise<void> = this.terminalAsync;
+        => Promise<void> = this.terminalAsync.bind(this);
     for (let i = this.context.interceptors.length - 1; i >= 0; i--) {
       const interceptor = this.context.interceptors[i];
       const currentNext = next;
@@ -129,7 +129,7 @@ export type IonProtocolError = { code: string; message: string };
 
 export class IonRequestException extends Error {
   constructor(public error: IonProtocolError) {
-    super(error.message);
+    super(`Ion Transport Error: ${error.message}`);
   }
 }
 IonFormatterStorage.register<IonProtocolError>("IonProtocolError", {

@@ -1,4 +1,4 @@
-namespace ion.compiler.CodeGen;
+﻿namespace ion.compiler.CodeGen;
 
 using ion.runtime;
 using Microsoft.Build.Construction;
@@ -110,7 +110,6 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         bool serverToo)
     {
         var candidates = types.Where(t => t is { IsBuiltin: false, IsScalar: false, IsVoid: false }).ToArray();
-        var sorted = TopoSortByDependencies(candidates);
 
         var sb = new StringBuilder();
 
@@ -120,7 +119,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
         formattersSb.AppendLine();
 
-        foreach (var t in sorted) 
+        foreach (var t in candidates) 
             formattersSb.AppendLine($"      IonFormatterStorage<{UnwrapType(t)}>.Value = new Ion_{UnwrapType(t)}_Formatter();");
 
         foreach (var t in candidates.Where(x => x.IsUnion).OfType<IonUnion>().SelectMany(x => x.types).Where(x => x.IsUnionCase))
@@ -245,6 +244,12 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             sb.AppendLine();
         }
 
+        foreach (var attributeType in module.Attributes)
+        {
+            sb.AppendLine(GenerateAttributeDefinition(attributeType));
+            sb.AppendLine();
+        }
+
         return sb.ToCompiledString();
     }
 
@@ -313,6 +318,16 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
         foreach (var method in service.methods)
         {
+            if (method.attributes.Any())
+            {
+                foreach (var attribute in method.attributes)
+                {
+                    if (attribute.name.Identifier.Equals("deprecated"))
+                        sb.AppendLine("    [Obsolete]");
+                    else
+                        sb.AppendLine($"    [{attribute.name.Identifier}({string.Join(',', attribute.arguments)})]");
+                }
+            }
             var args = string.Join(", ", method.arguments.Select(GenerateArgument));
             sb.AppendLine($"    {GenerateReturnType(method)} {method.name.Identifier}({args});");
         }
@@ -419,13 +434,12 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     public string GenerateAllFormatters(IEnumerable<IonType> types)
     {
         var candidates = types.Where(t => t is { IsBuiltin: false, IsScalar: false, IsVoid: false, IsUnionCase: false, IsUnion: false }).ToArray();
-        var sorted = TopoSortByDependencies(candidates);
 
         var sb = new StringBuilder();
 
         sb.AppendLine(FileHeader());
 
-        foreach (var t in sorted)
+        foreach (var t in candidates)
         {
             sb.AppendLine(GenerateFormatterForType(t));
             sb.AppendLine();
@@ -624,37 +638,6 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         return
             $"IonFormatterStorage<{ResolveTypeName(arrayType.TypeArguments[0])}>.WriteMaybe(writer, value.{field.name.Identifier});";
     }
-
-    private static IReadOnlyList<IonType> TopoSortByDependencies(IReadOnlyList<IonType> types)
-    {
-        var byName = types.ToDictionary(t => t.name.Identifier, t => t);
-        var visited = new HashSet<string>();
-        var temp = new HashSet<string>();
-        var result = new List<IonType>();
-
-        foreach (var t in types) Visit(t);
-        return result;
-
-        void Visit(IonType t)
-        {
-            var key = t.name.Identifier;
-            if (visited.Contains(key)) return;
-            if (!temp.Add(key)) return;
-
-            foreach (var f in t.fields ?? [])
-            {
-                var ft = f.type;
-                if (ft is null || ft.IsBuiltin || ft.IsScalar || ft.IsVoid) continue;
-                if (byName.TryGetValue(ft.name.Identifier, out var dep))
-                    Visit(dep);
-            }
-
-            temp.Remove(key);
-            visited.Add(key);
-            result.Add(t);
-        }
-    }
-
 
     private static readonly string ServiceExecutorTemplate =
         """
@@ -1025,6 +1008,27 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             $"{UnwrapType(field.type)} __{field.name.Identifier.ToLowerInvariant()}";
     }
 
+    private static readonly string AttributeTemplate =
+        """
+        [AttributeUsage(AttributeTargets.All)]
+        public sealed class {AttributeName}Attribute({args}) : System.Attribute
+        {
+        {argValues}
+        }
+        """;
+    private string GenerateAttributeDefinition(IonAttributeType type)
+    {
+        var accessValues = new StringBuilder();
+
+        foreach (var argument in type.arguments) 
+            accessValues.AppendLine($"    public {UnwrapType(argument.type)} {argument.Name.Identifier.Capitalize()} => {argument.Name.Identifier};");
+        
+        return AttributeTemplate
+            .Replace("{argValues}", accessValues.ToString())
+            .Replace("{args}", string.Join(", ", type.arguments.Select(GenerateArgument)))
+            .Replace("{AttributeName}", type.name.Identifier);
+    }
+
     private string GenerateUnion(IonUnion union)
     {
         var builder = new StringBuilder();
@@ -1207,4 +1211,16 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
                     return;
                 }
         """;
+}
+
+
+public static class StringEx
+{
+    public static string Capitalize(this string input)
+    {
+        if (string.IsNullOrEmpty(input))
+            return input;
+
+        return char.ToUpper(input[0]) + input[1..];
+    }
 }
