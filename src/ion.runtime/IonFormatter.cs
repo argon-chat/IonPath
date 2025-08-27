@@ -35,6 +35,16 @@ public static class IonBinarySerializer
     }
 }
 
+public static class CborExtensions
+{
+    public static void ReadEndArrayAndSkip(this CborReader reader, int skipCount)
+    {
+        for (var i = 0; i < Math.Abs(skipCount); i++) 
+            reader.SkipValue();
+        reader.ReadEndArray();
+    }
+}
+
 public interface IonFormatter<T>
 {
     T Read(CborReader reader);
