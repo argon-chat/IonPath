@@ -189,13 +189,13 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         """
         IonFormatterStorage.register("{ionType}", {
           read(reader: CborReader): {ionType} {
-            reader.readStartArray();
+            const arraySize = reader.readStartArray() ?? (() => { throw new Error("undefined len array not allowed") })();
             {fieldReadExpression}
-            reader.readEndArray();
+            reader.readEndArrayAndSkip(arraySize - {fieldsCount});
             return { {ctorFields} };
           },
           write(writer: CborWriter, value: {ionType}): void {
-            writer.writeStartArray(null);
+            writer.writeStartArray({fieldsCount});
             {fieldWriteExpression}
             writer.writeEndArray();
           }
@@ -206,13 +206,13 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         """
         IonFormatterStorage.register("{ionType}", {
           read(reader: CborReader): {ionType} {
-            reader.readStartArray();
+            const arraySize = reader.readStartArray() ?? (() => { throw new Error("undefined len array not allowed") })();
             {fieldReadExpression}
-            reader.readEndArray();
+            reader.readEndArrayAndSkip(arraySize - {fieldsCount});
             return new {ionType}({ctorFields});
           },
           write(writer: CborWriter, value: {ionType}): void {
-            writer.writeStartArray(null);
+            writer.writeStartArray({fieldsCount});
             {fieldWriteExpression}
             writer.writeEndArray();
           }
@@ -314,7 +314,8 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
             .Replace("{ionType}", name)
             .Replace("{fieldReadExpression}", GenerateReadField(type))
             .Replace("{ctorFields}", GenerateCaptureField(type))
-            .Replace("{fieldWriteExpression}", GenerateWriteField(type));
+            .Replace("{fieldWriteExpression}", GenerateWriteField(type))
+            .Replace("{fieldsCount}", type.fields.Count.ToString());
 
         return template;
     }
@@ -735,17 +736,18 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
             .Replace("{unionInterface}", union.name.Identifier)
             .Replace("{readCheks}", readChecks.ToString())
             .Replace("{writeChecks}", writeChecks.ToString())
+            .Replace("{fieldsCount}", union.types.Max(x => x.fields.Count).ToString())
         );
 
         return builder.ToString();
     }
 
 
-    private static readonly string Union_InterfaceFormatter =
+    private static string Union_InterfaceFormatter =>
         """
         IonFormatterStorage.register("I{unionInterface}", {
           read(reader: CborReader): I{unionInterface} {
-            reader.readStartArray();
+            const arraySize = reader.readStartArray() ?? (() => { throw new Error("undefined len array not allowed") })();
             let value: I{unionInterface} = null as any;
             const unionIndex = reader.readUInt32();
             
@@ -754,11 +756,11 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
             {readCheks}
             else throw new Error();
           
-            reader.readEndArray();
+            reader.readEndArrayAndSkip(arraySize - {fieldsCount});
             return value!;
           },
           write(writer: CborWriter, value: I{unionInterface}): void {
-            writer.writeStartArray(null);
+            writer.writeStartArray({fieldsCount});
             writer.writeUInt32(value.UnionIndex);
             if (false)
             {}

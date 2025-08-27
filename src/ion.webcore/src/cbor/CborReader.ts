@@ -64,7 +64,7 @@ export class CborReader {
         if (ai === 25 || ai === 26 || ai === 27)
           return CborReaderState.FloatingPointNumber;
 
-        if (ai === 20 || ai === 21) return CborReaderState.Boolean; 
+        if (ai === 20 || ai === 21) return CborReaderState.Boolean;
         if (ai === 22) return CborReaderState.Null;
         if (ai === 23) return CborReaderState.Undefined;
 
@@ -322,6 +322,93 @@ export class CborReader {
     }
   }
 
+  readEndArrayAndSkip(skipSize: number) {
+    for (var i = 0; i < Math.abs(skipSize); i++) 
+        this.skipValue();
+    this.readEndArray();
+  }
+
+  skipValue(): void {
+    this.readEncodedValue();
+  }
+
+  readEncodedValue() {
+    let depth = 0;
+
+    do {
+      depth = this.skipNextNode(depth);
+    } while (depth > 0);
+  }
+
+  skipNextNode(initialDepth: number): number {
+    let state: CborReaderState;
+    let depth = initialDepth;
+
+    while ((state = this.peekState()) === CborReaderState.Tag)
+      this.r.readUint8();
+
+    switch (state) {
+      case CborReaderState.UnsignedInteger:
+        this.readUInt32();
+        break;
+
+      case CborReaderState.NegativeInteger:
+        this.readInt32();
+        break;
+
+      case CborReaderState.ByteString:
+        this.readByteString();
+        break;
+
+      case CborReaderState.TextString:
+        this.readTextString();
+        break;
+
+      case CborReaderState.StartArray:
+        this.readStartArray();
+        depth++;
+        break;
+
+      case CborReaderState.EndArray:
+        if (depth === 0) throw new Error(`Skip invalid state: ${state}`);
+
+        this.readEndArray();
+        depth--;
+        break;
+
+      case CborReaderState.StartMap:
+        this.readStartMap();
+        depth++;
+        break;
+
+      case CborReaderState.EndMap:
+        if (depth === 0) throw new Error(`Skip invalid state: ${state}`);
+
+        this.readEndMap();
+        depth--;
+        break;
+
+      case CborReaderState.FloatingPointNumber:
+        this.readDouble();
+        break;
+
+      case CborReaderState.Null:
+        this.readNull();
+        break;
+      case CborReaderState.Boolean:
+        this.readBoolean();
+        break;
+      case CborReaderState.Undefined:
+        this.readUndefined();
+        break;
+
+      default:
+        throw new Error(`Skip invalid state: ${state}`);
+    }
+
+    return depth;
+  }
+
   // -------------------
   // Maps
   // -------------------
@@ -351,9 +438,6 @@ export class CborReader {
   // Helpers
   // -------------------
   private peekByte(): number {
-    const pos = this.r.position;
-    const b = this.r.readUint8();
-    this.r.seek(pos);
-    return b;
+    return this.r.peekUint8();
   }
 }

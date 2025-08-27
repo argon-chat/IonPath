@@ -24,16 +24,12 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
     
         const int argumentSize = 2;
     
-        var arraySize = reader.ReadStartArray();
+        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
     
-        if (arraySize is null)
-            throw new InvalidOperationException();
-        if (argumentSize != arraySize)
-            throw new InvalidOperationException();
         var __leftoperand = IonFormatterStorage<i4>.Read(reader);
         var __rightoperand = IonFormatterStorage<i4>.Read(reader);
     
-        reader.ReadEndArray();
+        reader.ReadEndArrayAndSkip(arraySize - argumentSize);
     
         var result = await service.Add(__leftoperand, __rightoperand);
         
@@ -46,16 +42,12 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
     
         const int argumentSize = 2;
     
-        var arraySize = reader.ReadStartArray();
+        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
     
-        if (arraySize is null)
-            throw new InvalidOperationException();
-        if (argumentSize != arraySize)
-            throw new InvalidOperationException();
         var __leftoperand = IonFormatterStorage<i4>.Read(reader);
         var __rightoperand = IonFormatterStorage<i4>.Read(reader);
     
-        reader.ReadEndArray();
+        reader.ReadEndArrayAndSkip(arraySize - argumentSize);
     
         var result = await service.Mul(__leftoperand, __rightoperand);
         
@@ -68,16 +60,12 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
     
         const int argumentSize = 2;
     
-        var arraySize = reader.ReadStartArray();
+        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
     
-        if (arraySize is null)
-            throw new InvalidOperationException();
-        if (argumentSize != arraySize)
-            throw new InvalidOperationException();
         var __leftoperand = IonFormatterStorage<i4>.Read(reader);
         var __rightoperand = IonFormatterStorage<i4>.Read(reader);
     
-        reader.ReadEndArray();
+        reader.ReadEndArrayAndSkip(arraySize - argumentSize);
     
         var result = await service.Sub(__leftoperand, __rightoperand);
         
@@ -90,16 +78,12 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
     
         const int argumentSize = 2;
     
-        var arraySize = reader.ReadStartArray();
+        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
     
-        if (arraySize is null)
-            throw new InvalidOperationException();
-        if (argumentSize != arraySize)
-            throw new InvalidOperationException();
         var __leftoperand = IonFormatterStorage<i4>.Read(reader);
         var __rightoperand = IonFormatterStorage<i4>.Read(reader);
     
-        reader.ReadEndArray();
+        reader.ReadEndArrayAndSkip(arraySize - argumentSize);
     
         var result = await service.Div(__leftoperand, __rightoperand);
         
@@ -112,16 +96,12 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
     
         const int argumentSize = 2;
     
-        var arraySize = reader.ReadStartArray();
+        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
     
-        if (arraySize is null)
-            throw new InvalidOperationException();
-        if (argumentSize != arraySize)
-            throw new InvalidOperationException();
         var __leftoperand = IonFormatterStorage<i4>.Read(reader);
         var __rightoperand = IonFormatterStorage<i4>.Read(reader);
     
-        reader.ReadEndArray();
+        reader.ReadEndArrayAndSkip(arraySize - argumentSize);
     
         var result = await service.Pow(__leftoperand, __rightoperand);
         
@@ -159,16 +139,11 @@ public sealed class Ion_RandomStreamInteraction_ServiceExecutor(AsyncServiceScop
 
         const int argumentSize = 1;
 
-        var arraySize = reader.ReadStartArray();
-
-        if (arraySize is null)
-            throw new InvalidOperationException();
-        if (argumentSize != arraySize)
-            throw new InvalidOperationException();
-
+        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+            
         var __seed = IonFormatterStorage<i4>.Read(reader);
 
-        reader.ReadEndArray();
+        reader.ReadEndArrayAndSkip(arraySize - argumentSize);
 
         await foreach (var e in service.Integer(__seed))
         {

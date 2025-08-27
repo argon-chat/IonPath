@@ -34,6 +34,10 @@ export class BinaryReader {
     return this.view.getUint8(this.offset++);
   }
 
+  peekUint8(): number {
+    return this.view.getUint8(this.offset);
+  }
+
   readInt16(littleEndian = true): number {
     const val = this.view.getInt16(this.offset, littleEndian);
     this.offset += 2;

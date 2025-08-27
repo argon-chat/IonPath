@@ -375,16 +375,16 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             {compileGeneratedAttributes}
             public {ionType} Read(CborReader reader)
             {
-                reader.ReadStartArray();
+                var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");;
                 {fieldReadExpression}
-                reader.ReadEndArray();
+                reader.ReadEndArrayAndSkip(arraySize - {fieldsCount});
                 return new({ctorFields});
             }
             
             {compileGeneratedAttributes}
             public void Write(CborWriter writer, {ionType} value)
             {
-                writer.WriteStartArray(null);
+                writer.WriteStartArray({fieldsCount});
                 {fieldWriteExpression}
                 writer.WriteEndArray();
             }
@@ -508,7 +508,8 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             .Replace("{ionType}", name)
             .Replace("{fieldReadExpression}", GenerateReadField(type))
             .Replace("{ctorFields}", GenerateCaptureField(type))
-            .Replace("{fieldWriteExpression}", GenerateWriteField(type));
+            .Replace("{fieldWriteExpression}", GenerateWriteField(type))
+            .Replace("{fieldsCount}", type.fields.Count.ToString());
 
         return template;
     }
@@ -679,16 +680,11 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
                 const int argumentSize = {argSize};
 
-                var arraySize = reader.ReadStartArray();
-
-                if (arraySize is null)
-                    throw new InvalidOperationException();
-                if (argumentSize != arraySize)
-                    throw new InvalidOperationException();
-
+                var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+                    
                 {fieldReadExpression}
 
-                reader.ReadEndArray();
+                reader.ReadEndArrayAndSkip(arraySize - argumentSize);
 
                 await foreach (var e in service.{methodName}({fieldReadArgs}))
                 {
@@ -716,15 +712,11 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             
                 const int argumentSize = {argSize};
             
-                var arraySize = reader.ReadStartArray();
+                var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
             
-                if (arraySize is null)
-                    throw new InvalidOperationException();
-                if (argumentSize != arraySize)
-                    throw new InvalidOperationException();
                 {fieldReadExpression}
             
-                reader.ReadEndArray();
+                reader.ReadEndArrayAndSkip(arraySize - argumentSize);
             
                 await service.{methodName}({fieldReadArgs});
             }
@@ -739,15 +731,11 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             
                 const int argumentSize = {argSize};
             
-                var arraySize = reader.ReadStartArray();
+                var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
             
-                if (arraySize is null)
-                    throw new InvalidOperationException();
-                if (argumentSize != arraySize)
-                    throw new InvalidOperationException();
                 {fieldReadExpression}
             
-                reader.ReadEndArray();
+                reader.ReadEndArrayAndSkip(arraySize - argumentSize);
             
                 var result = await service.{methodName}({fieldReadArgs});
                 
@@ -1166,6 +1154,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             .Replace("{unionInterface}", union.name.Identifier)
             .Replace("{readCheks}", readChecks.ToString())
             .Replace("{writeChecks}", writeChecks.ToString())
+            .Replace("{fieldsCount}", union.types.Max(x => x.fields.Count).ToString())
         );
 
         return builder.ToString();
@@ -1179,36 +1168,44 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         {
             public I{unionInterface} Read(CborReader reader)
             {
+                var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
                 var unionIndex = reader.ReadUInt32();
-        
+                I{unionInterface} result;
+                if (false) {}
                 {readCheks}
-        
-                throw new InvalidOperationException();
+                else
+                    throw new InvalidOperationException();
+                reader.ReadEndArrayAndSkip(arraySize - {fieldsCount});
+                return result;
             }
         
             public void Write(CborWriter writer, I{unionInterface} value)
             {
+                writer.WriteStartArray({fieldsCount});
                 writer.WriteUInt32(value.UnionIndex);
         
-                {writeChecks}        
+                if (false) {}
+                {writeChecks}    
+                else
+                    throw new InvalidOperationException();
+                writer.WriteEndArray();    
             }
         }
         """;
 
     private static readonly string UnionReadCheck =
         """
-                if (unionIndex == {caseIndex})
-                    return IonFormatterStorage<{caseTypeName}>.Read(reader);
+                else if (unionIndex == {caseIndex})
+                    result = IonFormatterStorage<{caseTypeName}>.Read(reader);
         """;
 
     private static readonly string UnionWriteCheck =
         """
-                if (value is {caseTypeName} n_{caseIndex})
+                else if (value is {caseTypeName} n_{caseIndex})
                 {
                     if (n_{caseIndex}.UnionIndex != {caseIndex})
                         throw new InvalidOperationException();
                     IonFormatterStorage<{caseTypeName}>.Write(writer, n_{caseIndex});
-                    return;
                 }
         """;
 }

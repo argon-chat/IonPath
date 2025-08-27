@@ -56,8 +56,19 @@ public static class IonFormatterStorage<T>
 {
     public static IonFormatter<T> Value { get; set; } = null!;
 
-    public static T Read(CborReader reader) => Value.Read(reader);
-    public static void Write(CborWriter writer, T value) => Value.Write(writer, value);
+    public static T Read(CborReader reader)
+    {
+        if (Value is null)
+            throw new InvalidOperationException($"Ion Formatter for type '{typeof(T).FullName}' is not registered");
+        return Value.Read(reader);
+    }
+
+    public static void Write(CborWriter writer, T value)
+    {
+        if (Value is null)
+            throw new InvalidOperationException($"Ion Formatter for type '{typeof(T).FullName}' is not registered");
+        Value.Write(writer, value);
+    }
 
     public static IonMaybe<T> ReadMaybe(CborReader reader)
     {
@@ -114,6 +125,7 @@ public static class IonFormatterStorageModuleInit
     [ModuleInitializer]
     public static void Init()
     {
+        IonFormatterStorage<bool>.Value = new Ion_bool_Formatter();
         IonFormatterStorage<string>.Value = new Ion_string_Formatter();
         IonFormatterStorage<BigInteger>.Value = new Ion_bigint_Formatter();
         IonFormatterStorage<Guid>.Value = new Ion_guid_Formatter();
@@ -137,7 +149,14 @@ public static class IonFormatterStorageModuleInit
         IonFormatterStorage<IonProtocolError>.Value = new IonProtocolErrorFormatter();
     }
 }
+public sealed class Ion_bool_Formatter : IonFormatter<bool>
+{
+    public bool Read(CborReader reader)
+        => reader.ReadBoolean();
 
+    public void Write(CborWriter writer, bool value)
+        => writer.WriteBoolean(value);
+}
 public sealed class Ion_string_Formatter : IonFormatter<string>
 {
     public string Read(CborReader reader)

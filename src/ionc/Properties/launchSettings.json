@@ -9,6 +9,11 @@
       "commandName": "Project",
       "commandLineArgs": "compile -n -o Browser",
       "workingDirectory": "Z:\\!argon\\hostfx\\Argon.Ion"
+    },
+    "build testProject": {
+      "commandName": "Project",
+      "commandLineArgs": "compile -n",
+      "workingDirectory": "Z:\\!argon\\IonPath\\src\\tests\\Contracts"
     }
   }
 }

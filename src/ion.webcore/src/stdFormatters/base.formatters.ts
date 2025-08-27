@@ -2,6 +2,15 @@ import { DateOnly, DateTimeOffset, Duration, Guid, TimeOnly } from "../baseTypes
 import { CborReader, CborWriter } from "../cbor";
 import { IonFormatterStorage } from "../logic/IonFormatter";
 
+IonFormatterStorage.register("bool", {
+  read(reader: CborReader): boolean {
+    return reader.readBoolean();
+  },
+  write(writer: CborWriter, value: boolean): void {
+    writer.writeBoolean(value);
+  },
+});
+
 IonFormatterStorage.register("string", {
   read(reader: CborReader): string {
     return reader.readTextString();

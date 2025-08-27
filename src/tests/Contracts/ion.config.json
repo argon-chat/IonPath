@@ -1,10 +1,16 @@
-{
-    "name": "TestContracts",
-    "features": [
-        "std"
-    ],
-    "generators": [
-        { "type": "server", "platform": "dotnet", "output": "@/server" },
-        { "type": "client", "platform": "dotnet", "output": "@/client" }
-    ]
+﻿{
+  "name": "TestContracts",
+  "features": [
+    "std"
+  ],
+  "generators": {
+    "dotnet": {
+      "features": [
+        "server",
+        "client",
+        "models"
+      ],
+      "outputs": "./"
+    }
+  }
 }
