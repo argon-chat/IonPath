@@ -7,10 +7,13 @@ public interface IIonTransportRegistration
     IIonTransportRegistration AddService<TInterface, TImpl>()
         where TInterface : class, IIonService
         where TImpl : class, TInterface;
+
+    IIonTransportRegistration AddInterceptor<TImpl>() 
+        where TImpl : class, IIonInterceptor;
 }
 
 
-public readonly struct IonDescriptorRegistration(IServiceCollection col) : IIonTransportRegistration
+internal readonly struct IonDescriptorRegistration(IServiceCollection col) : IIonTransportRegistration
 {
     public IIonTransportRegistration AddService<TInterface, TImpl>() where TInterface : class, IIonService where TImpl : class, TInterface
     {
