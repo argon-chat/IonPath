@@ -13,13 +13,15 @@ using System.Linq;
 using System.Net.WebSockets;
 using System.Reflection;
 
-public class ServerSideCallContext(Type @interface, MethodInfo @method) : IIonCallContext
+public class ServerSideCallContext(AsyncServiceScope scope, Type @interface, MethodInfo @method) : IIonCallContext
 {
     public Type InterfaceName { get; } = @interface;
     public MethodInfo MethodName { get; } = @method;
     public IDictionary<string, string> RequestItems { get; } = new Dictionary<string, string>();
     public IDictionary<string, string> ResponseItems { get; } = new Dictionary<string, string>();
     public Stopwatch Stopwatch { get; } = Stopwatch.StartNew();
+    public AsyncServiceScope AsyncServiceScope { get; } = scope;
+    public void Dispose() => Stopwatch.Stop();
 }
 
 
@@ -181,7 +183,7 @@ public static class RpcEndpoints
                     return;
                 }
 
-                var callCtx = new ServerSideCallContext(@interface, method);
+                using var callCtx = new ServerSideCallContext(scope, @interface, method);
 
 
                 foreach (var header in req.Headers) 

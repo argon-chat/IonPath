@@ -3,6 +3,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using network;
 using System.Buffers;
+using System.ComponentModel.Design;
 using System.Diagnostics;
 using System.Formats.Cbor;
 using System.Net.Http.Headers;
@@ -51,6 +52,7 @@ public class IonClient
 public class IonClientContext(HttpClient client, IonWebSocketFactory wsFactory)
 {
     private readonly List<IIonInterceptor> interceptors = [];
+    internal IServiceProvider serviceProvider = new ServiceContainer();
 
     public IonClientContext Use(IIonInterceptor interceptor)
     {
@@ -233,7 +235,7 @@ public class IonRequest(IonClientContext context, Type interfaceName, MethodInfo
     {
         var httpClient = context.HttpClient;
 
-        var ctx = new IonCallContext(httpClient, interfaceName, methodName, typeof(void), payload);
+        var ctx = new IonCallContext(new AsyncServiceScope(), httpClient, interfaceName, methodName, typeof(void), payload);
 
         var next = TerminalAsync;
         for (var i = context.Interceptors.Count - 1; i >= 0; i--)
@@ -293,7 +295,7 @@ public class IonRequest(IonClientContext context, Type interfaceName, MethodInfo
     {
         var httpClient = context.HttpClient;
 
-        var ctx = new IonCallContext(httpClient, interfaceName, methodName, typeof(TResponse), payload);
+        using var ctx = new IonCallContext(new AsyncServiceScope(), httpClient, interfaceName, methodName, typeof(TResponse), payload);
 
         var next = TerminalAsync;
         for (var i = context.Interceptors.Count - 1; i >= 0; i--)
@@ -350,6 +352,7 @@ public class IonRequest(IonClientContext context, Type interfaceName, MethodInfo
 }
 
 public sealed class IonCallContext(
+    AsyncServiceScope scope,
     HttpClient client,
     Type iface,
     MethodInfo method,
@@ -371,4 +374,12 @@ public sealed class IonCallContext(
     public HttpResponseMessage? HttpResponse { get; set; }
     public int Attempt { get; set; } = 1;
     public Stopwatch Stopwatch { get; } = Stopwatch.StartNew();
+    public AsyncServiceScope AsyncServiceScope => scope;
+
+    public void Dispose()
+    {
+        HttpRequest?.Dispose();
+        HttpResponse?.Dispose();
+        Stopwatch.Stop();
+    }
 }
