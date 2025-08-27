@@ -18,8 +18,8 @@ public class ServerSideCallContext(AsyncServiceScope scope, Type @interface, Met
 {
     public Type InterfaceName { get; } = @interface;
     public MethodInfo MethodName { get; } = @method;
-    public IDictionary<string, string> RequestItems { get; } = new Dictionary<string, string>();
-    public IDictionary<string, string> ResponseItems { get; } = new Dictionary<string, string>();
+    public IDictionary<string, string> RequestItems { get; } = new Dictionary<string, string>([], StringComparer.InvariantCultureIgnoreCase);
+    public IDictionary<string, string> ResponseItems { get; } = new Dictionary<string, string>([], StringComparer.InvariantCultureIgnoreCase);
     public Stopwatch Stopwatch { get; } = Stopwatch.StartNew();
     public AsyncServiceScope AsyncServiceScope { get; } = scope;
     public void Dispose() => Stopwatch.Stop();
