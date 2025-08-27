@@ -151,11 +151,11 @@ public static class RpcEndpoints
 
         
         app.MapPost("/ion/{interfaceName}/{methodName}.unary", async (string interfaceName, string methodName,
-                HttpRequest req, HttpResponse resp, 
-                IonDescriptorStorage store,
-                IServiceProvider provider,
-                IReadOnlyList<IIonInterceptor> interceptors,
-                ILoggerFactory lf, CancellationToken ct) 
+                HttpRequest req, HttpResponse resp,
+                [FromServices] IonDescriptorStorage store,
+                [FromServices] IServiceProvider provider,
+                [FromServices] IEnumerable<IIonInterceptor> interceptors,
+                [FromServices] ILoggerFactory lf, CancellationToken ct) 
                 =>
             {
                 var log = lf.CreateLogger("RPC");
@@ -209,9 +209,11 @@ public static class RpcEndpoints
                 try
                 {
                     var next = TerminalAsync;
-                    for (var i = interceptors.Count - 1; i >= 0; i--)
+
+                    var array = interceptors.ToArray();
+                    for (var i = array.Count() - 1; i >= 0; i--)
                     {
-                        var interceptor = interceptors[i];
+                        var interceptor = array[i];
                         var currentNext = next;
                         next = (c, token) => interceptor.InvokeAsync(c, currentNext, token);
                     }
