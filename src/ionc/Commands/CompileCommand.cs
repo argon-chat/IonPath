@@ -206,6 +206,8 @@ public class CompileCommand : AsyncCommand<CompileOptions>
             """);
 
         fileBuilder.AppendLine(generator.GenerateTypes(context.ProcessedModules.SelectMany(x => x.Definitions).DistinctBy(x => x.name.Identifier)));
+        fileBuilder.AppendLine(generator.GenerateAllFormatters(context.ProcessedModules.SelectMany(x => x.Definitions)
+            .DistinctBy(x => x.name.Identifier)));
 
         foreach (var module in context.ProcessedModules) 
             fileBuilder.AppendLine(generator.GenerateServices(module));

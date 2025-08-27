@@ -18,6 +18,12 @@ public record IonScalarAttributeInstance() : IonAttributeInstance("scalar", []);
 public record IonTagAttributeInstance(int tag) : IonAttributeInstance("tag", [tag]);
 public record IonUnionAttributeInstance() : IonAttributeInstance("union", []);
 public record IonUnionCaseAttributeInstance() : IonAttributeInstance("unionCase", []);
+public record IonBitAttributeInstance(int bitCount) : IonAttributeInstance("bits", [bitCount]);
+
+public static class NumberBitEx
+{
+    public static IonBitAttributeInstance Bits(this int bytesCount) => new(bytesCount * 8);
+}
 
 
 public record IonAttributeType(IonIdentifier name, List<IonArgument> arguments) : IonBase(name, []);

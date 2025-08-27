@@ -1,9 +1,14 @@
 ﻿{
   "profiles": {
-    "ionc": {
+    "build server": {
       "commandName": "Project",
       "commandLineArgs": "compile -n -o Dotnet",
       "workingDirectory": "Z:\\!argon\\server\\src\\Argon.Ion"
+    },
+    "build client": {
+      "commandName": "Project",
+      "commandLineArgs": "compile -n -o Browser",
+      "workingDirectory": "Z:\\!argon\\hostfx\\Argon.Ion"
     }
   }
 }

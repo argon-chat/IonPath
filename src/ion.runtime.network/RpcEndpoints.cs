@@ -2,6 +2,7 @@
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -235,7 +236,7 @@ public static class RpcEndpoints
                     await WriteError(resp, "INTERNAL_ERROR", ex.ToString());
                 }
             })
-            .Accepts<byte[]>(IonContentType)
+            .WithMetadata(new ConsumesAttribute(IonContentType))
             .Produces(StatusCodes.Status200OK, contentType: IonContentType)
             .Produces(StatusCodes.Status400BadRequest, contentType: IonContentType)
             .Produces(StatusCodes.Status409Conflict, contentType: IonContentType)

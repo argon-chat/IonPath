@@ -25,21 +25,21 @@ public sealed class IonModule
 
             new("bool", ["scalar", "builtin"], [], true),
 
-            new("i1", ["scalar", "builtin"], [], true),
-            new("i2", ["scalar", "builtin"], [], true),
-            new("i4", ["scalar", "builtin"], [], true),
-            new("i8", ["scalar", "builtin"], [], true),
-            new("i16", ["scalar", "builtin"], [], true),
+            new("i1", ["scalar", "builtin", sizeof(sbyte).Bits()], [], true),
+            new("i2", ["scalar", "builtin", sizeof(short).Bits()], [], true),
+            new("i4", ["scalar", "builtin", sizeof(int).Bits()], [], true),
+            new("i8", ["scalar", "builtin", sizeof(long).Bits()], [], true),
+            new("i16", ["scalar", "builtin", 16.Bits()], [], true),
 
-            new("u1", ["scalar", "builtin"], [], true),
-            new("u2", ["scalar", "builtin"], [], true),
-            new("u4", ["scalar", "builtin"], [], true),
-            new("u8", ["scalar", "builtin"], [], true),
-            new("u16", ["scalar", "builtin"], [], true),
+            new("u1", ["scalar", "builtin", sizeof(byte).Bits()], [], true),
+            new("u2", ["scalar", "builtin", sizeof(ushort).Bits()], [], true),
+            new("u4", ["scalar", "builtin", sizeof(uint).Bits()], [], true),
+            new("u8", ["scalar", "builtin", sizeof(ulong).Bits()], [], true),
+            new("u16", ["scalar", "builtin", 16.Bits()], [], true),
 
-            new("f2", ["scalar", "builtin"], [], true),
-            new("f4", ["scalar", "builtin"], [], true),
-            new("f8", ["scalar", "builtin"], [], true),
+            new("f2", ["scalar", "builtin", 2.Bits()], [], true),
+            new("f4", ["scalar", "builtin", sizeof(float).Bits()], [], true),
+            new("f8", ["scalar", "builtin", sizeof(double).Bits()], [], true),
 
             new("bigint", ["builtin"], [], true),
 
@@ -61,7 +61,8 @@ public sealed class IonModule
             new("tag", [new IonArgument("tagId", new IonType("i4", ["scalar", "builtin"], [], true), [])]),
             new("deadline", [new IonArgument("time", new IonType("i4", ["scalar", "builtin"], [], true), [])]),
             new("deprecated", []),
-            new("internal", [])
+            new("internal", []),
+            new("bits", [new IonArgument("bitCount", new IonType("i4", ["scalar", "builtin"], [], true), [])]),
         ],
         Imports = [],
         Services = []
@@ -184,6 +185,10 @@ public record IonType(
 
     public bool IsUnion => attributes.Any(x => x.IsUnion);
     public bool IsUnionCase => attributes.Any(x => x.IsUnionCase);
+    public bool HasBitsAttribute => attributes.Any(x => x is IonBitAttributeInstance);
+
+
+    public int Bits => (int)attributes.First(x => x is IonBitAttributeInstance).arguments.First();
 
 }
 

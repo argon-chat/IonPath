@@ -88,13 +88,22 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         return GenerateMessage(type);
     }
 
+    private static string AppendPostfixForEnumType(IonType type, string constantValue)
+    {
+        if (type.name.Identifier.Equals("bigint"))
+            return $"{constantValue}n as any";
+        if (type.Bits >= 56)
+            return $"{constantValue}n as any";
+        return constantValue;
+    }
+
     private static string GenerateEnum(IonEnum e)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"export enum {e.name.Identifier}");
         sb.AppendLine("{");
         foreach (var m in e.members)
-            sb.AppendLine($"{new string(' ', 2)}{m.name.Identifier} = {m.constantValue},");
+            sb.AppendLine($"{new string(' ', 2)}{m.name.Identifier} = {AppendPostfixForEnumType(m.type, m.constantValue)},");
         sb.AppendLine("}");
         return sb.ToString();
     }
@@ -105,7 +114,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         sb.AppendLine($"export enum {f.name.Identifier}");
         sb.AppendLine("{");
         foreach (var m in f.members)
-            sb.AppendLine($"{new string(' ', 2)}{m.name.Identifier} = {m.constantValue},");
+            sb.AppendLine($"{new string(' ', 2)}{m.name.Identifier} = {AppendPostfixForEnumType(m.type, m.constantValue)},");
         sb.AppendLine("}");
         return sb.ToString();
     }
@@ -246,8 +255,6 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 
         var sb = new StringBuilder();
 
-        sb.AppendLine(FileHeader());
-
         foreach (var t in sorted)
         {
             sb.AppendLine(GenerateFormatterForType(t));
@@ -259,49 +266,39 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 
     private static string GenerateFormatterForEnum(IonEnum @enum) =>
         """
-            {compileGeneratedAttributes}
-            public sealed class Ion_{ionType}_Formatter : IonFormatter<{ionType}>
-            {
-                {compileGeneratedAttributes}
-                public {ionType} Read(CborReader reader)
-                {
-                     return ({ionType})({readEnumValue}.Read(reader));
-                }
-                
-                {compileGeneratedAttributes}
-                public void Write(CborWriter writer, {ionType} value)
-                {
-                    var casted = ({baseTypeName})value;
-                    {writeEnumValue}
-                }
-            }
-            """
+        IonFormatterStorage.register("{ionType}", {
+          read(reader: CborReader): {ionType} {
+            const num = ({readEnumValue}.read(reader))
+            return {ionType}[num] !== undefined ? num as {ionType} : (() => {throw new Error('invalid enum type')})();
+          },
+          write(writer: CborWriter, value: {ionType}): void {
+            const casted: {baseTypeName} = value;
+            {writeEnumValue}
+          }
+        });
+        """
             .Replace("{ionType}", @enum.name.Identifier)
             .Replace("{baseTypeName}", @enum.baseType.name.Identifier)
             .Replace("{readEnumValue}", FormatterTemplateRef(@enum.baseType))
-            .Replace("{writeEnumValue}", $"{FormatterTemplateRef(@enum.baseType)}.Write(writer, casted);");
+            .Replace("{writeEnumValue}", $"{FormatterTemplateRef(@enum.baseType)}.write(writer, casted);");
 
     private static string GenerateFormatterForFlags(IonFlags @enum) =>
         """
-            {compileGeneratedAttributes}
-            public sealed class Ion_{ionType}_Formatter : IonFormatter<{ionType}>
-            {
-                public {ionType} Read(CborReader reader)
-                {
-                     return ({ionType})({readEnumValue}.Read(reader));
-                }
-
-                public void Write(CborWriter writer, {ionType} value)
-                {
-                    var casted = ({baseTypeName})value;
-                    {writeEnumValue}
-                }
-            }
-            """
+        IonFormatterStorage.register("{ionType}", {
+          read(reader: CborReader): {ionType} {
+            const num = ({readEnumValue}.read(reader))
+            return {ionType}[num as any] !== undefined ? num as any : (() => {throw new Error('invalid enum type')})();
+          },
+          write(writer: CborWriter, value: {ionType}): void {
+            const casted: {baseTypeName} = value as any;
+            {writeEnumValue}
+          }
+        });
+        """
             .Replace("{ionType}", @enum.name.Identifier)
             .Replace("{baseTypeName}", @enum.baseType.name.Identifier)
             .Replace("{readEnumValue}", FormatterTemplateRef(@enum.baseType))
-            .Replace("{writeEnumValue}", $"{FormatterTemplateRef(@enum.baseType)}.Write(writer, casted);");
+            .Replace("{writeEnumValue}", $"{FormatterTemplateRef(@enum.baseType)}.write(writer, casted);");
 
 
     private string GenerateFormatterForType(IonType type)
