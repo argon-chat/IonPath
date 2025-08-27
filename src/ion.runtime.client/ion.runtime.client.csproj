@@ -6,6 +6,7 @@
 		<Nullable>enable</Nullable>
 		<PackageId>ionpath.runtime.client</PackageId>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+		<PackageIcon>icon-128.png</PackageIcon>
 	</PropertyGroup>
 
 	<ItemGroup>

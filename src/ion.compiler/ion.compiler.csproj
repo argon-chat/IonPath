@@ -1,14 +1,15 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>net9.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<PackageIcon>icon-128.png</PackageIcon>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\ion.compiler.runtime\ion.compiler.runtime.csproj" />
-    <ProjectReference Include="..\ion.syntax\ion.syntax.csproj" />
-  </ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\ion.compiler.runtime\ion.compiler.runtime.csproj" />
+		<ProjectReference Include="..\ion.syntax\ion.syntax.csproj" />
+	</ItemGroup>
 
 </Project>

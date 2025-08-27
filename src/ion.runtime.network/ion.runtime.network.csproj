@@ -9,6 +9,7 @@
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<Title>Ion Network Runtime Types for Server Generated Code</Title>
 		<PackageId>ionpath.runtime.network</PackageId>
+		<PackageIcon>icon-128.png</PackageIcon>
 	</PropertyGroup>
 	<ItemGroup>
 		<FrameworkReference Include="Microsoft.AspNetCore.App" />
