@@ -10,6 +10,9 @@ public interface IIonTransportRegistration
 
     IIonTransportRegistration AddInterceptor<TImpl>() 
         where TImpl : class, IIonInterceptor;
+
+    IIonTransportRegistration IonWithSubProtocolTicketExchange<T>()
+        where T : class, IIonTicketExchange;
 }
 
 
@@ -24,6 +27,12 @@ internal readonly struct IonDescriptorRegistration(IServiceCollection col) : IIo
     public IIonTransportRegistration AddInterceptor<TImpl>() where TImpl : class, IIonInterceptor
     {
         col.AddIonInterceptor<TImpl>();
+        return this;
+    }
+
+    public IIonTransportRegistration IonWithSubProtocolTicketExchange<T>() where T : class, IIonTicketExchange
+    {
+        col.IonWithSubProtocolTicketExchange<T>();
         return this;
     }
 }
