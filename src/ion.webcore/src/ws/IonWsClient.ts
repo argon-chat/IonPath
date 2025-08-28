@@ -46,7 +46,7 @@ export class IonWsClient {
       throw new Error("WebSocketStream is not supported in this browser");
 
     const wsUrl = `${toWebSocketUrl(this.baseUrl)}/ion/${this.interfaceName}/${this.methodName}.ws`;
-    const wss = new WebSocketStream(wsUrl, { signal });
+    const wss = new WebSocketStream(wsUrl, { signal, headers: { 'X-Test': "1" }, protocols: ["YameteKudasai"] });
     const { readable, writable } = await wss.opened;
     const reader = readable.getReader();
     const writer = writable.getWriter();
@@ -57,7 +57,7 @@ export class IonWsClient {
       while (true) {
         const { value, done } = await reader.read();
         if (!(value instanceof Uint8Array))
-            throw new Error("invalid operation exception, websocket return string type, not a buffer");
+            throw new Error(`invalid operation exception, websocket return string type, not a buffer, value: ${value}, done: ${done}`);
 
         if (done) break;
         if (!value) continue;

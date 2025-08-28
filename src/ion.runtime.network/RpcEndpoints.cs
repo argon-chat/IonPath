@@ -1,11 +1,13 @@
 ﻿namespace ion.runtime.network;
 
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Components.Routing;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System;
 using System.Buffers;
 using System.Diagnostics;
@@ -18,17 +20,37 @@ public class ServerSideCallContext(AsyncServiceScope scope, Type @interface, Met
 {
     public Type InterfaceName { get; } = @interface;
     public MethodInfo MethodName { get; } = @method;
-    public IDictionary<string, string> RequestItems { get; } = new Dictionary<string, string>([], StringComparer.InvariantCultureIgnoreCase);
-    public IDictionary<string, string> ResponseItems { get; } = new Dictionary<string, string>([], StringComparer.InvariantCultureIgnoreCase);
+
+    public IDictionary<string, string> RequestItems { get; } =
+        new Dictionary<string, string>([], StringComparer.InvariantCultureIgnoreCase);
+
+    public IDictionary<string, string> ResponseItems { get; } =
+        new Dictionary<string, string>([], StringComparer.InvariantCultureIgnoreCase);
+
     public Stopwatch Stopwatch { get; } = Stopwatch.StartNew();
     public AsyncServiceScope AsyncServiceScope { get; } = scope;
     public void Dispose() => Stopwatch.Stop();
 }
 
+public interface IIonTicketExchange
+{
+    Task<ReadOnlyMemory<byte>> OnExchangeCreateAsync(IIonCallContext callContext);
+    Task OnExchangeTransactionAsync(ReadOnlyMemory<byte> exchangeToken);
+}
+
+internal interface __internal_ion
+{
+    void __exchange();
+
+
+    static MethodInfo __exchange_ref =>
+        typeof(__internal_ion).GetMethod(nameof(__exchange), BindingFlags.Public | BindingFlags.Instance)!;
+}
 
 public static class RpcEndpoints
 {
-    public static IServiceCollection AddIonProtocol(this IServiceCollection services, Action<IIonTransportRegistration> onRegistration)
+    public static IServiceCollection AddIonProtocol(this IServiceCollection services,
+        Action<IIonTransportRegistration> onRegistration)
     {
         services.Configure<IonTransportOptions>(_ => { });
         services.AddSingleton<IonDescriptorStorage>();
@@ -37,12 +59,24 @@ public static class RpcEndpoints
         return services;
     }
 
+    internal static IServiceCollection IonWithSubProtocolTicketExchange<T>(this IServiceCollection services)
+        where T : class, IIonTicketExchange
+    {
+        services.AddScoped<IIonTicketExchange, T>();
+        services.Configure<IonTransportOptions>(x =>
+        {
+            x.WebSocketOptions.Flow = IonWebSocketAuthFlow.SubProtocol;
+            x.WebSocketOptions.TicketExchangeHandle = typeof(T);
+        });
+        return services;
+    }
+
     public static IServiceCollection AddIonService<TInterface, TImplementation>(this IServiceCollection services)
         where TInterface : class, IIonService
         where TImplementation : class, TInterface
     {
         services.AddScoped<TInterface, TImplementation>();
-        services.Configure<IonTransportOptions>(options => 
+        services.Configure<IonTransportOptions>(options =>
             options.Services.Add(typeof(TInterface), typeof(TImplementation)));
         return services;
     }
@@ -64,6 +98,7 @@ public static class RpcEndpoints
     public static string IdempotencyHeader = "X-Idempotency-Key";
     public static string RequestSignatureHeader = "X-Sig-Key";
     public static string IonStatusCode = "X-Ion-Status";
+    public static string SubProtocolTemplate = "ion; ticket={ticket}; ver=1";
 
     static class IonWs
     {
@@ -72,9 +107,90 @@ public static class RpcEndpoints
         public const byte OPCODE_ERROR = 0x02;
     }
 
-
     public static IEndpointRouteBuilder MapRpcEndpoints(this IEndpointRouteBuilder app)
     {
+        app.Map("/ion.att", async (HttpContext http,
+            [FromServices] IOptions<IonTransportOptions> transportOptions,
+            [FromServices] IEnumerable<IIonInterceptor> interceptors,
+            [FromServices] IServiceProvider provider,
+            [FromServices] ILoggerFactory lf,
+            CancellationToken ct
+        ) =>
+        {
+            var log = lf.CreateLogger("RPC");
+            var req = http.Request;
+            var resp = http.Response;
+
+            if (req.ContentType is null ||
+                !req.ContentType.StartsWith(IonContentType, StringComparison.OrdinalIgnoreCase))
+            {
+                resp.StatusCode = StatusCodes.Status415UnsupportedMediaType;
+                await WriteError(resp, "UNSUPPORTED_MEDIA", $"Content-Type must be {IonContentType}");
+                return;
+            }
+
+            await using var scope = provider.CreateAsyncScope();
+            using var callCtx = new ServerSideCallContext(scope, typeof(__internal_ion), __internal_ion.__exchange_ref);
+
+            foreach (var header in req.Headers)
+                callCtx.RequestItems.Add(header.Key, header.Value.ToString());
+
+            var writer = new CborWriter();
+
+            async Task TerminalAsync(IIonCallContext c, CancellationToken cancellationToken)
+            {
+                var exchanger = c.AsyncServiceScope.ServiceProvider.GetRequiredService<IIonTicketExchange>();
+
+                var token = await exchanger.OnExchangeCreateAsync(c);
+
+                writer.WriteStartArray(1);
+                writer.WriteByteString(token.Span);
+                writer.WriteEndArray();
+
+
+                resp.StatusCode = StatusCodes.Status200OK;
+                resp.ContentType = IonContentType;
+
+                foreach (var (k, v) in c.ResponseItems)
+                    resp.Headers.Append(k, v);
+
+                await resp.BodyWriter.WriteAsync(writer.Encode(), cancellationToken);
+                await resp.BodyWriter.FlushAsync(cancellationToken);
+            }
+
+            try
+            {
+                var next = TerminalAsync;
+
+                var array = interceptors.ToArray();
+                for (var i = array.Length - 1; i >= 0; i--)
+                {
+                    var interceptor = array[i];
+                    var currentNext = next;
+                    next = (c, token) => interceptor.InvokeAsync(c, currentNext, token);
+                }
+
+                await next(callCtx, ct).ConfigureAwait(false);
+            }
+            catch (IonRequestException ionException)
+            {
+                resp.StatusCode = StatusCodes.Status400BadRequest;
+                await WriteError(resp, ionException.Error.code, ionException.Error.msg);
+            }
+            catch (OperationCanceledException)
+            {
+                resp.StatusCode = StatusCodes.Status504GatewayTimeout;
+                await WriteError(resp, IonProtocolError.DEADLINE_EXCEEDED());
+            }
+            catch (Exception ex)
+            {
+                log.LogError(ex, "handler failed");
+                resp.StatusCode = StatusCodes.Status500InternalServerError;
+                await WriteError(resp, "INTERNAL_ERROR", ex.ToString());
+            }
+
+        });
+
         app.Map("/ion/{interfaceName}/{methodName}.ws", async (HttpContext http,
             string interfaceName,
             string methodName,
@@ -88,6 +204,7 @@ public static class RpcEndpoints
             await using var scope = provider.CreateAsyncScope();
             var router = store.GetStreamRouter(interfaceName, scope);
             using var ws = await http.WebSockets.AcceptWebSocketAsync();
+
 
             if (router is null)
             {
@@ -108,7 +225,7 @@ public static class RpcEndpoints
                 await CloseErrorGracefully(ws, "Expected binary INVOKE frame", ct);
                 return;
             }
-            
+
             var reader = new CborReader(invokeMsg.payload);
 
             try
@@ -123,8 +240,13 @@ public static class RpcEndpoints
             }
             catch (OperationCanceledException)
             {
-                try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "cancel", CancellationToken.None); } 
-                catch { }
+                try
+                {
+                    await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "cancel", CancellationToken.None);
+                }
+                catch
+                {
+                }
             }
             catch (Exception ex)
             {
@@ -137,19 +259,27 @@ public static class RpcEndpoints
                     var bytes = writer.Encode();
                     await SendOpFrameAsync(ws, IonWs.OPCODE_ERROR, bytes, ct);
                 }
-                catch { }
-                try { await ws.CloseAsync(WebSocketCloseStatus.InternalServerError, "exception", CancellationToken.None); } 
-                catch { }
+                catch
+                {
+                }
+
+                try
+                {
+                    await ws.CloseAsync(WebSocketCloseStatus.InternalServerError, "exception", CancellationToken.None);
+                }
+                catch
+                {
+                }
             }
         });
 
-        
+
         app.MapPost("/ion/{interfaceName}/{methodName}.unary", async (string interfaceName, string methodName,
-                HttpRequest req, HttpResponse resp,
-                [FromServices] IonDescriptorStorage store,
-                [FromServices] IServiceProvider provider,
-                [FromServices] IEnumerable<IIonInterceptor> interceptors,
-                [FromServices] ILoggerFactory lf, CancellationToken ct) 
+                    HttpRequest req, HttpResponse resp,
+                    [FromServices] IonDescriptorStorage store,
+                    [FromServices] IServiceProvider provider,
+                    [FromServices] IEnumerable<IIonInterceptor> interceptors,
+                    [FromServices] ILoggerFactory lf, CancellationToken ct)
                 =>
             {
                 var log = lf.CreateLogger("RPC");
@@ -160,6 +290,7 @@ public static class RpcEndpoints
                     await WriteError(resp, "UNSUPPORTED_MEDIA", $"Content-Type must be {IonContentType}");
                     return;
                 }
+
                 await using var scope = provider.CreateAsyncScope();
 
                 using var msStream = new MemoryStream();
@@ -181,7 +312,7 @@ public static class RpcEndpoints
                 using var callCtx = new ServerSideCallContext(scope, @interface, method);
 
 
-                foreach (var header in req.Headers) 
+                foreach (var header in req.Headers)
                     callCtx.RequestItems.Add(header.Key, header.Value.ToString());
 
                 var reader = new CborReader(memory);
@@ -193,7 +324,7 @@ public static class RpcEndpoints
                     resp.StatusCode = StatusCodes.Status200OK;
                     resp.ContentType = IonContentType;
 
-                    foreach (var (k, v) in _.ResponseItems) 
+                    foreach (var (k, v) in _.ResponseItems)
                         resp.Headers.Append(k, v);
 
                     await resp.BodyWriter.WriteAsync(writer.Encode(), token);
@@ -213,7 +344,6 @@ public static class RpcEndpoints
                     }
 
                     await next(callCtx, ct).ConfigureAwait(false);
-
                 }
                 catch (IonRequestException ionException)
                 {
@@ -246,18 +376,15 @@ public static class RpcEndpoints
     {
         resp.ContentType = IonContentType;
         resp.Headers.Append(IonStatusCode, code);
-        await IonBinarySerializer.SerializeAsync(new IonProtocolError(code, message), async memory =>
-        {
-            await resp.BodyWriter.WriteAsync(memory);
-        });
+        await IonBinarySerializer.SerializeAsync(new IonProtocolError(code, message),
+            async memory => { await resp.BodyWriter.WriteAsync(memory); });
     }
+
     private static async Task WriteError(HttpResponse resp, IonProtocolError error)
     {
         resp.ContentType = IonContentType;
         resp.Headers.Append(IonStatusCode, error.code);
-        await IonBinarySerializer.SerializeAsync(error, async memory => {
-            await resp.BodyWriter.WriteAsync(memory);
-        });
+        await IonBinarySerializer.SerializeAsync(error, async memory => { await resp.BodyWriter.WriteAsync(memory); });
     }
 
     private static async Task SendOpFrameAsync(
@@ -278,7 +405,8 @@ public static class RpcEndpoints
         {
             rented[0] = opcode;
             cborPayload.Span.CopyTo(rented.AsSpan(1));
-            await ws.SendAsync(new ArraySegment<byte>(rented, 0, cborPayload.Length + 1), WebSocketMessageType.Binary, true, ct).ConfigureAwait(false);
+            await ws.SendAsync(new ArraySegment<byte>(rented, 0, cborPayload.Length + 1), WebSocketMessageType.Binary,
+                true, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -287,9 +415,10 @@ public static class RpcEndpoints
     }
 
 
-    private static async Task<(WebSocketMessageType messageType, ReadOnlyMemory<byte> payload)> ReceiveSetupMessageAsync(
-       WebSocket ws,
-       CancellationToken ct)
+    private static async Task<(WebSocketMessageType messageType, ReadOnlyMemory<byte> payload)>
+        ReceiveSetupMessageAsync(
+            WebSocket ws,
+            CancellationToken ct)
     {
         var buffer = ArrayPool<byte>.Shared.Rent(64 * 1024);
         try
@@ -317,20 +446,40 @@ public static class RpcEndpoints
     private static async Task CloseGracefully(WebSocket ws, CancellationToken ct)
     {
         if (ws.State == WebSocketState.CloseReceived)
-            try { await ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "ack", ct).ConfigureAwait(false); }
-            catch { }
+            try
+            {
+                await ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "ack", ct).ConfigureAwait(false);
+            }
+            catch
+            {
+            }
         else if (ws.State == WebSocketState.Open)
-            try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", ct).ConfigureAwait(false); } 
-            catch { }
+            try
+            {
+                await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", ct).ConfigureAwait(false);
+            }
+            catch
+            {
+            }
     }
 
     private static async Task CloseErrorGracefully(WebSocket ws, string error, CancellationToken ct)
     {
         if (ws.State == WebSocketState.CloseReceived)
-            try { await ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, error, ct).ConfigureAwait(false); }
-            catch { }
+            try
+            {
+                await ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, error, ct).ConfigureAwait(false);
+            }
+            catch
+            {
+            }
         else if (ws.State == WebSocketState.Open)
-            try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, error, ct).ConfigureAwait(false); }
-            catch { }
+            try
+            {
+                await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, error, ct).ConfigureAwait(false);
+            }
+            catch
+            {
+            }
     }
 }

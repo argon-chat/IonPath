@@ -1,5 +1,7 @@
 interface WebSocketStreamOptions {
   signal?: AbortSignal;
+  headers?: HeadersInit;
+  protocols?: string[]
 }
 
 interface WebSocketStreamOpenEvent {
