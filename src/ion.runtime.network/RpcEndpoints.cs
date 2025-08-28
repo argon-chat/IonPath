@@ -35,7 +35,7 @@ public class ServerSideCallContext(AsyncServiceScope scope, Type @interface, Met
 public interface IIonTicketExchange
 {
     Task<ReadOnlyMemory<byte>> OnExchangeCreateAsync(IIonCallContext callContext);
-    Task OnExchangeTransactionAsync(ReadOnlyMemory<byte> exchangeToken);
+    Task<IonProtocolError?> OnExchangeTransactionAsync(ReadOnlyMemory<byte> exchangeToken);
 }
 
 internal interface __internal_ion
@@ -189,28 +189,68 @@ public static class RpcEndpoints
                 await WriteError(resp, "INTERNAL_ERROR", ex.ToString());
             }
 
-        });
+        })
+        .WithMetadata(new ConsumesAttribute(IonContentType))
+        .Produces(StatusCodes.Status200OK, contentType: IonContentType)
+        .Produces(StatusCodes.Status400BadRequest, contentType: IonContentType)
+        .Produces(StatusCodes.Status409Conflict, contentType: IonContentType)
+        .Produces(StatusCodes.Status415UnsupportedMediaType, contentType: IonContentType)
+        .Produces(StatusCodes.Status500InternalServerError, contentType: IonContentType); ;
 
         app.Map("/ion/{interfaceName}/{methodName}.ws", async (HttpContext http,
             string interfaceName,
             string methodName,
-            IonDescriptorStorage store,
-            IServiceProvider provider,
-            ILoggerFactory lf,
+            [FromServices] IonDescriptorStorage store,
+            [FromServices] IServiceProvider provider,
+            [FromServices] IIonTicketExchange ticketExchange,
+            [FromServices] ILoggerFactory lf,
             CancellationToken ct) =>
         {
             var log = lf.CreateLogger("RPC.WS");
 
             await using var scope = provider.CreateAsyncScope();
             var router = store.GetStreamRouter(interfaceName, scope);
-            using var ws = await http.WebSockets.AcceptWebSocketAsync();
 
+            if (!http.WebSockets.IsWebSocketRequest)
+            {
+                http.Response.StatusCode = StatusCodes.Status412PreconditionFailed;
+                await WriteError(http.Response, "UNSUPPORTED_TRANSPORT", $"Transport must be WebSocket");
+                return;
+            }
 
             if (router is null)
             {
-                await CloseErrorGracefully(ws, $"Method {methodName} is not server-streaming", ct);
+                await WriteError(http.Response, "ENTRYPOINT_NOT_FOUND", $"Method {methodName} is not server-streaming");
                 return;
             }
+
+            var subProtocol = http.WebSockets.WebSocketRequestedProtocols.FirstOrDefault(x => x.StartsWith("ion;"));
+
+            if (string.IsNullOrEmpty(subProtocol))
+            {
+                http.Response.StatusCode = StatusCodes.Status412PreconditionFailed;
+                await WriteError(http.Response, "UNSUPPORTED_SUB_PROTOCOL", $"Transport sub-protocol must be ion");
+                return;
+            }
+
+            var ticket = IonTicketExtractor.ExtractTicketBytes(subProtocol);
+
+            if (ticket is null)
+            {
+                http.Response.StatusCode = StatusCodes.Status412PreconditionFailed;
+                await WriteError(http.Response, "TICKET_BROKEN", $"Transport ticket has been broken");
+                return;
+            }
+
+            var error = await ticketExchange.OnExchangeTransactionAsync(ticket.Value);
+
+            if (error is not null)
+            {
+                await WriteError(http.Response, error.Value);
+                return;
+            }
+
+            using var ws = await http.WebSockets.AcceptWebSocketAsync(subProtocol);
 
             var invokeMsg = await ReceiveSetupMessageAsync(ws, ct);
 
@@ -279,8 +319,7 @@ public static class RpcEndpoints
                     [FromServices] IonDescriptorStorage store,
                     [FromServices] IServiceProvider provider,
                     [FromServices] IEnumerable<IIonInterceptor> interceptors,
-                    [FromServices] ILoggerFactory lf, CancellationToken ct)
-                =>
+                    [FromServices] ILoggerFactory lf, CancellationToken ct) =>
             {
                 var log = lf.CreateLogger("RPC");
                 if (req.ContentType is null ||
