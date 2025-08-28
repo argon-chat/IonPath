@@ -43,6 +43,11 @@ public static class CborExtensions
             reader.SkipValue();
         reader.ReadEndArray();
     }
+
+    public static void WriteUndefineds(this CborWriter writer, int count)
+    {
+        for (var i = 0; i < count; i++) writer.WriteSimpleValue(CborSimpleValue.Undefined);
+    }
 }
 
 public interface IonFormatter<T>
