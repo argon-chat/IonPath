@@ -1154,7 +1154,6 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             .Replace("{unionInterface}", union.name.Identifier)
             .Replace("{readCheks}", readChecks.ToString())
             .Replace("{writeChecks}", writeChecks.ToString())
-            .Replace("{fieldsCount}", union.types.Max(x => x.fields.Count).ToString())
         );
 
         return builder.ToString();
@@ -1175,13 +1174,13 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
                 {readCheks}
                 else
                     throw new InvalidOperationException();
-                reader.ReadEndArrayAndSkip(arraySize - {fieldsCount});
+                reader.ReadEndArray();
                 return result;
             }
         
             public void Write(CborWriter writer, I{unionInterface} value)
             {
-                writer.WriteStartArray({fieldsCount});
+                writer.WriteStartArray(2);
                 writer.WriteUInt32(value.UnionIndex);
         
                 if (false) {}

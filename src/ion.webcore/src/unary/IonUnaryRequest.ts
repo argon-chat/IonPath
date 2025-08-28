@@ -38,11 +38,11 @@ export class IonRequest {
       methodName: this.methodName,
       requestPayload: payload,
       expectedType: undefined,
-      requestHeadets: { "Content-Type": IonContentType }
+      requestHeadets: { "Content-Type": IonContentType },
     };
 
-    let next: (c: IonCallContext, s?: AbortSignal) 
-        => Promise<void> = this.terminalAsync;
+    let next: (c: IonCallContext, s?: AbortSignal) => Promise<void> =
+      this.terminalAsync;
     for (let i = this.context.interceptors.length - 1; i >= 0; i--) {
       const interceptor = this.context.interceptors[i];
       const currentNext = next;
@@ -57,17 +57,18 @@ export class IonRequest {
     payload: Uint8Array,
     signal?: AbortSignal
   ): Promise<TResponse> {
+    const normalizedTypename = this.extractTypeName(responseTypename);
     const ctx: IonCallContext = {
       client: fetch,
       interfaceName: this.interfaceName,
       methodName: this.methodName,
       requestPayload: payload,
       expectedType: null as any as TResponse,
-      requestHeadets: { "Content-Type": IonContentType }
+      requestHeadets: { "Content-Type": IonContentType },
     };
 
-    let next: (c: IonCallContext, s?: AbortSignal) 
-        => Promise<void> = this.terminalAsync.bind(this);
+    let next: (c: IonCallContext, s?: AbortSignal) => Promise<void> =
+      this.terminalAsync.bind(this);
     for (let i = this.context.interceptors.length - 1; i >= 0; i--) {
       const interceptor = this.context.interceptors[i];
       const currentNext = next;
@@ -80,8 +81,60 @@ export class IonRequest {
       throw new Error("No response payload");
     }
 
-    const reader = new CborReader(ctx.responsePayload);
-    return IonFormatterStorage.get<TResponse>(responseTypename).read(reader);
+    try {
+      const reader = new CborReader(ctx.responsePayload);
+      if (normalizedTypename.isArray)
+        return IonFormatterStorage.readArray<TResponse>(reader, normalizedTypename.typeName) as TResponse;
+      if (normalizedTypename.isMaybe)
+        return IonFormatterStorage.readMaybe<TResponse>(reader, normalizedTypename.typeName) as TResponse;
+      return IonFormatterStorage.get<TResponse>(normalizedTypename.typeName).read(reader);
+    } catch (e) {
+      console.error("===== UNCATCH ION INTERNAL ERROR =====");
+      console.error(e);
+      console.error(`Procedure: ${ctx.interfaceName}/${ctx.methodName}()`);
+      console.error(`ResponseTypename: ${responseTypename}`);
+      console.error(`Payload: ${this.toBase64(ctx.responsePayload)}`);
+      console.error("===== ========================== =====");
+      throw e;
+    }
+  }
+
+  extractTypeName(typeName: string): {
+    typeName: string;
+    isArray: boolean;
+    isMaybe: boolean;
+  } {
+    let isArray = false;
+    let isMaybe = false;
+    let inner = typeName.trim();
+
+    if (inner.startsWith("IonArray<") && inner.endsWith(">")) {
+      isArray = true;
+      inner = inner.slice("IonArray<".length, -1).trim();
+    } else if (inner.startsWith("IonMaybe<") && inner.endsWith(">")) {
+      isMaybe = true;
+      inner = inner.slice("IonMaybe<".length, -1).trim();
+    }
+
+    return {
+      typeName: inner,
+      isArray,
+      isMaybe,
+    };
+  }
+
+  toBase64(u8: Uint8Array): string {
+    if (typeof Buffer !== "undefined") {
+      return Buffer.from(u8).toString("base64");
+    } else {
+      let binary = "";
+      const chunkSize = 0x8000;
+      for (let i = 0; i < u8.length; i += chunkSize) {
+        const chunk = u8.subarray(i, i + chunkSize);
+        binary += String.fromCharCode(...chunk);
+      }
+      return btoa(binary);
+    }
   }
 
   private async terminalAsync(
@@ -105,9 +158,9 @@ export class IonRequest {
 
     if (!resp.ok) {
       try {
-        const error = IonFormatterStorage
-            .get<IonProtocolError>("IonProtocolError")
-            .read(new CborReader(buf));
+        const error = IonFormatterStorage.get<IonProtocolError>(
+          "IonProtocolError"
+        ).read(new CborReader(buf));
         throw new IonRequestException(error);
       } catch {
         throw new IonRequestException(
@@ -146,7 +199,7 @@ IonFormatterStorage.register<IonProtocolError>("IonProtocolError", {
     writer.writeTextString(value.message);
     writer.writeEndArray();
   },
-})
+});
 
 export const IonProtocolError = {
   UPSTREAM_ERROR: (msg: string): IonProtocolError => ({

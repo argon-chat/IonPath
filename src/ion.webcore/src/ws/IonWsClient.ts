@@ -23,7 +23,11 @@ function toWebSocketUrl(httpUrl: string): string {
   ) {
     u.port = "";
   }
-  return u.toString();
+  const urlStr = u.toString();
+
+  if (urlStr.endsWith("/"))
+    return urlStr.slice(0, -1);
+  return urlStr;
 }
 
 export class IonWsClient {

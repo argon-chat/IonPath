@@ -178,6 +178,12 @@ export class CborWriter {
     this.stack.push({ type: "array", definite: length !== null });
   }
 
+  writeUndefineds(len: number) {
+    for (let index = 0; index < len; index++) {
+      this.writeUndefined();
+    }
+  }
+
   writeEndArray() {
     const ctx = this.stack.pop();
     if (!ctx || ctx.type !== "array")

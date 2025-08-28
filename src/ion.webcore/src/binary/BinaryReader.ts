@@ -38,43 +38,43 @@ export class BinaryReader {
     return this.view.getUint8(this.offset);
   }
 
-  readInt16(littleEndian = true): number {
+  readInt16(littleEndian = false): number {
     const val = this.view.getInt16(this.offset, littleEndian);
     this.offset += 2;
     return val;
   }
 
-  readUint16(littleEndian = true): number {
+  readUint16(littleEndian = false): number {
     const val = this.view.getUint16(this.offset, littleEndian);
     this.offset += 2;
     return val;
   }
 
-  readInt32(littleEndian = true): number {
+  readInt32(littleEndian = false): number {
     const val = this.view.getInt32(this.offset, littleEndian);
     this.offset += 4;
     return val;
   }
 
-  readUint32(littleEndian = true): number {
+  readUint32(littleEndian = false): number {
     const val = this.view.getUint32(this.offset, littleEndian);
     this.offset += 4;
     return val;
   }
 
-  readBigInt64(littleEndian = true): bigint {
+  readBigInt64(littleEndian = false): bigint {
     const val = this.view.getBigInt64(this.offset, littleEndian);
     this.offset += 8;
     return val;
   }
 
-  readBigUint64(littleEndian = true): bigint {
+  readBigUint64(littleEndian = false): bigint {
     const val = this.view.getBigUint64(this.offset, littleEndian);
     this.offset += 8;
     return val;
   }
 
-  readInt128(littleEndian = true): bigint {
+  readInt128(littleEndian = false): bigint {
     const bytes = this.readBytes(16);
     let result = 0n;
     if (littleEndian) {
@@ -93,19 +93,19 @@ export class BinaryReader {
     return result;
   }
 
-  readFloat32(littleEndian = true): number {
+  readFloat32(littleEndian = false): number {
     const val = this.view.getFloat32(this.offset, littleEndian);
     this.offset += 4;
     return val;
   }
 
-  readFloat64(littleEndian = true): number {
+  readFloat64(littleEndian = false): number {
     const val = this.view.getFloat64(this.offset, littleEndian);
     this.offset += 8;
     return val;
   }
 
-  readFloat16(littleEndian = true): number {
+  readFloat16(littleEndian = false): number {
     const bits = this.view.getUint16(this.offset, littleEndian);
     this.offset += 2;
 
@@ -126,13 +126,26 @@ export class BinaryReader {
     }
   }
 
-  readBytes(length: number): Uint8Array {
+  readBytes(length: number | bigint): Uint8Array {
+    if (typeof length === "bigint") {
+      if (length > Number.MAX_SAFE_INTEGER) {
+        throw new Error("Length too large to handle in JS");
+      }
+      length = Number(length);
+    }
+
+    const start = this.offset;
+    const end = start + length;
+    if (end > this.view.byteLength) {
+      throw new Error(`Out of range read end > this.view.byteLength (${end} > ${this.view.byteLength})`);
+    }
+
     const arr = new Uint8Array(
       this.view.buffer,
-      this.view.byteOffset + this.offset,
+      this.view.byteOffset + start,
       length
     );
-    this.offset += length;
-    return arr;
+    this.offset = end;
+    return new Uint8Array(arr);
   }
 }

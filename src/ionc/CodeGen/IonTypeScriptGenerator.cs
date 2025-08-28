@@ -736,7 +736,6 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
             .Replace("{unionInterface}", union.name.Identifier)
             .Replace("{readCheks}", readChecks.ToString())
             .Replace("{writeChecks}", writeChecks.ToString())
-            .Replace("{fieldsCount}", union.types.Max(x => x.fields.Count).ToString())
         );
 
         return builder.ToString();
@@ -747,7 +746,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         """
         IonFormatterStorage.register("I{unionInterface}", {
           read(reader: CborReader): I{unionInterface} {
-            const arraySize = reader.readStartArray() ?? (() => { throw new Error("undefined len array not allowed") })();
+            reader.readStartArray();
             let value: I{unionInterface} = null as any;
             const unionIndex = reader.readUInt32();
             
@@ -756,11 +755,11 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
             {readCheks}
             else throw new Error();
           
-            reader.readEndArrayAndSkip(arraySize - {fieldsCount});
+            reader.readEndArray();
             return value!;
           },
           write(writer: CborWriter, value: I{unionInterface}): void {
-            writer.writeStartArray({fieldsCount});
+            writer.writeStartArray(2);
             writer.writeUInt32(value.UnionIndex);
             if (false)
             {}
@@ -779,8 +778,9 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string UnionWriteCheck =
         """
-            else if (value.UnionIndex == {caseIndex})
-              IonFormatterStorage.get<{caseTypeName}>("{caseTypeName}").write(writer, value as {caseTypeName});
+            else if (value.UnionIndex == {caseIndex}) {
+                IonFormatterStorage.get<{caseTypeName}>("{caseTypeName}").write(writer, value as {caseTypeName});
+            }
         """;
 
 

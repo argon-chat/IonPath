@@ -36,7 +36,7 @@ export class BinaryWriter {
     this.buffer[this.offset++] = value & 0xff;
   }
 
-  writeUint16(value: number, littleEndian = true) {
+  writeUint16(value: number, littleEndian = false) {
     this.ensure(2);
     if (littleEndian) {
       this.buffer[this.offset++] = value & 0xff;
@@ -47,11 +47,11 @@ export class BinaryWriter {
     }
   }
 
-  writeInt16(value: number, littleEndian = true) {
+  writeInt16(value: number, littleEndian = false) {
     this.writeUint16(value, littleEndian);
   }
 
-  writeUint32(value: number, littleEndian = true) {
+  writeUint32(value: number, littleEndian = false) {
     this.ensure(4);
     if (littleEndian) {
       this.buffer[this.offset++] = value & 0xff;
@@ -66,11 +66,11 @@ export class BinaryWriter {
     }
   }
 
-  writeInt32(value: number, littleEndian = true) {
+  writeInt32(value: number, littleEndian = false) {
     this.writeUint32(value >>> 0, littleEndian);
   }
 
-  writeBigInt64(value: bigint, littleEndian = true) {
+  writeBigInt64(value: bigint, littleEndian = false) {
     this.ensure(8);
     if (littleEndian) {
       for (let i = 0; i < 8; i++) {
@@ -83,11 +83,11 @@ export class BinaryWriter {
     }
   }
 
-  writeBigUint64(value: bigint, littleEndian = true) {
+  writeBigUint64(value: bigint, littleEndian = false) {
     this.writeBigInt64(value, littleEndian);
   }
 
-  writeInt128(value: bigint, littleEndian = true) {
+  writeInt128(value: bigint, littleEndian = false) {
     this.ensure(16);
     if (littleEndian) {
       for (let i = 0; i < 16; i++) {
@@ -100,7 +100,7 @@ export class BinaryWriter {
     }
   }
 
-  writeFloat32(value: number, littleEndian = true) {
+  writeFloat32(value: number, littleEndian = false) {
     this.ensure(4);
     const f32 = new Float32Array(1);
     const u8 = new Uint8Array(f32.buffer);
@@ -112,7 +112,7 @@ export class BinaryWriter {
     }
   }
 
-  writeFloat64(value: number, littleEndian = true) {
+  writeFloat64(value: number, littleEndian = false) {
     this.ensure(8);
     const f64 = new Float64Array(1);
     const u8 = new Uint8Array(f64.buffer);
@@ -124,7 +124,7 @@ export class BinaryWriter {
     }
   }
 
-  writeFloat16(value: number, littleEndian = true) {
+  writeFloat16(value: number, littleEndian = false) {
     this.ensure(2);
     if (isNaN(value)) {
       this.writeUint16(0x7e00, littleEndian); 

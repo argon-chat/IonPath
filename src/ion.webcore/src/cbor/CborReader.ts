@@ -82,14 +82,24 @@ export class CborReader {
     }
   }
 
-  private readLength(ai: number): number | bigint | null {
-    if (ai < 24) return ai;
-    if (ai === 24) return this.r.readUint8();
-    if (ai === 25) return this.r.readUint16();
-    if (ai === 26) return this.r.readUint32();
-    if (ai === 27) return this.r.readBigUint64();
-    if (ai === 31) return null;
-    throw new Error("invalid length encoding");
+  readLength(ai: number): number | bigint | null {
+    if (ai < 24) {
+      return ai;
+    }
+    switch (ai) {
+      case 24:
+        return this.r.readUint8();
+      case 25:
+        return this.r.readUint16(); 
+      case 26:
+        return this.r.readUint32();
+      case 27:
+        return this.r.readBigUint64();
+      case 31:
+        return null;
+      default:
+        throw new Error(`Invalid additional info for length: ${ai}`);
+    }
   }
 
   // -------------------
@@ -261,39 +271,57 @@ export class CborReader {
       throw new Error("Not an indefinite text string");
   }
 
-  readTextStringChunk(): string {
-    const b = this.r.readUint8();
-    if (b >> 5 !== 3) throw new Error("Not a text string chunk");
-    const ai = b & 0x1f;
-    const len = this.readLength(ai);
-    if (len === null)
-      throw new Error("Nested indefinite string not allowed here");
-    const bytes = this.r.readBytes(len as number);
-    return new TextDecoder("utf-8").decode(bytes);
-  }
-
   readEndTextString(): void {
     const b = this.r.readUint8();
     if (b !== 0xff) throw new Error("Expected break for text string");
   }
 
   readTextString(): string {
-    const b = this.r.readUint8();
-    if (b >> 5 !== 3) throw new Error("Not a text string");
-    const ai = b & 0x1f;
-    const len = this.readLength(ai);
+    const initialByte = this.r.peekUint8();
+    const majorType = initialByte >> 5;
+    const ai = initialByte & 0x1f;
+    if (majorType !== 3) throw new Error("Not a text string");
 
-    if (len === null) {
-      let s = "";
-      while (this.peekByte() !== 0xff) {
-        s += this.readTextStringChunk();
+    if (ai === 31) {
+      this.r.readUint8();
+      let chunks: Uint8Array[] = [];
+      for (;;) {
+        const b = this.r.peekUint8();
+        if (b === 0xff) {
+          this.r.readUint8();
+          break;
+        }
+        chunks.push(this.readTextStringChunkRaw());
       }
-      this.readEndTextString();
-      return s;
+      const total = new Uint8Array(
+        chunks.reduce((sum, c) => sum + c.length, 0)
+      );
+      let offset = 0;
+      for (const c of chunks) {
+        total.set(c, offset);
+        offset += c.length;
+      }
+      return new TextDecoder("utf-8").decode(total);
+    } else {
+      this.r.readUint8();
+      const len = this.readLength(ai);
+      if (len == null) throw new Error("Invalid definite length");
+      const bytes = this.r.readBytes(len);
+      return new TextDecoder("utf-8").decode(bytes);
     }
+  }
 
-    const bytes = this.r.readBytes(len as number);
-    return new TextDecoder("utf-8").decode(bytes);
+  private readTextStringChunkRaw(): Uint8Array {
+    const initialByte = this.r.readUint8();
+    const majorType = initialByte >> 5;
+    const ai = initialByte & 0x1f;
+    if (majorType !== 3) throw new Error("Not a text string chunk");
+
+    const len = this.readLength(ai);
+    if (len == null)
+      throw new Error("Chunks of indefinite text string must be definite");
+
+    return this.r.readBytes(len);
   }
 
   // -------------------
@@ -323,8 +351,7 @@ export class CborReader {
   }
 
   readEndArrayAndSkip(skipSize: number) {
-    for (var i = 0; i < Math.abs(skipSize); i++) 
-        this.skipValue();
+    for (var i = 0; i < Math.abs(skipSize); i++) this.skipValue();
     this.readEndArray();
   }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CborReader, CborWriter } from "../src";
-import { decode, encode } from 'cbor-x';
+import { decode, encode } from "cbor-x";
 
 describe("decodeTest", () => {
   it("1", () => {
@@ -12,10 +12,8 @@ describe("decodeTest", () => {
     writer.writeTextString("12345");
     writer.writeEndArray();
 
-
     let result = decode(writer.data);
     let encoded = encode(result);
-
 
     let reader = new CborReader(encoded);
 
@@ -25,10 +23,38 @@ describe("decodeTest", () => {
     const s3 = reader.readTextString();
     reader.readEndArray();
 
-
     expect(3).toEqual(len);
     expect(true).toEqual(b1);
     expect(b2).toEqual(0n);
     expect(s3).toEqual("12345");
+  });
+
+  it("2", () => {
+    function fromBase64(base64: string): Uint8Array {
+      return new Uint8Array(Buffer.from(base64, "base64"));
+    }
+
+    let result = decode(
+      fromBase64(
+        "ggCCeQGAZXlKaGJHY2lPaUpJVXpVeE1pSXNJbXRwWkNJNklrRkVSVFJCTWtKQ05rRXlSRU0zTWpVaUxDSjBlWEFpT2lKS1YxUWlmUS5leUpwWkNJNklqVm1OelEyWW1FMUxUQmxOV0V0TkRNek1TMWhZakZrTFdOaE1XSTRaV0ZoT0dReE9DSXNJbTFwWkNJNklqQXhPVGhsWkRneUxUUTRaRGN0TnpZeE1pMDVabU13TFRoaFpqZ3lNakEzTURZM09DSXNJbTVpWmlJNk1UYzFOak0wT0RRNE55d2laWGh3SWpveE56YzJNRFEzTmpnM0xDSnBZWFFpT2pFM05UWXpORGcwT0Rjc0ltbHpjeUk2SWtGeVoyOXVJaXdpWVhWa0lqb2lRWEpuYjI0aWZRLmpuSFRfa1FoNlZQcGtuTHVzcm1KTWhRUzJCZ3VtbEZVUHp4SHhwODRtMG1lbS1fd1dLTllzWHpHRXl5ZDM4a3NrdkFXckhCRk14aHlyYVZtVF8zLU5B9g=="
+      )
+    );
+    let encoded = encode(result);
+
+    console.log(result);
+
+    let reader = new CborReader(encoded);
+
+    const len = reader.readStartArray();
+    const b1 = reader.readInt32();
+    const arr2 = reader.readStartArray();
+    const s3 = reader.readTextString();
+    const s4 = reader.readNull();
+    reader.readEndArray();
+    reader.readEndArray();
+
+    expect(2).toEqual(len);
+    expect(0).toEqual(b1);
+    expect(arr2).toEqual(2);
   });
 });

@@ -85,12 +85,6 @@ public static class RpcEndpoints
         {
             var log = lf.CreateLogger("RPC.WS");
 
-            if (!http.WebSockets.IsWebSocketRequest)
-            {
-                http.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await http.Response.WriteAsync("WebSocket expected", ct);
-                return;
-            }
             await using var scope = provider.CreateAsyncScope();
             var router = store.GetStreamRouter(interfaceName, scope);
             using var ws = await http.WebSockets.AcceptWebSocketAsync();
