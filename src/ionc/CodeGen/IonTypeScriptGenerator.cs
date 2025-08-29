@@ -527,7 +527,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
     private static readonly string ServiceClientMethodDeclStream =
         """
           {methodName}({args}): AsyncIterable<{methodReturnType}> {
-            const ws = new IonWsClient(this.ctx.baseUrl, "I{serviceTypename}", "{methodName}");
+            const ws = new IonWsClient(this.ctx, "I{serviceTypename}", "{methodName}");
             
             const writer = new CborWriter();
             

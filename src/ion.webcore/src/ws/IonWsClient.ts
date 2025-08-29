@@ -92,7 +92,7 @@ export class IonWsClient {
     };
 
     let next: (c: IonCallContext, s?: AbortSignal) => Promise<void> =
-      this.terminalExchangeAsync;
+      this.terminalExchangeAsync.bind(this);
     for (let i = this.context.interceptors.length - 1; i >= 0; i--) {
       const interceptor = this.context.interceptors[i];
       const currentNext = next;
@@ -157,7 +157,7 @@ export class IonWsClient {
     }.ws`;
     const wss = new WebSocketStream(wsUrl, {
       signal,
-      protocols: [`ion; ticket=${exhangeToken}; ver=1`],
+      protocols: [`ion!ticket#${exhangeToken}!ver#1`],
     });
     const { readable, writable } = await wss.opened;
     const reader = readable.getReader();

@@ -16,7 +16,7 @@ public static class IonTicketExtractor
 
     public static ReadOnlyMemory<byte>? ExtractTicketBytes(string input)
     {
-        var match = Regex.Match(input, @"ticket=([0-9A-Za-z]+)");
+        var match = Regex.Match(input, @"ticket#([0-9A-Za-z]+)");
         return !match.Success ? null : DecodeBase56(match.Groups[1].Value);
     }
 
