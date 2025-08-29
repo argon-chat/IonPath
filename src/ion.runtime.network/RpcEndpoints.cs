@@ -227,7 +227,7 @@ public static class RpcEndpoints
                 return;
             }
 
-            var subProtocol = http.WebSockets.WebSocketRequestedProtocols.FirstOrDefault(x => x.StartsWith("ion;"));
+            var subProtocol = http.WebSockets.WebSocketRequestedProtocols.FirstOrDefault(x => x.StartsWith("ion"));
 
             if (string.IsNullOrEmpty(subProtocol))
             {
