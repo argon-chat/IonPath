@@ -134,7 +134,8 @@ public static class IonFormatterStorageModuleInit
         IonFormatterStorage<string>.Value = new Ion_string_Formatter();
         IonFormatterStorage<BigInteger>.Value = new Ion_bigint_Formatter();
         IonFormatterStorage<Guid>.Value = new Ion_guid_Formatter();
-        IonFormatterStorage<DateTimeOffset>.Value = new Ion_datetime_Formatter();
+        IonFormatterStorage<DateTime>.Value = new Ion_datetime_Formatter();
+        IonFormatterStorage<DateTimeOffset>.Value = new Ion_datetime_offset_Formatter();
         IonFormatterStorage<DateOnly>.Value = new Ion_dateonly_Formatter();
         IonFormatterStorage<TimeOnly>.Value = new Ion_timeonly_Formatter();
         IonFormatterStorage<TimeSpan>.Value = new Ion_duration_Formatter();
@@ -199,12 +200,21 @@ public sealed class Ion_guid_Formatter : IonFormatter<Guid>
     }
 }
 
-public sealed class Ion_datetime_Formatter : IonFormatter<DateTimeOffset>
+public sealed class Ion_datetime_offset_Formatter : IonFormatter<DateTimeOffset>
 {
     public DateTimeOffset Read(CborReader reader)
         => reader.ReadDateTimeOffset();
 
     public void Write(CborWriter writer, DateTimeOffset value)
+        => writer.WriteDateTimeOffset(value);
+}
+
+public sealed class Ion_datetime_Formatter : IonFormatter<DateTime>
+{
+    public DateTime Read(CborReader reader)
+        => reader.ReadDateTimeOffset().UtcDateTime;
+
+    public void Write(CborWriter writer, DateTime value)
         => writer.WriteDateTimeOffset(value);
 }
 
