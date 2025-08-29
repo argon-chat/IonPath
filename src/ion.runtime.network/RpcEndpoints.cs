@@ -213,6 +213,7 @@ public static class RpcEndpoints
 
             if (!http.WebSockets.IsWebSocketRequest)
             {
+                log.LogWarning("UNSUPPORTED_TRANSPORT");
                 http.Response.StatusCode = StatusCodes.Status412PreconditionFailed;
                 await WriteError(http.Response, "UNSUPPORTED_TRANSPORT", $"Transport must be WebSocket");
                 return;
@@ -220,6 +221,8 @@ public static class RpcEndpoints
 
             if (router is null)
             {
+                log.LogWarning("ENTRYPOINT_NOT_FOUND");
+                http.Response.StatusCode = StatusCodes.Status412PreconditionFailed;
                 await WriteError(http.Response, "ENTRYPOINT_NOT_FOUND", $"Method {methodName} is not server-streaming");
                 return;
             }
@@ -228,6 +231,7 @@ public static class RpcEndpoints
 
             if (string.IsNullOrEmpty(subProtocol))
             {
+                log.LogWarning("UNSUPPORTED_SUB_PROTOCOL");
                 http.Response.StatusCode = StatusCodes.Status412PreconditionFailed;
                 await WriteError(http.Response, "UNSUPPORTED_SUB_PROTOCOL", $"Transport sub-protocol must be ion");
                 return;
@@ -237,6 +241,7 @@ public static class RpcEndpoints
 
             if (ticket is null)
             {
+                log.LogWarning("TICKET_BROKEN");
                 http.Response.StatusCode = StatusCodes.Status412PreconditionFailed;
                 await WriteError(http.Response, "TICKET_BROKEN", $"Transport ticket has been broken");
                 return;
@@ -246,6 +251,7 @@ public static class RpcEndpoints
 
             if (error is not null)
             {
+                log.LogWarning(error.ToString());
                 await WriteError(http.Response, error.Value);
                 return;
             }
