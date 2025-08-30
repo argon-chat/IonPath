@@ -35,7 +35,8 @@ public class ServerSideCallContext(AsyncServiceScope scope, Type @interface, Met
 public interface IIonTicketExchange
 {
     Task<ReadOnlyMemory<byte>> OnExchangeCreateAsync(IIonCallContext callContext);
-    Task<IonProtocolError?> OnExchangeTransactionAsync(ReadOnlyMemory<byte> exchangeToken);
+    Task<(IonProtocolError?, object? ticket)> OnExchangeTransactionAsync(ReadOnlyMemory<byte> exchangeToken);
+    void OnTicketApply(object ticketObject);
 }
 
 internal interface __internal_ion
@@ -170,7 +171,7 @@ public static class RpcEndpoints
                     next = (c, token) => interceptor.InvokeAsync(c, currentNext, token);
                 }
 
-                await next(callCtx, ct).ConfigureAwait(false);
+                await next(callCtx, ct).ConfigureAwait(true);
             }
             catch (IonRequestException ionException)
             {
@@ -247,8 +248,7 @@ public static class RpcEndpoints
                 return;
             }
 
-            var error = await ticketExchange.OnExchangeTransactionAsync(ticket.Value);
-
+            var (error, ticketData) = await ticketExchange.OnExchangeTransactionAsync(ticket.Value).ConfigureAwait(true);
             if (error is not null)
             {
                 log.LogWarning(error.ToString());
@@ -256,9 +256,9 @@ public static class RpcEndpoints
                 return;
             }
 
-            using var ws = await http.WebSockets.AcceptWebSocketAsync(subProtocol);
+            using var ws = await http.WebSockets.AcceptWebSocketAsync(subProtocol).ConfigureAwait(true);
 
-            var invokeMsg = await ReceiveSetupMessageAsync(ws, ct);
+            var invokeMsg = await ReceiveSetupMessageAsync(ws, ct).ConfigureAwait(true);
 
             if (invokeMsg.messageType == WebSocketMessageType.Close)
             {
@@ -276,7 +276,8 @@ public static class RpcEndpoints
 
             try
             {
-                await foreach (var encodedItem in router.StreamRouteExecuteAsync(methodName, reader, ct))
+                ticketExchange.OnTicketApply(ticketData);
+                await foreach (var encodedItem in router.StreamRouteExecuteAsync(methodName, reader, ct).ConfigureAwait(true))
                 {
                     await SendOpFrameAsync(ws, IonWs.OPCODE_DATA, encodedItem, ct);
                 }

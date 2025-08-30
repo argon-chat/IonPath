@@ -179,11 +179,12 @@ export class IonWsClient {
     }/${this.methodName}.ws`;
 
     let attempt = 0;
+    let wss: WebSocketStream | null = null;
 
     while (true) {
       try {
         const exchangeToken = await this.createExchangeToken(signal);
-        const wss = new WebSocketStream(wsUrl, {
+        wss = new WebSocketStream(wsUrl, {
           signal,
           protocols: [`ion!ticket#${exchangeToken}!ver#1`],
         });
@@ -202,7 +203,8 @@ export class IonWsClient {
           const { value, done } = await reader.read();
           if (done) break;
 
-          if (!(value instanceof Uint8Array)) {
+          if (!(value instanceof ArrayBuffer)) {
+            console.error(`invalid frame type: ${value},  ${typeof value}`);
             throw new Error(`Invalid frame type: ${typeof value}`);
           }
 
@@ -215,9 +217,10 @@ export class IonWsClient {
             yield IonFormatterStorage.get<TResponse>(responseTypename).read(
               cborReader
             );
+            continue;
           } else if (opcode === 0x01) {
             wss.close();
-            return;
+            continue;
           } else if (opcode === 0x02) {
             const err =
               IonFormatterStorage.get<IonProtocolError>(
@@ -230,7 +233,9 @@ export class IonWsClient {
               yield IonFormatterStorage.get<TResponse>(responseTypename).read(
                 cborReader
               );
+              continue;
             } catch (ex: any) {
+              console.error(ex);
               wss.close();
               throw new IonRequestException({
                 code: "-1",
@@ -242,6 +247,8 @@ export class IonWsClient {
         wss.close();
         throw new Error("WebSocket closed unexpectedly");
       } catch (err) {
+        wss?.close();
+        console.error(err);
         attempt++;
         const delay = Math.min(1000 * 2 ** attempt, 30000);
 

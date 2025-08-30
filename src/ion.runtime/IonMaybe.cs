@@ -37,7 +37,7 @@ public readonly record struct IonArray<T>
 
     public static IonArray<T> Empty => new([]);
 
-    public int Size => Values.Count;
+    public int Size => Values?.Count ?? 0;
 
     public T this[in int index] => Values[index];
 
