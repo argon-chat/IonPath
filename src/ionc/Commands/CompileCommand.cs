@@ -17,6 +17,9 @@ public class CompileOptions : CommandSettings
     [CommandOption("-o|--only")]
     public string OnlyTarget { get; set; }
 
+    [CommandOption("--maybe")]
+    public bool UseMaybeWrapper { get; set; }
+
 }
 
 public class CompileCommand : AsyncCommand<CompileOptions>

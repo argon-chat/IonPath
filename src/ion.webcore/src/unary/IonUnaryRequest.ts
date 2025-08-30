@@ -1,5 +1,6 @@
 import { CborReader } from "../cbor";
 import { IonFormatterStorage } from "../logic/IonFormatter";
+import { safeFetchBuffer } from "../yetAnotherFetch";
 
 export const IonContentType = "application/ion";
 
@@ -42,7 +43,7 @@ export class IonRequest {
     };
 
     let next: (c: IonCallContext, s?: AbortSignal) => Promise<void> =
-      this.terminalAsync;
+      this.terminalAsync.bind(this);
     for (let i = this.context.interceptors.length - 1; i >= 0; i--) {
       const interceptor = this.context.interceptors[i];
       const currentNext = next;
@@ -84,10 +85,18 @@ export class IonRequest {
     try {
       const reader = new CborReader(ctx.responsePayload);
       if (normalizedTypename.isArray)
-        return IonFormatterStorage.readArray<TResponse>(reader, normalizedTypename.typeName) as TResponse;
+        return IonFormatterStorage.readArray<TResponse>(
+          reader,
+          normalizedTypename.typeName
+        ) as TResponse;
       if (normalizedTypename.isMaybe)
-        return IonFormatterStorage.readMaybe<TResponse>(reader, normalizedTypename.typeName) as TResponse;
-      return IonFormatterStorage.get<TResponse>(normalizedTypename.typeName).read(reader);
+        return IonFormatterStorage.readMaybe<TResponse>(
+          reader,
+          normalizedTypename.typeName
+        ) as TResponse;
+      return IonFormatterStorage.get<TResponse>(
+        normalizedTypename.typeName
+      ).read(reader);
     } catch (e) {
       console.error("===== UNCATCH ION INTERNAL ERROR =====");
       console.error(e);
@@ -141,32 +150,33 @@ export class IonRequest {
     c: IonCallContext,
     signal?: AbortSignal
   ): Promise<void> {
-    const url = `${this.context.baseUrl}/ion/${c.interfaceName}/${c.methodName}.unary`;
-
-    const resp = await fetch(url, {
-      method: "POST",
-      body: c.requestPayload.buffer as unknown as BodyInit,
+    const resp = await safeFetchBuffer(`${this.context.baseUrl}/ion/${c.interfaceName}/${c.methodName}.unary`, {
+      body: c.requestPayload.buffer as any,
       headers: c.requestHeadets,
-      signal,
+      signal: signal,
+      method: "POST",
     });
 
-    const buf = new Uint8Array(await resp.arrayBuffer());
-    c.responsePayload = buf;
-    c.responseStatus = resp.status;
-    c.responseStatusText = resp.statusText;
-    c.response = resp;
+    if (!resp.buffer)
+      throw new IonRequestException(
+        IonProtocolError.UPSTREAM_ERROR("no buffer return")
+      );
 
-    if (!resp.ok) {
+    const buf = new Uint8Array(await resp.buffer);
+    c.responsePayload = buf;
+
+    if (resp.status != 200) {
       try {
         const error = IonFormatterStorage.get<IonProtocolError>(
           "IonProtocolError"
         ).read(new CborReader(buf));
         throw new IonRequestException(error);
-      } catch {
+      } catch (e) {
+        if (e instanceof IonRequestException) {
+          throw e;
+        }
         throw new IonRequestException(
-          IonProtocolError.UPSTREAM_ERROR(
-            resp.statusText || resp.status.toString()
-          )
+          IonProtocolError.UPSTREAM_ERROR(resp.status.toString())
         );
       }
     }

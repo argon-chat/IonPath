@@ -39,6 +39,31 @@ export class CborReader {
     return !this.finished && this.r.position < (this.r as any).view.byteLength;
   }
 
+  readTag(): number | bigint {
+    const reader = this.r;
+    const initial = reader.readUint8();
+    const majorType = initial >> 5;
+    const additional = initial & 0x1f;
+
+    if (majorType !== 6) {
+      throw new Error(`Unexpected major type ${majorType}, expected 6 (tag)`);
+    }
+
+    if (additional < 24) {
+      return additional;
+    } else if (additional === 24) {
+      return reader.readUint8();
+    } else if (additional === 25) {
+      return reader.readUint16(false);
+    } else if (additional === 26) {
+      return reader.readUint32(false);
+    } else if (additional === 27) {
+      return reader.readBigUint64(false);
+    } else {
+      throw new Error(`Invalid additional info for tag: ${additional}`);
+    }
+  }
+
   peekState(): CborReaderState {
     if (!this.hasData) return CborReaderState.Finished;
     const b = this.peekByte();
@@ -90,7 +115,7 @@ export class CborReader {
       case 24:
         return this.r.readUint8();
       case 25:
-        return this.r.readUint16(); 
+        return this.r.readUint16();
       case 26:
         return this.r.readUint32();
       case 27:

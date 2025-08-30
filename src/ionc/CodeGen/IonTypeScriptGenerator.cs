@@ -7,6 +7,8 @@ using syntax;
 using System.Text;
 public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 {
+    public static bool UseMaybeWrapper { get; set; }
+
     public string FileHeader()
     {
         return $"""
@@ -157,12 +159,13 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 
     private static string GenerateArgument(IonArgument field) => $"{field.name.Identifier}: {UnwrapType(field.type)}";
 
-    private static string UnwrapType(IonType type) => type switch
+    private static string UnwrapType(IonType type) => (type, UseMaybeWrapper) switch
     {
         //IonUnresolvedType unresolved => throw new InvalidOperationException("Detected unresolved type"),
-        IonGenericType { IsMaybe: true } maybe => $"IonMaybe<{UnwrapType(maybe.TypeArguments[0])}>",
-        IonGenericType { IsArray: true } array => $"IonArray<{UnwrapType(array.TypeArguments[0])}>",
-        IonGenericType generic => GenerateGenericTypeName(generic),
+        (IonGenericType { IsMaybe: true } maybe, true) => $"IonMaybe<{UnwrapType(maybe.TypeArguments[0])}>",
+        (IonGenericType { IsMaybe: true } maybe, false) => $"{UnwrapType(maybe.TypeArguments[0])} | null",
+        (IonGenericType { IsArray: true } array, _) => $"IonArray<{UnwrapType(array.TypeArguments[0])}>",
+        (IonGenericType generic, _) => GenerateGenericTypeName(generic),
         _ => ResolveTypeName(type)
     };
 
@@ -287,7 +290,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         IonFormatterStorage.register("{ionType}", {
           read(reader: CborReader): {ionType} {
             const num = ({readEnumValue}.read(reader))
-            return {ionType}[num as any] !== undefined ? num as any : (() => {throw new Error('invalid enum type')})();
+            return num as any;
           },
           write(writer: CborWriter, value: {ionType}): void {
             const casted: {baseTypeName} = value as any;
@@ -369,7 +372,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         if (field.Type is not IonGenericType { IsMaybe: true } arrayType)
             throw new InvalidOperationException();
         return
-            $"const {field.Name.Identifier} = IonFormatterStorage.readMaybe<{ResolveTypeName(arrayType.TypeArguments[0])}>(reader, '{ResolveTypeName(arrayType.TypeArguments[0])}');";
+            $"const {field.Name.Identifier} = IonFormatterStorage.{(UseMaybeWrapper ? "readMaybe" : "readNullable")}<{ResolveTypeName(arrayType.TypeArguments[0])}>(reader, '{ResolveTypeName(arrayType.TypeArguments[0])}');";
     }
 
 
@@ -386,7 +389,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         if (field.Type is not IonGenericType { IsMaybe: true } arrayType)
             throw new InvalidOperationException();
         return
-            $"IonFormatterStorage.writeMaybe<{ResolveTypeName(arrayType.TypeArguments[0])}>(writer, {field.Name.Identifier}, '{ResolveTypeName(arrayType.TypeArguments[0])}');";
+            $"IonFormatterStorage.{(UseMaybeWrapper ? "writeMaybe" : "writeNullable")}<{ResolveTypeName(arrayType.TypeArguments[0])}>(writer, {field.Name.Identifier}, '{ResolveTypeName(arrayType.TypeArguments[0])}');";
     }
 
     private static string GenerateWriteReturnValue(IonType returnType) =>
@@ -408,7 +411,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
     {
         if (returnType is not IonGenericType { IsMaybe: true } maybeType)
             throw new InvalidOperationException();
-        return $"{FormatterTemplateRef(maybeType.TypeArguments.First())}.writeMaybe(writer, result, '{FormatterTemplateRef(maybeType.TypeArguments.First())}');";
+        return $"{FormatterTemplateRef(maybeType.TypeArguments.First())}.{(UseMaybeWrapper ? "writeMaybe" : "writeNullable")}(writer, result, '{FormatterTemplateRef(maybeType.TypeArguments.First())}');";
     }
 
     private static string GenerateWriteField(IonType type)
@@ -443,7 +446,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         if (field.type is not IonGenericType { IsMaybe: true } arrayType)
             throw new InvalidOperationException();
         return
-            $"IonFormatterStorage.writeMaybe<{ResolveTypeName(arrayType.TypeArguments[0])}>(writer, value.{field.name.Identifier}, '{ResolveTypeName(arrayType.TypeArguments[0])}');";
+            $"IonFormatterStorage.{(UseMaybeWrapper ? "writeMaybe" : "writeNullable")}<{ResolveTypeName(arrayType.TypeArguments[0])}>(writer, value.{field.name.Identifier}, '{ResolveTypeName(arrayType.TypeArguments[0])}');";
     }
 
     private static IReadOnlyList<IonType> TopoSortByDependencies(IReadOnlyList<IonType> types)

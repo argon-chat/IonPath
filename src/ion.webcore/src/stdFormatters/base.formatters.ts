@@ -1,4 +1,10 @@
-import { DateOnly, DateTimeOffset, Duration, Guid, TimeOnly } from "../baseTypes";
+import {
+  DateOnly,
+  DateTimeOffset,
+  Duration,
+  Guid,
+  TimeOnly,
+} from "../baseTypes";
 import { CborReader, CborWriter } from "../cbor";
 import { IonFormatterStorage } from "../logic/IonFormatter";
 
@@ -50,7 +56,7 @@ IonFormatterStorage.register("guid", {
 
 IonFormatterStorage.register("dateonly", {
   read(reader: CborReader): DateOnly {
-    reader.readStartArray()
+    reader.readStartArray();
     const y = reader.readInt32();
     const m = reader.readInt32();
     const d = reader.readInt32();
@@ -65,7 +71,7 @@ IonFormatterStorage.register("dateonly", {
     writer.writeInt32(value.day);
     writer.writeInt32(0);
     writer.writeEndArray();
-  }
+  },
 });
 
 IonFormatterStorage.register("timeonly", {
@@ -83,7 +89,7 @@ IonFormatterStorage.register("timeonly", {
     writer.writeInt32(value.second);
     writer.writeInt32(value.millisecond);
     writer.writeInt32(value.microsecond);
-  }
+  },
 });
 
 IonFormatterStorage.register("duration", {
@@ -92,11 +98,15 @@ IonFormatterStorage.register("duration", {
   },
   write(writer: CborWriter, value: Duration): void {
     writer.writeInt64(value.ticks);
-  }
+  },
 });
 
 IonFormatterStorage.register("datetime", {
   read(reader: CborReader): DateTimeOffset {
+    const tag = reader.readTag();
+    if (tag !== 0) {
+      throw new Error(`Unexpected CBOR tag ${tag}, expected 0 (datetime)`);
+    }
     const iso = reader.readTextString();
     const d = new Date(iso);
     const match = iso.match(/([+-]\d{2}:\d{2}|Z)$/);
@@ -112,6 +122,7 @@ IonFormatterStorage.register("datetime", {
   },
   write(writer: CborWriter, value: DateTimeOffset): void {
     const iso = value.date.toISOString();
+    writer.writeTag(0);
     writer.writeTextString(iso);
-  }
+  },
 });

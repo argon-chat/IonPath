@@ -54,6 +54,16 @@ export class IonFormatterStorage {
     return IonMaybe.None<T>();
   }
 
+  static readNullable<T>(reader: CborReader, typeName: string): T | null {
+    const state = reader.peekState();
+    if (state !== CborReaderState.Null) {
+      const value = IonFormatterStorage.get<T>(typeName).read(reader);
+      return value;
+    }
+    reader.readNull();
+    return null;
+  }
+
   static writeMaybe<T>(
     writer: CborWriter,
     ionMaybe: IonMaybe<T>,
@@ -64,6 +74,18 @@ export class IonFormatterStorage {
       return;
     }
     IonFormatterStorage.get<T>(typeName).write(writer, ionMaybe.value as T);
+  }
+
+  static writeNullable<T>(
+    writer: CborWriter,
+    ionMaybe: T | null,
+    typeName: string = ""
+  ): void {
+    if(ionMaybe === undefined || ionMaybe === null) {
+      writer.writeNull();
+      return;
+    }
+    IonFormatterStorage.get<T>(typeName).write(writer, ionMaybe as T);
   }
 
   static readArray<T>(reader: CborReader, typeName: string): IonArray<T> {

@@ -58,6 +58,7 @@ public interface IIonCodeGenerator
     void GenerateProjectFile(string projectName, FileInfo outputFile);
 
     string GenerateAllFormatters(IEnumerable<IonType> types);
+
     string GenerateModuleInit(IEnumerable<IonType> types, IReadOnlyList<IonService> services, bool clientToo,
         bool serverToo);
 
@@ -72,6 +73,8 @@ public interface IIonCodeGenerator
 
 public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 {
+    public static bool UseMaybeWrapper { get; set; }
+
     private string FileHeader()
     {
         return $"""
@@ -119,11 +122,14 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
         formattersSb.AppendLine();
 
-        foreach (var t in candidates) 
-            formattersSb.AppendLine($"      IonFormatterStorage<{UnwrapType(t)}>.Value = new Ion_{UnwrapType(t)}_Formatter();");
+        foreach (var t in candidates)
+            formattersSb.AppendLine(
+                $"      IonFormatterStorage<{UnwrapType(t)}>.Value = new Ion_{UnwrapType(t)}_Formatter();");
 
-        foreach (var t in candidates.Where(x => x.IsUnion).OfType<IonUnion>().SelectMany(x => x.types).Where(x => x.IsUnionCase))
-            formattersSb.AppendLine($"      IonFormatterStorage<{UnwrapType(t)}>.Value = new Ion_{UnwrapType(t)}_Formatter();");
+        foreach (var t in candidates.Where(x => x.IsUnion).OfType<IonUnion>().SelectMany(x => x.types)
+                     .Where(x => x.IsUnionCase))
+            formattersSb.AppendLine(
+                $"      IonFormatterStorage<{UnwrapType(t)}>.Value = new Ion_{UnwrapType(t)}_Formatter();");
 
         if (serverToo)
         {
@@ -328,6 +334,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
                         sb.AppendLine($"    [{attribute.name.Identifier}({string.Join(',', attribute.arguments)})]");
                 }
             }
+
             var args = string.Join(", ", method.arguments.Select(GenerateArgument));
             sb.AppendLine($"    {GenerateReturnType(method)} {method.name.Identifier}({args});");
         }
@@ -340,13 +347,15 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
     private static string GenerateArgument(IonArgument field) => $"{UnwrapType(field.type)} {field.name.Identifier}";
 
-    private static string UnwrapType(IonType type) => type switch
-    {
-        IonGenericType { IsMaybe: true } maybe => $"IonMaybe<{ResolveTypeName(maybe.TypeArguments[0])}>",
-        IonGenericType { IsArray: true } array => $"IonArray<{ResolveTypeName(array.TypeArguments[0])}>",
-        IonGenericType generic => GenerateGenericTypeName(generic),
-        _ => ResolveTypeName(type)
-    };
+    private static string UnwrapType(IonType type) =>
+        (type, UseMaybeWrapper) switch
+        {
+            (IonGenericType { IsMaybe: true } maybe, true) => $"IonMaybe<{ResolveTypeName(maybe.TypeArguments[0])}>",
+            (IonGenericType { IsMaybe: true } maybe, false) => $"{ResolveTypeName(maybe.TypeArguments[0])}?",
+            (IonGenericType { IsArray: true } array, _) => $"IonArray<{ResolveTypeName(array.TypeArguments[0])}>",
+            (IonGenericType generic, _) => GenerateGenericTypeName(generic),
+            _ => ResolveTypeName(type)
+        };
 
     private static string GenerateGenericTypeName(IonGenericType generic)
         => $"{generic.name.Identifier}<{string.Join(',', generic.TypeArguments.Select(x => x.name.Identifier))}>";
@@ -433,7 +442,8 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
     public string GenerateAllFormatters(IEnumerable<IonType> types)
     {
-        var candidates = types.Where(t => t is { IsBuiltin: false, IsScalar: false, IsVoid: false, IsUnionCase: false, IsUnion: false }).ToArray();
+        var candidates = types.Where(t => t is
+            { IsBuiltin: false, IsScalar: false, IsVoid: false, IsUnionCase: false, IsUnion: false }).ToArray();
 
         var sb = new StringBuilder();
 
@@ -562,8 +572,9 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     {
         if (field.Type is not IonGenericType { IsMaybe: true } arrayType)
             throw new InvalidOperationException();
+
         return
-            $"var __{field.Name.Identifier.ToLowerInvariant()} = IonFormatterStorage<{ResolveTypeName(arrayType.TypeArguments[0])}>.ReadMaybe(reader);";
+            $"var __{field.Name.Identifier.ToLowerInvariant()} = IonFormatterStorage<{ResolveTypeName(arrayType.TypeArguments[0])}>.{(UseMaybeWrapper ? "ReadMaybe" : "ReadNullable")}(reader);";
     }
 
 
@@ -580,7 +591,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         if (field.Type is not IonGenericType { IsMaybe: true } arrayType)
             throw new InvalidOperationException();
         return
-            $"IonFormatterStorage<{ResolveTypeName(arrayType.TypeArguments[0])}>.WriteMaybe(writer, __{field.Name.Identifier.ToLowerInvariant()});";
+            $"IonFormatterStorage<{ResolveTypeName(arrayType.TypeArguments[0])}>.{(UseMaybeWrapper ? "WriteMaybe" : "WriteNullable")}(writer, __{field.Name.Identifier.ToLowerInvariant()});";
     }
 
     private static string GenerateWriteReturnValue(IonType returnType) =>
@@ -602,7 +613,8 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     {
         if (returnType is not IonGenericType { IsMaybe: true } maybeType)
             throw new InvalidOperationException();
-        return $"{FormatterTemplateRef(maybeType.TypeArguments.First())}.WriteMaybe(writer, result);";
+        return
+            $"{FormatterTemplateRef(maybeType.TypeArguments.First())}.{(UseMaybeWrapper ? "WriteMaybe" : "WriteNullable")}(writer, result);";
     }
 
     private static string GenerateWriteField(IonType type)
@@ -637,7 +649,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         if (field.type is not IonGenericType { IsMaybe: true } arrayType)
             throw new InvalidOperationException();
         return
-            $"IonFormatterStorage<{ResolveTypeName(arrayType.TypeArguments[0])}>.WriteMaybe(writer, value.{field.name.Identifier});";
+            $"IonFormatterStorage<{ResolveTypeName(arrayType.TypeArguments[0])}>.{(UseMaybeWrapper ? "WriteMaybe" : "WriteNullable")}(writer, value.{field.name.Identifier});";
     }
 
     private static readonly string ServiceExecutorTemplate =
@@ -772,7 +784,8 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         var builder = ServiceExecutorTemplate
             .Replace("{serviceTypename}", serviceTypename)
             .Replace("{routerInterfaces}", interfaces)
-            .Replace("{routerStreaming}", interfaces.Contains("IServiceStreamExecutorRouter") ? RouterStreamMethodTemplate : "")
+            .Replace("{routerStreaming}",
+                interfaces.Contains("IServiceStreamExecutorRouter") ? RouterStreamMethodTemplate : "")
             .Replace("{routerUnary}", interfaces.Contains("IServiceExecutorRouter") ? RouterMethodTemplate : "");
 
         branchBuilder.AppendLine();
@@ -823,7 +836,8 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         branchBuilder.AppendLine(branch);
     }
 
-    private static void GenerateUnaryMethodExecutor(IonMethod method, string serviceTypename, StringBuilder methodsBuilder,
+    private static void GenerateUnaryMethodExecutor(IonMethod method, string serviceTypename,
+        StringBuilder methodsBuilder,
         StringBuilder branchBuilder)
     {
         var methodName = method.name.Identifier;
@@ -924,7 +938,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
                 var ws = new IonWsClient(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
             
                 var writer = new CborWriter();
-        
+
                 const int argsSize = {argSize};
                 
                 writer.WriteStartArray(argsSize);
@@ -957,9 +971,9 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             var methodArgs = string.Join(", ", method.arguments.Select(GenerateClientMethodArgument));
 
             var template =
-                method.IsStreamable ? 
-                    ServiceClientMethodDeclStream :
-                        method.returnType.IsVoid
+                method.IsStreamable
+                    ? ServiceClientMethodDeclStream
+                    : method.returnType.IsVoid
                         ? ServiceClientMethodDeclNoReturn
                         : ServiceClientMethodDecl;
 
@@ -1004,13 +1018,15 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         {argValues}
         }
         """;
+
     private string GenerateAttributeDefinition(IonAttributeType type)
     {
         var accessValues = new StringBuilder();
 
-        foreach (var argument in type.arguments) 
-            accessValues.AppendLine($"    public {UnwrapType(argument.type)} {argument.Name.Identifier.Capitalize()} => {argument.Name.Identifier};");
-        
+        foreach (var argument in type.arguments)
+            accessValues.AppendLine(
+                $"    public {UnwrapType(argument.type)} {argument.Name.Identifier.Capitalize()} => {argument.Name.Identifier};");
+
         return AttributeTemplate
             .Replace("{argValues}", accessValues.ToString())
             .Replace("{args}", string.Join(", ", type.arguments.Select(GenerateArgument)))
@@ -1076,6 +1092,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
                 index++;
                 continue;
             }
+
             unionTypesRequiredFormatters.Add(type);
 
             var fields = string.Join(", ", type.fields.Select(f =>
@@ -1106,6 +1123,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             {checkProps}
         }
         """;
+
     private static readonly string Union_InterfaceBody_CheckProp =
         """
             internal bool Is{caseTypeName} => this is {caseTypeName};
@@ -1177,12 +1195,12 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
                 reader.ReadEndArray();
                 return result;
             }
-        
+
             public void Write(CborWriter writer, I{unionInterface} value)
             {
                 writer.WriteStartArray(2);
                 writer.WriteUInt32(value.UnionIndex);
-        
+
                 if (false) {}
                 {writeChecks}    
                 else
@@ -1208,7 +1226,6 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
                 }
         """;
 }
-
 
 public static class StringEx
 {
