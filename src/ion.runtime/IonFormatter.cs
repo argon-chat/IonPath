@@ -104,19 +104,28 @@ public static class IonFormatterStorage<T>
         Write(writer, value);
     }
 
-    public static void WriteNullable(CborWriter writer, T? ionMaybe)
+    public static void WriteNullable<TNullable>(CborWriter writer, TNullable? ionMaybe) where TNullable : class
     {
-        var type = typeof(T);
-
-        if (!type.IsValueType || Nullable.GetUnderlyingType(type) != null)
+        if (ionMaybe is null)
         {
-            if (ionMaybe == null)
-            {
-                writer.WriteNull();
-                return;
-            }
+            writer.WriteNull();
+            return;
         }
-        Write(writer, ionMaybe!);
+        Write(writer, (T)(object)ionMaybe);
+    }
+
+    public static void WriteNullable<TNullable>(CborWriter writer, TNullable? ionMaybe) where TNullable : struct
+    {
+        if (!ionMaybe.HasValue)
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        if (ionMaybe.Value is T unwrapped)
+            Write(writer, unwrapped);
+        else
+            throw new InvalidOperationException($"T({typeof(T).Name}) != TNullable({typeof(TNullable).Name})");
     }
 
 
