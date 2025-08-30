@@ -75,6 +75,15 @@ public static class IonFormatterStorage<T>
         Value.Write(writer, value);
     }
 
+    public static T? ReadNullable(CborReader reader)
+    {
+        var state = reader.PeekState();
+        if (state != CborReaderState.Null)
+            return Read(reader);
+        reader.ReadNull();
+        return default;
+    }
+
     public static IonMaybe<T> ReadMaybe(CborReader reader)
     {
         var state = reader.PeekState();
@@ -93,6 +102,21 @@ public static class IonFormatterStorage<T>
         }
         var value = ionMaybe.Value!;
         Write(writer, value);
+    }
+
+    public static void WriteNullable(CborWriter writer, T? ionMaybe)
+    {
+        var type = typeof(T);
+
+        if (!type.IsValueType || Nullable.GetUnderlyingType(type) != null)
+        {
+            if (ionMaybe == null)
+            {
+                writer.WriteNull();
+                return;
+            }
+        }
+        Write(writer, ionMaybe!);
     }
 
 
