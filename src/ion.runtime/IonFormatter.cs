@@ -3,6 +3,7 @@
 using ion.runtime.network;
 #pragma warning disable CA2255
 using System.Buffers;
+using System.Buffers.Binary;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 
@@ -221,17 +222,48 @@ public sealed class Ion_guid_Formatter : IonFormatter<Guid>
         var bytes = reader.ReadByteString();
         if (bytes.Length != 16)
             throw new CborContentException("Expected 16-byte GUID");
-        return new Guid(bytes);
+
+        return FromBigEndianBytes(bytes);
     }
 
     public void Write(CborWriter writer, Guid value)
     {
         Span<byte> buf = stackalloc byte[16];
-        if (!value.TryWriteBytes(buf))
-            throw new InvalidOperationException("Failed to write GUID bytes");
+        ToBigEndianBytes(value, buf);
         writer.WriteByteString(buf);
     }
+
+    private static Guid FromBigEndianBytes(ReadOnlySpan<byte> bytes)
+    {
+        var a = BinaryPrimitives.ReadUInt32BigEndian(bytes[..4]);
+        var b = BinaryPrimitives.ReadUInt16BigEndian(bytes.Slice(4, 2));
+        var c = BinaryPrimitives.ReadUInt16BigEndian(bytes.Slice(6, 2));
+
+        Span<byte> tmp = stackalloc byte[16];
+        BinaryPrimitives.WriteUInt32LittleEndian(tmp[..4], a);
+        BinaryPrimitives.WriteUInt16LittleEndian(tmp.Slice(4, 2), b);
+        BinaryPrimitives.WriteUInt16LittleEndian(tmp.Slice(6, 2), c);
+        bytes[8..].CopyTo(tmp[8..]);
+
+        return new Guid(tmp);
+    }
+
+    private static void ToBigEndianBytes(Guid value, Span<byte> dest)
+    {
+        Span<byte> tmp = stackalloc byte[16];
+        value.TryWriteBytes(tmp); 
+
+        var a = BinaryPrimitives.ReadUInt32LittleEndian(tmp[..4]);
+        var b = BinaryPrimitives.ReadUInt16LittleEndian(tmp.Slice(4, 2));
+        var c = BinaryPrimitives.ReadUInt16LittleEndian(tmp.Slice(6, 2));
+
+        BinaryPrimitives.WriteUInt32BigEndian(dest[..4], a);
+        BinaryPrimitives.WriteUInt16BigEndian(dest.Slice(4, 2), b);
+        BinaryPrimitives.WriteUInt16BigEndian(dest.Slice(6, 2), c);
+        tmp[8..].CopyTo(dest[8..]);
+    }
 }
+
 
 public sealed class Ion_datetime_offset_Formatter : IonFormatter<DateTimeOffset>
 {

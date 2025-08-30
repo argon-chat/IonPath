@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { CborReader, CborWriter } from "../src";
+import { CborReader, CborWriter, Guid, IonFormatterStorage } from "../src";
 import { decode, encode } from "cbor-x";
+import "./../src/index";
 
 describe("decodeTest", () => {
   it("1", () => {
@@ -56,5 +57,31 @@ describe("decodeTest", () => {
     expect(2).toEqual(len);
     expect(0).toEqual(b1);
     expect(arr2).toEqual(2);
+  });
+
+  it("3", () => {
+    const writer = new CborWriter();
+
+    writer.writeStartArray();
+    IonFormatterStorage.get<Guid>("guid").write(
+      writer,
+      "b7404c69-abf2-4d73-b7b0-f4f232c85815"
+    );
+    writer.writeEndArray();
+
+    const result = writer.data;
+    let decoded = decode(writer.data);
+
+    console.warn(result, decoded);
+
+    const reader = new CborReader(writer.data);
+
+    reader.readStartArray();
+    const existGuid = IonFormatterStorage.get<Guid>("guid").read(reader);
+    reader.readEndArray();
+
+    console.warn(existGuid);
+
+    expect("b7404c69-abf2-4d73-b7b0-f4f232c85815").toEqual(existGuid);
   });
 });
