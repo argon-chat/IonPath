@@ -372,7 +372,8 @@ public static class RpcEndpoints
                     foreach (var (k, v) in _.ResponseItems)
                         resp.Headers.Append(k, v);
 
-                    await resp.BodyWriter.WriteAsync(writer.Encode(), token);
+                    if (writer.BytesWritten != 0)
+                        await resp.BodyWriter.WriteAsync(writer.Encode(), token);
                     await resp.BodyWriter.FlushAsync(token);
                 }
 
@@ -381,7 +382,7 @@ public static class RpcEndpoints
                     var next = TerminalAsync;
 
                     var array = interceptors.ToArray();
-                    for (var i = array.Count() - 1; i >= 0; i--)
+                    for (var i = array.Length - 1; i >= 0; i--)
                     {
                         var interceptor = array[i];
                         var currentNext = next;
