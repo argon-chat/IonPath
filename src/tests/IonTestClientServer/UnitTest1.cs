@@ -3,6 +3,9 @@
 using ion.runtime.client;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using System.Runtime.CompilerServices;
+using ion.runtime.network;
+using Microsoft.Extensions.Logging;
 using TestContracts;
 using static Assert;
 
@@ -64,5 +67,4 @@ public class Tests
         }
         That(list, Has.Count.EqualTo(10));
     }
-
 }

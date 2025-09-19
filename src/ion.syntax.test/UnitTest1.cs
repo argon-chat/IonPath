@@ -325,5 +325,44 @@ public class Tests
         That(result.Success);
     }
 
-    
+
+    [Test]
+    public void Test21()
+    {
+        const string input = """
+                             service InventoryInteraction() {
+                                 GetMyInventoryItems(): InventoryItem[];
+                             }
+                             
+                             msg InventoryItem {
+                                 id: string;
+                                 instanceId: guid;
+                                 grantedDate: datetime;
+                                 rarity: ItemRarity;
+                                 tags: string[];
+                                 useable: bool;
+                                 giftable: bool;
+                                 iconId: string;
+                                 usableVector?: ItemUseVector;
+                             }
+                             
+                             enum ItemRarity {
+                                 Common,
+                                 Rare,
+                                 Legendary,
+                                 Relic
+                             }
+                             
+                             enum ItemUseVector {
+                                 RedeemCode,
+                                 SpacePremium,
+                                 UserPremium
+                             }
+                             """;
+
+        var result = IonParser.IonFile.Parse(input);
+
+        That(result.Success);
+    }
+
 }

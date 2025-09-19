@@ -8,17 +8,15 @@ public partial class IonParser
 {
     public static Parser<char, IonSyntaxMember> Definition =>
         OneOf(
-            Try(AttributeDef.OfType<IonSyntaxMember>()),
-            Try(Service.OfType<IonSyntaxMember>()),
-            Try(UseDirective.OfType<IonSyntaxMember>()),
-            Try(FeatureDirective.OfType<IonSyntaxMember>()),
-            Try(Message.OfType<IonSyntaxMember>()),
-            Try(Flags.OfType<IonSyntaxMember>()),
-            Try(Enums.OfType<IonSyntaxMember>()),
-            Try(Typedef.OfType<IonSyntaxMember>()),
-            Try(AttributeDef.OfType<IonSyntaxMember>()),
-            Try(Union.OfType<IonSyntaxMember>()),
-            InvalidBlockFallback
+            AttributeDef.OfType<IonSyntaxMember>(),
+            Service.OfType<IonSyntaxMember>(),
+            UseDirective.OfType<IonSyntaxMember>(),
+            FeatureDirective.OfType<IonSyntaxMember>(),
+            Message.OfType<IonSyntaxMember>(),
+            Flags.OfType<IonSyntaxMember>(),
+            Enums.OfType<IonSyntaxMember>(),
+            Typedef.OfType<IonSyntaxMember>(),
+            Union.OfType<IonSyntaxMember>()
         ).Before(SkipWhitespaces);
 
     private static Parser<char, IonSyntaxMember> InvalidBlockFallback =>

@@ -9,6 +9,7 @@
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<PackAsTool>True</PackAsTool>
 		<PackageId>ionpath.compiler</PackageId>
+		<Version>1.2.1</Version>
 	</PropertyGroup>
 
 	<ItemGroup>

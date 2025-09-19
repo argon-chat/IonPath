@@ -30,18 +30,23 @@ public partial class IonParser
             Try(String("[]")).Before(SkipWhitespaces).Optional()
         );
 
+    public static Parser<char, Maybe<Unit>> ForbidNext(char c, string message) =>
+        Lookahead(
+            Char(c).Then(Fail<Unit>(message))
+        ).Optional();
 
     private static Parser<char, IonFieldSyntax> Field =>
         Map(
-            (doc, attrs, pos, name, _, type, __) => new IonFieldSyntax(name, type)
+            (doc, attrs, pos, name, _, _, type, __) => new IonFieldSyntax(name, type)
                 .WithComments(doc)
                 .WithAttributes(attrs)
                 .WithPos(pos),
             LeadingDoc,
             Attributes,
             CurrentPos,
-            Identifier.Before(SkipWhitespaces),
-            Char(':').Before(SkipWhitespaces),
+            Identifier.Labelled("field name").Before(SkipWhitespaces),
+            ForbidNext('?', "'?' is not allowed after field name"),
+            Char(':').Labelled("':' after field name").Before(SkipWhitespaces),
             Type,
             Char(';').Before(SkipWhitespaces)
         );

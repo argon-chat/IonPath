@@ -126,7 +126,7 @@ public static class RpcEndpoints
                 !req.ContentType.StartsWith(IonContentType, StringComparison.OrdinalIgnoreCase))
             {
                 resp.StatusCode = StatusCodes.Status415UnsupportedMediaType;
-                await WriteError(resp, "UNSUPPORTED_MEDIA", $"Content-Type must be {IonContentType}");
+                await WriteError(log, resp, "UNSUPPORTED_MEDIA", $"Content-Type must be {IonContentType}");
                 return;
             }
 
@@ -176,7 +176,7 @@ public static class RpcEndpoints
             catch (IonRequestException ionException)
             {
                 resp.StatusCode = StatusCodes.Status400BadRequest;
-                await WriteError(resp, ionException.Error.code, ionException.Error.msg);
+                await WriteError(log, resp, ionException.Error.code, ionException.Error.msg);
             }
             catch (OperationCanceledException)
             {
@@ -187,7 +187,7 @@ public static class RpcEndpoints
             {
                 log.LogError(ex, "handler failed");
                 resp.StatusCode = StatusCodes.Status500InternalServerError;
-                await WriteError(resp, "INTERNAL_ERROR", ex.ToString());
+                await WriteError(log, resp, "INTERNAL_ERROR", ex.ToString());
             }
 
         })
@@ -216,7 +216,7 @@ public static class RpcEndpoints
             {
                 log.LogWarning("UNSUPPORTED_TRANSPORT");
                 http.Response.StatusCode = StatusCodes.Status412PreconditionFailed;
-                await WriteError(http.Response, "UNSUPPORTED_TRANSPORT", $"Transport must be WebSocket");
+                await WriteError(log, http.Response, "UNSUPPORTED_TRANSPORT", $"Transport must be WebSocket");
                 return;
             }
 
@@ -224,7 +224,7 @@ public static class RpcEndpoints
             {
                 log.LogWarning("ENTRYPOINT_NOT_FOUND");
                 http.Response.StatusCode = StatusCodes.Status412PreconditionFailed;
-                await WriteError(http.Response, "ENTRYPOINT_NOT_FOUND", $"Method {methodName} is not server-streaming");
+                await WriteError(log, http.Response, "ENTRYPOINT_NOT_FOUND", $"Method {methodName} is not server-streaming");
                 return;
             }
 
@@ -234,7 +234,7 @@ public static class RpcEndpoints
             {
                 log.LogWarning("UNSUPPORTED_SUB_PROTOCOL");
                 http.Response.StatusCode = StatusCodes.Status412PreconditionFailed;
-                await WriteError(http.Response, "UNSUPPORTED_SUB_PROTOCOL", $"Transport sub-protocol must be ion");
+                await WriteError(log, http.Response, "UNSUPPORTED_SUB_PROTOCOL", $"Transport sub-protocol must be ion");
                 return;
             }
 
@@ -244,7 +244,7 @@ public static class RpcEndpoints
             {
                 log.LogWarning("TICKET_BROKEN");
                 http.Response.StatusCode = StatusCodes.Status412PreconditionFailed;
-                await WriteError(http.Response, "TICKET_BROKEN", $"Transport ticket has been broken");
+                await WriteError(log, http.Response, "TICKET_BROKEN", $"Transport ticket has been broken");
                 return;
             }
 
@@ -333,7 +333,7 @@ public static class RpcEndpoints
                     !req.ContentType.StartsWith(IonContentType, StringComparison.OrdinalIgnoreCase))
                 {
                     resp.StatusCode = StatusCodes.Status415UnsupportedMediaType;
-                    await WriteError(resp, "UNSUPPORTED_MEDIA", $"Content-Type must be {IonContentType}");
+                    await WriteError(log, resp, "UNSUPPORTED_MEDIA", $"Content-Type must be {IonContentType}");
                     return;
                 }
 
@@ -351,7 +351,7 @@ public static class RpcEndpoints
                 if (router is null || @interface is null || method is null)
                 {
                     resp.StatusCode = StatusCodes.Status405MethodNotAllowed;
-                    await WriteError(resp, "INTERFACE_NOT_FOUND", $"Interface {interfaceName} is not found");
+                    await WriteError(log, resp, "INTERFACE_NOT_FOUND", $"Interface {interfaceName} is not found");
                     return;
                 }
 
@@ -395,7 +395,7 @@ public static class RpcEndpoints
                 catch (IonRequestException ionException)
                 {
                     resp.StatusCode = StatusCodes.Status400BadRequest;
-                    await WriteError(resp, ionException.Error.code, ionException.Error.msg);
+                    await WriteError(log, resp, ionException.Error.code, ionException.Error.msg);
                 }
                 catch (OperationCanceledException)
                 {
@@ -406,7 +406,7 @@ public static class RpcEndpoints
                 {
                     log.LogError(ex, "handler failed");
                     resp.StatusCode = StatusCodes.Status500InternalServerError;
-                    await WriteError(resp, "INTERNAL_ERROR", ex.ToString());
+                    await WriteError(log, resp, "INTERNAL_ERROR", ex.ToString());
                 }
             })
             .WithMetadata(new ConsumesAttribute(IonContentType))
@@ -419,10 +419,11 @@ public static class RpcEndpoints
         return app;
     }
 
-    private static async Task WriteError(HttpResponse resp, string code, string message)
+    private static async Task WriteError(ILogger logger, HttpResponse resp, string code, string message)
     {
         resp.ContentType = IonContentType;
         resp.Headers.Append(IonStatusCode, code);
+        logger.LogError("{Message}, {Code}", message, code);
         await IonBinarySerializer.SerializeAsync(new IonProtocolError(code, message),
             async memory => { await resp.BodyWriter.WriteAsync(memory); });
     }
