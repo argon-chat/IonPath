@@ -32,6 +32,37 @@ IonPath consists of two parts:
 
 ---
 
+## Base Types Table
+
+| ion      | C#            | TypeScript       |
+|----------|---------------|------------------|
+| void     | void          | void             |
+| bool     | bool          | boolean          |
+| i1       | sbyte         | number           |
+| i2       | short         | number           |
+| i4       | int           | number           |
+| i8       | long          | bigint           |
+| i16      | Int128        | bigint           |
+| u1       | byte          | number           |
+| u2       | ushort        | number           |
+| u4       | uint          | number           |
+| u8       | ulong         | bigint           |
+| u16      | UInt128       | bigint           |
+| f2       | Half          | number           |
+| f4       | float         | number           |
+| f8       | double        | number           |
+| bigint   | BigInteger    | bigint           |
+| guid     | Guid          | string as Guid   |
+| string   | string        | string           |
+| datetime | DateTime      | Date             |
+| dateonly | DateOnly      | DateOnly         |
+| timeonly | TimeOnly      | TimeOnly         |
+| duration | TimeSpan      | Duration         |
+| uri      | Uri           | string as Uri    |
+| Maybe    | Maybe<T>      | Maybe<T>         |
+| Array    | T[]           | T[]              |
+
+
 ## 📣 Project Roadmap 
 
 | 📜 Language             | Status | 🛠 Code Generation           | Status | 🌐 Transports & Platforms    | Status |
