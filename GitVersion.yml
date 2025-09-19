@@ -1,6 +1,6 @@
 ﻿mode: ContinuousDelivery
 semantic-version-format: Strict
-next-version: 1.2.1
+next-version: 1.2.2
 
 label: beta
 

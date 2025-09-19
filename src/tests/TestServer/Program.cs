@@ -1,4 +1,5 @@
-﻿using ion.runtime.network;
+﻿using ion.runtime;
+using ion.runtime.network;
 using TestContracts;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -36,6 +37,8 @@ public class MathImpl : IMathInteraction
     public Task<Int32> Div(int leftOperand, int rightOperand) => Task.FromResult(leftOperand / rightOperand);
 
     public Task<Int32> Pow(int leftOperand, int rightOperand) => Task.FromResult((int)Math.Pow(leftOperand, rightOperand));
+    public Task<IonArray<Int32>> PowArray(int leftOperand, IonArray<Int32> rightOperand)
+        => Task.FromResult(new IonArray<int>(rightOperand.Values.Select(x => (int)Math.Pow(leftOperand, x)).ToList()));
 }
 
 public class VectorImpl : IVectorMathInteraction

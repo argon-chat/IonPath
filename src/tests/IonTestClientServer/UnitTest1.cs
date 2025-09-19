@@ -4,6 +4,7 @@ using ion.runtime.client;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using System.Runtime.CompilerServices;
+using ion.runtime;
 using ion.runtime.network;
 using Microsoft.Extensions.Logging;
 using TestContracts;
@@ -50,6 +51,16 @@ public class Tests
         var service = client.ForService<IVectorMathInteraction>(scope);
 
         var response = await service.Do(new Vector(1, 2, 3));
+    }
+
+    [Test]
+    public async Task UnaryCall_Test_ArrPow()
+    {
+        await using var scope = _factoryAsp.Services.CreateAsyncScope();
+        var client = IonClient.Create(httpClient, (uri, ct) => webSocketClient.ConnectAsync(uri, ct));
+        var service = client.ForService<IMathInteraction>(scope);
+
+        var response = await service.PowArray(1, new IonArray<int>([1, 2, 3, 4]));
     }
 
     [Test]

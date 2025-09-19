@@ -910,6 +910,27 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             }
         """;
 
+    private static readonly string ServiceClientMethodDeclArray =
+        """
+            {compileGeneratedAttributes}
+            public async Task<{methodReturnType}> {methodName}({args})
+            {
+                var req = new IonRequest(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
+            
+                var writer = new CborWriter();
+                
+                const int argsSize = {argSize};
+            
+                writer.WriteStartArray(argsSize);
+                
+                {argsWrite}
+                
+                writer.WriteEndArray();
+            
+                return await req.CallAsyncWithArray<{methodReturnTypeUnwrapped}>(writer.Encode());
+            }
+        """;
+
     private static readonly string ServiceClientMethodDeclNoReturn =
         """
             {compileGeneratedAttributes}
@@ -975,7 +996,9 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
                     ? ServiceClientMethodDeclStream
                     : method.returnType.IsVoid
                         ? ServiceClientMethodDeclNoReturn
-                        : ServiceClientMethodDecl;
+                        : method.returnType.IsArray
+                            ? ServiceClientMethodDeclArray
+                            : ServiceClientMethodDecl;
 
             var templateMethod =
                 template
@@ -985,10 +1008,12 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
                     .Replace("{argsWrite}", writeArgsExpression)
                     .Replace("{args}", methodArgs);
 
-            if (!method.returnType.IsVoid)
+            if (method.returnType is { IsVoid: false })
                 templateMethod = templateMethod
                     .Replace("{methodReturnType}", UnwrapType(method.returnType));
-
+            if (method.returnType is { IsVoid: false, IsArray: true })
+                templateMethod = templateMethod
+                    .Replace("{methodReturnTypeUnwrapped}", ResolveTypeName((method.returnType as IonGenericType)!.TypeArguments[0]));
             methodsBuilder.AppendLine(templateMethod);
 
 

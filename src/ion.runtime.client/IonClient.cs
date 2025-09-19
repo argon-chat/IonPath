@@ -1,4 +1,4 @@
-﻿namespace ion.runtime.client;
+namespace ion.runtime.client;
 
 using Microsoft.Extensions.DependencyInjection;
 using network;
@@ -289,13 +289,31 @@ public class IonRequest(IonClientContext context, Type interfaceName, MethodInfo
         }
     }
 
-    public async Task<TResponse> CallAsync<TResponse>(
+    public Task<TResponse> CallAsync<TResponse>(
         ReadOnlyMemory<byte> payload,
+        CancellationToken ct = default)
+        => CallCoreAsync<TResponse, TResponse>(
+            payload,
+            IonFormatterStorage<TResponse>.Read,
+            ct);
+
+    public Task<IonArray<TResponse>> CallAsyncWithArray<TResponse>(
+        ReadOnlyMemory<byte> payload,
+        CancellationToken ct = default)
+        => CallCoreAsync<TResponse, IonArray<TResponse>>(
+            payload,
+            IonFormatterStorage<TResponse>.ReadArray,
+            ct);
+
+    private async Task<TResult> CallCoreAsync<TResponse, TResult>(
+        ReadOnlyMemory<byte> payload,
+        Func<CborReader, TResult> projector,
         CancellationToken ct = default)
     {
         var httpClient = context.HttpClient;
 
-        using var ctx = new IonCallContext(new AsyncServiceScope(), httpClient, interfaceName, methodName, typeof(TResponse), payload);
+        using var ctx = new IonCallContext(new AsyncServiceScope(), httpClient, interfaceName, methodName,
+            typeof(TResponse), payload);
 
         var next = TerminalAsync;
         for (var i = context.Interceptors.Count - 1; i >= 0; i--)
@@ -308,12 +326,12 @@ public class IonRequest(IonClientContext context, Type interfaceName, MethodInfo
         await next(ctx, ct).ConfigureAwait(false);
 
         var reader = new CborReader(ctx.ResponsePayload!);
-        return IonFormatterStorage<TResponse>.Read(reader);
+        return projector(reader);
 
         async Task TerminalAsync(IIonCallContext callCtx, CancellationToken token)
         {
             if (callCtx is not IonCallContext c)
-                throw new InvalidOperationException($"Invalid configuration, call context broken");
+                throw new InvalidOperationException("Invalid configuration, call context broken");
 
             c.HttpRequest ??=
                 new HttpRequestMessage(HttpMethod.Post, $"/ion/{c.InterfaceName.Name}/{c.MethodName.Name}.unary")
@@ -328,8 +346,11 @@ public class IonRequest(IonClientContext context, Type interfaceName, MethodInfo
                 c.HttpRequest.Headers.Add(hKey, hValue);
 
             c.HttpResponse?.Dispose();
-            c.HttpResponse = await c.Client.SendAsync(c.HttpRequest, HttpCompletionOption.ResponseHeadersRead, token)
-                .ConfigureAwait(false);
+            c.HttpResponse = await c.Client.SendAsync(
+                c.HttpRequest,
+                HttpCompletionOption.ResponseHeadersRead,
+                token
+            ).ConfigureAwait(false);
 
             var respBytes = await c.HttpResponse.Content.ReadAsByteArrayAsync(token).ConfigureAwait(false);
             c.ResponsePayload = respBytes;
@@ -341,10 +362,13 @@ public class IonRequest(IonClientContext context, Type interfaceName, MethodInfo
                     var error = IonFormatterStorage<IonProtocolError>.Read(new CborReader(respBytes));
                     throw new IonRequestException(error);
                 }
-                catch (Exception)
+                catch
                 {
-                    throw new IonRequestException(IonProtocolError.UPSTREAM_ERROR(c.HttpResponse.ReasonPhrase ??
-                        c.HttpResponse.StatusCode.ToString()));
+                    throw new IonRequestException(
+                        IonProtocolError.UPSTREAM_ERROR(
+                            c.HttpResponse.ReasonPhrase ?? c.HttpResponse.StatusCode.ToString()
+                        )
+                    );
                 }
             }
         }
