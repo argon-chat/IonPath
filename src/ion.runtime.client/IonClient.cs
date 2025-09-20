@@ -305,6 +305,27 @@ public class IonRequest(IonClientContext context, Type interfaceName, MethodInfo
             IonFormatterStorage<TResponse>.ReadArray,
             ct);
 
+    public Task<TResponse?> CallAsyncNullable<TResponse>(
+        ReadOnlyMemory<byte> payload,
+        _StructTag<TResponse> _ = default,
+        CancellationToken ct = default) where TResponse : struct
+        => CallCoreAsync<TResponse, TResponse?>(
+            payload,
+            reader => reader.ReadNullable<TResponse>(),
+            ct);
+
+    public Task<TResponse?> CallAsyncNullable<TResponse>(
+        ReadOnlyMemory<byte> payload,
+        _ClassTag<TResponse> _ = default,
+        CancellationToken ct = default) where TResponse : class
+        => CallCoreAsync<TResponse, TResponse?>(
+            payload,
+            reader => reader.ReadNullable<TResponse>(),
+            ct);
+
+    public readonly struct _StructTag<T> where T : struct { }
+    public readonly struct _ClassTag<T> where T : class { }
+
     private async Task<TResult> CallCoreAsync<TResponse, TResult>(
         ReadOnlyMemory<byte> payload,
         Func<CborReader, TResult> projector,

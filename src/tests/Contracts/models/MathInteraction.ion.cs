@@ -23,6 +23,7 @@ public interface IMathInteraction : IIonService
     Task<i4> Div(i4 leftOperand, i4 rightOperand);
     Task<i4> Pow(i4 leftOperand, i4 rightOperand);
     Task<IonArray<i4>> PowArray(i4 leftOperand, IonArray<i4> rightOperand);
+    Task<i4?> ToPositive(i4 leftOperand, i4? rightOperand);
 }
 
 

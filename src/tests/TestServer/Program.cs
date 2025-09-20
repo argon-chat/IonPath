@@ -39,6 +39,13 @@ public class MathImpl : IMathInteraction
     public Task<Int32> Pow(int leftOperand, int rightOperand) => Task.FromResult((int)Math.Pow(leftOperand, rightOperand));
     public Task<IonArray<Int32>> PowArray(int leftOperand, IonArray<Int32> rightOperand)
         => Task.FromResult(new IonArray<int>(rightOperand.Values.Select(x => (int)Math.Pow(leftOperand, x)).ToList()));
+
+    public async Task<int?> ToPositive(int leftOperand, int? rightOperand)
+    {
+        if (rightOperand is null)
+            return null;
+        return Math.Abs(rightOperand.Value);
+    }
 }
 
 public class VectorImpl : IVectorMathInteraction

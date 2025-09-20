@@ -125,6 +125,24 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
         
         IonFormatterStorage<i4>.WriteArray(writer, result);
     }
+    [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+    public async Task ToPositive_Execute(CborReader reader, CborWriter writer)
+    {
+        var service = scope.ServiceProvider.GetRequiredService<IMathInteraction>();
+    
+        const int argumentSize = 2;
+    
+        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+    
+        var __leftoperand = IonFormatterStorage<i4>.Read(reader);
+        var __rightoperand = reader.ReadNullable<i4>();
+    
+        reader.ReadEndArrayAndSkip(arraySize - argumentSize);
+    
+        var result = await service.ToPositive(__leftoperand, __rightoperand);
+        
+        IonFormatterStorage<i4>.WriteNullable(writer, result);
+    }
 
     
     
@@ -144,6 +162,8 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
             return Pow_Execute(reader, writer);
         if (methodName.Equals("PowArray", StringComparison.InvariantCultureIgnoreCase))
             return PowArray_Execute(reader, writer);
+        if (methodName.Equals("ToPositive", StringComparison.InvariantCultureIgnoreCase))
+            return ToPositive_Execute(reader, writer);
 
         
         throw new InvalidOperationException("no method defined");

@@ -1,10 +1,11 @@
-﻿namespace ion.runtime;
+namespace ion.runtime;
 
 using ion.runtime.network;
 #pragma warning disable CA2255
 using System.Buffers;
 using System.Buffers.Binary;
 using System.Numerics;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 
 public static class IonBinarySerializer
@@ -56,6 +57,34 @@ public interface IonFormatter<T>
     T Read(CborReader reader);
 
     void Write(CborWriter writer, T value);
+}
+
+public static class IonFormatterEx
+{
+    public static T? ReadNullable<T>(this CborReader reader, _StructTag<T> _ = default)
+        where T : struct
+    {
+        var state = reader.PeekState();
+        if (state != CborReaderState.Null)
+            return IonFormatterStorage<T>.Read(reader);
+
+        reader.ReadNull();
+        return null;
+    }
+
+    public static T ReadNullable<T>(this CborReader reader, _ClassTag<T> _ = default)
+        where T : class
+    {
+        var state = reader.PeekState();
+        if (state != CborReaderState.Null)
+            return IonFormatterStorage<T>.Read(reader);
+
+        reader.ReadNull();
+        return null!;
+    }
+
+    public readonly struct _StructTag<T> where T : struct { }
+    public readonly struct _ClassTag<T> where T : class { }
 }
 
 public static class IonFormatterStorage<T>

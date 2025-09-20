@@ -30,6 +30,8 @@ public sealed class Ion_MathInteraction_ClientImpl(IonClientContext context) : I
         typeof(IMathInteraction).GetMethod(nameof(Pow), BindingFlags.Public | BindingFlags.Instance)!);
     private static readonly Lazy<MethodInfo> PowArray_Ref = new(() =>
         typeof(IMathInteraction).GetMethod(nameof(PowArray), BindingFlags.Public | BindingFlags.Instance)!);
+    private static readonly Lazy<MethodInfo> ToPositive_Ref = new(() =>
+        typeof(IMathInteraction).GetMethod(nameof(ToPositive), BindingFlags.Public | BindingFlags.Instance)!);
 
 
     
@@ -140,6 +142,24 @@ public sealed class Ion_MathInteraction_ClientImpl(IonClientContext context) : I
         writer.WriteEndArray();
     
         return await req.CallAsyncWithArray<i4>(writer.Encode());
+    }
+    [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+    public async Task<i4?> ToPositive(i4 __leftoperand, i4? __rightoperand)
+    {
+        var req = new IonRequest(context, typeof(IMathInteraction), ToPositive_Ref.Value);
+    
+        var writer = new CborWriter();
+        
+        const int argsSize = 2;
+    
+        writer.WriteStartArray(argsSize);
+        
+        IonFormatterStorage<i4>.Write(writer, __leftoperand);
+        IonFormatterStorage<i4>.WriteNullable(writer, __rightoperand);
+        
+        writer.WriteEndArray();
+    
+        return await req.CallAsyncNullable<i4>(writer.Encode());
     }
 
 }

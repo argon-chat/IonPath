@@ -572,9 +572,10 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     {
         if (field.Type is not IonGenericType { IsMaybe: true } arrayType)
             throw new InvalidOperationException();
-
+        if (UseMaybeWrapper)
+            return $"var __{field.Name.Identifier.ToLowerInvariant()} = IonFormatterStorage<{ResolveTypeName(arrayType.TypeArguments[0])}>.ReadMaybe(reader);";
         return
-            $"var __{field.Name.Identifier.ToLowerInvariant()} = IonFormatterStorage<{ResolveTypeName(arrayType.TypeArguments[0])}>.{(UseMaybeWrapper ? "ReadMaybe" : "ReadNullable")}(reader);";
+            $"var __{field.Name.Identifier.ToLowerInvariant()} = reader.ReadNullable<{ResolveTypeName(arrayType.TypeArguments[0])}>();";
     }
 
 
@@ -931,6 +932,27 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             }
         """;
 
+    private static readonly string ServiceClientMethodDeclNullable =
+        """
+            {compileGeneratedAttributes}
+            public async Task<{methodReturnType}> {methodName}({args})
+            {
+                var req = new IonRequest(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
+            
+                var writer = new CborWriter();
+                
+                const int argsSize = {argSize};
+            
+                writer.WriteStartArray(argsSize);
+                
+                {argsWrite}
+                
+                writer.WriteEndArray();
+            
+                return await req.CallAsyncNullable<{methodReturnTypeUnwrapped}>(writer.Encode());
+            }
+        """;
+
     private static readonly string ServiceClientMethodDeclNoReturn =
         """
             {compileGeneratedAttributes}
@@ -998,7 +1020,9 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
                         ? ServiceClientMethodDeclNoReturn
                         : method.returnType.IsArray
                             ? ServiceClientMethodDeclArray
-                            : ServiceClientMethodDecl;
+                            : method.returnType.IsMaybe
+                                ? ServiceClientMethodDeclNullable
+                                : ServiceClientMethodDecl;
 
             var templateMethod =
                 template
@@ -1013,7 +1037,13 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
                     .Replace("{methodReturnType}", UnwrapType(method.returnType));
             if (method.returnType is { IsVoid: false, IsArray: true })
                 templateMethod = templateMethod
-                    .Replace("{methodReturnTypeUnwrapped}", ResolveTypeName((method.returnType as IonGenericType)!.TypeArguments[0]));
+                    .Replace("{methodReturnTypeUnwrapped}",
+                        ResolveTypeName((method.returnType as IonGenericType)!.TypeArguments[0]));
+            if (method.returnType is { IsVoid: false, IsArray: false, IsMaybe: true })
+                templateMethod = templateMethod
+                    .Replace("{methodReturnTypeUnwrapped}",
+                        ResolveTypeName((method.returnType as IonGenericType)!.TypeArguments[0]));
+
             methodsBuilder.AppendLine(templateMethod);
 
 

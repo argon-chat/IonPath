@@ -63,6 +63,20 @@ public class Tests
         var response = await service.PowArray(1, new IonArray<int>([1, 2, 3, 4]));
     }
 
+
+    [Test]
+    public async Task UnaryCall_Test_Nullable()
+    {
+        await using var scope = _factoryAsp.Services.CreateAsyncScope();
+        var client = IonClient.Create(httpClient, (uri, ct) => webSocketClient.ConnectAsync(uri, ct));
+        var service = client.ForService<IMathInteraction>(scope);
+
+        var response1 = await service.ToPositive(1, null);
+        var response2 = await service.ToPositive(1, -1);
+
+        That(response1 == null);
+        That(response2 == 1);
+    }
     [Test]
     public async Task UnaryCall_Test_StreamRandomInt()
     {

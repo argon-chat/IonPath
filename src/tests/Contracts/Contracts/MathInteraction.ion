@@ -6,6 +6,8 @@
     Pow(rightOperand: i4): i4;
 
     PowArray(rightOperand: i4[]): i4[];
+
+    ToPositive(rightOperand: i4?): i4?;
 }
 
 
