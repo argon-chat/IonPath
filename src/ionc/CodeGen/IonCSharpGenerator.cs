@@ -353,6 +353,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             (IonGenericType { IsMaybe: true } maybe, true) => $"IonMaybe<{ResolveTypeName(maybe.TypeArguments[0])}>",
             (IonGenericType { IsMaybe: true } maybe, false) => $"{ResolveTypeName(maybe.TypeArguments[0])}?",
             (IonGenericType { IsArray: true } array, _) => $"IonArray<{ResolveTypeName(array.TypeArguments[0])}>",
+            (IonGenericType { IsPartial: true } partial, _) => $"IonPartial<{ResolveTypeName(partial.TypeArguments[0])}>",
             (IonGenericType generic, _) => GenerateGenericTypeName(generic),
             _ => ResolveTypeName(type)
         };
@@ -538,6 +539,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         {
             { type: { IsArray: true } } => GenerateReadArrayField(field),
             { type: { IsMaybe: true } } => GenerateReadMaybeField(field),
+            { type: { IsPartial: true } } => GenerateReadPartialField(field),
             _ => $"var __{field.name.Identifier.ToLowerInvariant()} = {FormatterTemplateRef(field.type)}.Read(reader);"
         };
 
@@ -546,16 +548,32 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         {
             { type: { IsArray: true } } => GenerateReadArrayField(argument),
             { type: { IsMaybe: true } } => GenerateReadMaybeField(argument),
+            { type: { IsPartial: true } } => GenerateReadPartialField(argument),
             _ =>
                 $"var __{argument.name.Identifier.ToLowerInvariant()} = {FormatterTemplateRef(argument.type)}.Read(reader);"
         };
 
 
+    private static string GenerateReadPartialField(IonArgument arg)
+    {
+        return "";
+    }
+    private static string GenerateWritePartialField(IonArgument arg)
+    {
+        return "";
+    }
+
+
+    private static string GenerateReadPartialField(IonField arg)
+    {
+        return "";
+    }
     private static string GenerateWriteArgument(IonArgument argument) =>
         argument switch
         {
             { type: { IsArray: true } } => GenerateWriteArrayField(argument),
             { type: { IsMaybe: true } } => GenerateWriteMaybeField(argument),
+            { type: { IsPartial: true } } => GenerateWritePartialField(argument),
             _ =>
                 $"{FormatterTemplateRef(argument.type)}.Write(writer, __{argument.name.Identifier.ToLowerInvariant()});"
         };
@@ -600,6 +618,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         {
             { IsArray: true } => GenerateWriteReturnValueForArray(returnType),
             { IsMaybe: true } => GenerateWriteReturnValueForMaybe(returnType),
+            { IsPartial: true } => GenerateWriteReturnValueForPartial(returnType),
             _ => $"{FormatterTemplateRef(returnType)}.Write(writer, result);"
         };
 
@@ -608,6 +627,11 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         if (returnType is not IonGenericType { IsArray: true } arrayType)
             throw new InvalidOperationException();
         return $"{FormatterTemplateRef(arrayType.TypeArguments.First())}.WriteArray(writer, result);";
+    }
+
+    private static string GenerateWriteReturnValueForPartial(IonType returnType)
+    {
+        return "";
     }
 
     private static string GenerateWriteReturnValueForMaybe(IonType returnType)

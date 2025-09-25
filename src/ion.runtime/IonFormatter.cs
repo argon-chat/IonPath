@@ -41,7 +41,7 @@ public static class CborExtensions
 {
     public static void ReadEndArrayAndSkip(this CborReader reader, int skipCount)
     {
-        for (var i = 0; i < Math.Abs(skipCount); i++) 
+        for (var i = 0; i < Math.Abs(skipCount); i++)
             reader.SkipValue();
         reader.ReadEndArray();
     }
@@ -83,13 +83,73 @@ public static class IonFormatterEx
         return null!;
     }
 
-    public readonly struct _StructTag<T> where T : struct { }
-    public readonly struct _ClassTag<T> where T : class { }
+    public readonly struct _StructTag<T> where T : struct
+    {
+    }
+
+    public readonly struct _ClassTag<T> where T : class
+    {
+    }
+}
+public static class IonFormatterStorage
+{
+    internal static Dictionary<Type, Type> FormatterRelation { get; } = new();
+    internal static Dictionary<Type, object> FormatterInstances { get; } = new();
+
+    public static void SetFormatterTypeFor(Type type, Type fmtType)
+        => FormatterRelation[type] = fmtType;
+
+    public static Type GetFormatterTypeFor(Type type)
+    {
+        if (FormatterRelation.TryGetValue(type, out var fmtType))
+        {
+#if DEBUG
+            if (!fmtType.GetInterfaces()
+                    .Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IonFormatter<>)))
+                throw new InvalidOperationException($"Found {fmtType.FullName} for {type.FullName}, but {fmtType.FullName} is not IonFormatter");
+#endif
+            return fmtType;
+        }
+
+        if (type.IsGenericType)
+        {
+            var genericDef = type.GetGenericTypeDefinition();
+            if (FormatterRelation.TryGetValue(genericDef, out var openFmtType))
+            {
+                return openFmtType.MakeGenericType(type.GetGenericArguments());
+            }
+        }
+
+        throw new InvalidOperationException($"Ion Formatter for type '{type.FullName}' is not registered");
+    }
+
+    public static IonFormatter<T> GetFormatter<T>()
+    {
+        var t = typeof(T);
+
+        if (FormatterInstances.TryGetValue(t, out var cached))
+            return (IonFormatter<T>)cached;
+
+        var fmtType = GetFormatterTypeFor(t);
+        var instance = (IonFormatter<T>)Activator.CreateInstance(fmtType)!;
+        FormatterInstances[t] = instance;
+        return instance;
+    }
+
+    public static void SetFormatter<T>(IonFormatter<T> fmt)
+    {
+        SetFormatterTypeFor(typeof(T), fmt.GetType());
+        FormatterInstances[typeof(T)] = fmt;
+    }
 }
 
 public static class IonFormatterStorage<T>
 {
-    public static IonFormatter<T> Value { get; set; } = null!;
+    public static IonFormatter<T> Value
+    {
+        get => IonFormatterStorage.GetFormatter<T>();
+        set => IonFormatterStorage.SetFormatter(value);
+    }
 
     public static T Read(CborReader reader)
     {
@@ -130,6 +190,7 @@ public static class IonFormatterStorage<T>
             writer.WriteNull();
             return;
         }
+
         var value = ionMaybe.Value!;
         Write(writer, value);
     }
@@ -141,6 +202,7 @@ public static class IonFormatterStorage<T>
             writer.WriteNull();
             return;
         }
+
         Write(writer, (T)(object)ionMaybe);
     }
 
@@ -166,7 +228,7 @@ public static class IonFormatterStorage<T>
 
         using var span = MemoryPool<T>.Shared.Rent(size.Value);
 
-        for (var i = 0; i < size.Value; i++) 
+        for (var i = 0; i < size.Value; i++)
             span.Memory.Span[i] = Read(reader);
 
         reader.ReadEndArray();
@@ -182,7 +244,8 @@ public static class IonFormatterStorage<T>
             writer.WriteEndArray();
             return;
         }
-        for (var i = 0; i < array.Size; i++) 
+
+        for (var i = 0; i < array.Size; i++)
             Write(writer, array[i]);
         writer.WriteEndArray();
     }
@@ -216,8 +279,10 @@ public static class IonFormatterStorageModuleInit
         IonFormatterStorage<Int128>.Value = new Ion_i16_Formatter();
         IonFormatterStorage<UInt128>.Value = new Ion_u16_Formatter();
         IonFormatterStorage<IonProtocolError>.Value = new IonProtocolErrorFormatter();
+        IonFormatterStorage.SetFormatterTypeFor(typeof(IonPartial<>), typeof(PartialFormatter<>));
     }
 }
+
 public sealed class Ion_bool_Formatter : IonFormatter<bool>
 {
     public bool Read(CborReader reader)
@@ -226,6 +291,7 @@ public sealed class Ion_bool_Formatter : IonFormatter<bool>
     public void Write(CborWriter writer, bool value)
         => writer.WriteBoolean(value);
 }
+
 public sealed class Ion_string_Formatter : IonFormatter<string>
 {
     public string Read(CborReader reader)
@@ -280,7 +346,7 @@ public sealed class Ion_guid_Formatter : IonFormatter<Guid>
     private static void ToBigEndianBytes(Guid value, Span<byte> dest)
     {
         Span<byte> tmp = stackalloc byte[16];
-        value.TryWriteBytes(tmp); 
+        value.TryWriteBytes(tmp);
 
         var a = BinaryPrimitives.ReadUInt32LittleEndian(tmp[..4]);
         var b = BinaryPrimitives.ReadUInt16LittleEndian(tmp.Slice(4, 2));
@@ -292,7 +358,6 @@ public sealed class Ion_guid_Formatter : IonFormatter<Guid>
         tmp[8..].CopyTo(dest[8..]);
     }
 }
-
 
 public sealed class Ion_datetime_offset_Formatter : IonFormatter<DateTimeOffset>
 {
@@ -316,20 +381,23 @@ public sealed class Ion_dateonly_Formatter : IonFormatter<DateOnly>
 {
     public DateOnly Read(CborReader reader)
     {
+        reader.ReadStartArray();
         var i1 = reader.ReadInt32();
         var i2 = reader.ReadInt32();
         var i3 = reader.ReadInt32();
         var i4 = reader.ReadInt32(); // calendar reserved
-
+        reader.ReadEndArray();
         return new DateOnly(i1, i2, i3);
     }
 
     public void Write(CborWriter writer, DateOnly value)
     {
+        writer.WriteStartArray(4);
         writer.WriteInt32(value.Year);
         writer.WriteInt32(value.Month);
         writer.WriteInt32(value.Day);
         writer.WriteInt32(0); // calendar reserved
+        writer.WriteEndArray();
     }
 }
 
@@ -337,22 +405,26 @@ public sealed class Ion_timeonly_Formatter : IonFormatter<TimeOnly>
 {
     public TimeOnly Read(CborReader reader)
     {
+        reader.ReadStartArray();
         var h = reader.ReadInt32();
         var m = reader.ReadInt32();
         var s = reader.ReadInt32();
         var ms = reader.ReadInt32();
         var ns = reader.ReadInt32();
+        reader.ReadEndArray();
 
         return new TimeOnly(h, m, s, ms, ns);
     }
 
     public void Write(CborWriter writer, TimeOnly value)
     {
+        writer.WriteStartArray(5);
         writer.WriteInt32(value.Hour);
         writer.WriteInt32(value.Minute);
         writer.WriteInt32(value.Second);
         writer.WriteInt32(value.Millisecond);
         writer.WriteInt32(value.Microsecond);
+        writer.WriteEndArray();
     }
 }
 

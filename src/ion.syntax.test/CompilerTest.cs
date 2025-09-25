@@ -1,6 +1,8 @@
 ﻿namespace ion.syntax.test;
 
+using System.Formats.Cbor;
 using ion.compiler;
+using runtime;
 
 public class CompilerTest
 {

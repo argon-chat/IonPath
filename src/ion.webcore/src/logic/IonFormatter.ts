@@ -9,10 +9,13 @@ export interface IonFormatter<T> {
   read(reader: CborReader): T;
   write(writer: CborWriter, value: T): void;
 }
+export type FieldSchema = Record<string, string>;
 
-export type ExecutorConstructor<T extends IIonService> =
-  new (ctx: IonClientContext, signal: AbortSignal) => ServiceExecutor<T> & T;
-     
+export type ExecutorConstructor<T extends IIonService> = new (
+  ctx: IonClientContext,
+  signal: AbortSignal
+) => ServiceExecutor<T> & T;
+
 export class IonFormatterStorage {
   private static map = new Map<string, IonFormatter<any>>();
   private static mapExecutors = new Map<string, ExecutorConstructor<any>>();
@@ -81,7 +84,7 @@ export class IonFormatterStorage {
     ionMaybe: T | null,
     typeName: string = ""
   ): void {
-    if(ionMaybe === undefined || ionMaybe === null) {
+    if (ionMaybe === undefined || ionMaybe === null) {
       writer.writeNull();
       return;
     }
@@ -120,6 +123,61 @@ export class IonFormatterStorage {
 
     writer.writeEndArray();
   }
+
+  static makePartialFormatter<T>(
+    schema: FieldSchema
+  ): IonFormatter<Partial<T>> {
+    return {
+      read(reader: CborReader): Partial<T> {
+        const result: Partial<T> = {};
+        const length = reader.readStartMap();
+
+        for (let i = 0; i < (length ?? 0); i++) {
+          const key = reader.readTextString();
+          const typeName = schema[key];
+          if (!typeName) {
+            reader.skipValue();
+            continue;
+          }
+
+          if (reader.peekState() === CborReaderState.Null) {
+            reader.readNull();
+            (result as any)[key] = null;
+          } else {
+            const fmt = IonFormatterStorage.get(typeName);
+            (result as any)[key] = fmt.read(reader);
+          }
+        }
+
+        reader.readEndMap();
+        return result;
+      },
+
+      write(writer: CborWriter, value: Partial<T>): void {
+        const entries = Object.entries(value).filter(
+          ([_, v]) => v !== undefined
+        );
+        writer.writeStartMap(entries.length);
+
+        for (const [key, val] of entries) {
+          writer.writeTextString(key);
+
+          if (val === null) {
+            writer.writeNull();
+          } else {
+            const typeName = schema[key];
+            if (!typeName) {
+              throw new Error(`No formatter schema for field '${key}'`);
+            }
+            const fmt = IonFormatterStorage.get(typeName);
+            fmt.write(writer, val as any);
+          }
+        }
+
+        writer.writeEndMap();
+      },
+    };
+  }
 }
 
 export class IonMaybe<T> {
@@ -150,7 +208,7 @@ export class IonMaybe<T> {
     return this.value as T | null;
   }
 }
-export interface IS extends IIonService{
-    asdasd: Int16Array,
-    aqweqwe: 12,
+export interface IS extends IIonService {
+  asdasd: Int16Array;
+  aqweqwe: 12;
 }

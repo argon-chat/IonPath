@@ -26,7 +26,7 @@ public record IonIdentifier(string Identifier) : IonSyntaxBase()
 
     public override string ToString() => Identifier;
 }
-public record IonUnderlyingTypeSyntax(IonIdentifier Name, IReadOnlyList<IonTypeParameterSyntax> generics, bool IsArray, bool IsOptional) : IonSyntaxBase;
+public record IonUnderlyingTypeSyntax(IonIdentifier Name, IReadOnlyList<IonTypeParameterSyntax> generics, bool IsArray, bool IsOptional, bool IsPartial = false) : IonSyntaxBase;
 
 public record IonFieldSyntax(IonIdentifier Name, IonUnderlyingTypeSyntax Type) : IonSyntaxMember;
 

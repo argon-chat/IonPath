@@ -1,20 +1,48 @@
 ﻿namespace ion.compiler;
 
-using System.Globalization;
-using System.Numerics;
 using ion.syntax;
 using runtime;
+using System.Globalization;
+using System.Numerics;
 
 public class TransformStage(CompilationContext context) : CompilationStage(context)
 {
     public override void DoProcess()
     {
-        foreach (var syntax in context.Files) context.OnCompiler(TransformFile(syntax));
+        foreach (var syntax in context.Files) 
+            context.OnPrepare(PrepareModule(syntax));
+
+        foreach (var syntax in context.Files)
+            context.OnCompiler(syntax, x => GenerateAttributes(syntax, x));
+
+        foreach (var syntax in context.Files) 
+            context.OnCompiler(syntax, x => TransformFile(syntax, x));
     }
 
-    private IonModule TransformFile(IonFileSyntax file)
+    private IonModule PrepareModule(IonFileSyntax file)
+    {
+        return new IonModule()
+        {
+            Attributes = [],
+            Name = file.Name,
+            Path = file.file.FullName,
+            Syntax = file,
+            Imports = [],
+            Features = [],
+            Definitions = [],
+            Services = []
+        };
+    }
+
+    private void GenerateAttributes(IonFileSyntax file, IonModule module)
     {
         var attributes = CompileAttributes(file);
+
+        module.Attributes.AddRange(attributes);
+    }
+
+    private void TransformFile(IonFileSyntax file, IonModule module)
+    {
         var enums = CompileEnums(file);
         var typeDefs = CompileTypedefs(file);
         var messages = CompileMessages(file);
@@ -22,17 +50,8 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
         var flags = CompileFlags(file);
         var unions = CompileUnions(file);
 
-        return new IonModule()
-        {
-            Attributes = attributes,
-            Name = file.Name,
-            Path = file.file.FullName,
-            Syntax = file,
-            Imports = [],
-            Features = [],
-            Definitions = messages.Concat(typeDefs).Concat(enums).Concat(flags).Concat(unions).ToList(),
-            Services = services
-        };
+        module.Definitions.AddRange(messages.Concat(typeDefs).Concat(enums).Concat(flags).Concat(unions).ToList());
+        module.Services.AddRange(services);
     }
 
     public IReadOnlyList<IonAttributeType> CompileAttributes(IonFileSyntax file)

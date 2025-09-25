@@ -56,7 +56,7 @@ public partial class IonParser
         Map(IonSyntaxMember (pos, doc, attrs, name, baseType, entries) =>
                 ctor(name, baseType.HasValue
                         ? baseType.Value
-                        : new IonUnderlyingTypeSyntax(new IonIdentifier("u4"), [], false, false), entries)
+                        : new IonUnderlyingTypeSyntax(new IonIdentifier("u4"), [], false, false, false), entries)
                     .WithComments(doc)
                     .WithAttributes(attrs)
                     .WithPos(pos),

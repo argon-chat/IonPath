@@ -8,9 +8,9 @@ public sealed class IonModule
     public required string Path { get; init; }
     public required List<IonType> Definitions { get; init; }
     public required List<IonService> Services { get; init; }
-    public required IReadOnlyList<IonFeature> Features { get; init; }
-    public required IReadOnlyList<IonAttributeType> Attributes { get; init; }
-    public required IReadOnlyList<string> Imports { get; init; }
+    public required List<IonFeature> Features { get; init; }
+    public required List<IonAttributeType> Attributes { get; init; }
+    public required List<string> Imports { get; init; }
     public IonFileSyntax? Syntax { get; init; } = null;
 
 
@@ -53,6 +53,7 @@ public sealed class IonModule
 
             new IonGenericType("Maybe", ["builtin"], [], ["T"], []),
             new IonGenericType("Array", ["builtin"], [], ["T"], []),
+            new IonGenericType("Partial", ["builtin"], [], ["T"], []),
         ],
         Attributes =
         [
@@ -182,6 +183,7 @@ public record IonType(
     public bool IsVoid => this.name.Identifier.Equals("void");
     public bool IsMaybe => this.name.Identifier.Equals("Maybe");
     public bool IsArray => this.name.Identifier.Equals("Array");
+    public bool IsPartial => this.name.Identifier.Equals("Partial");
 
     public bool IsUnion => attributes.Any(x => x.IsUnion);
     public bool IsUnionCase => attributes.Any(x => x.IsUnionCase);

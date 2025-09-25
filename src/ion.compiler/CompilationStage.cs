@@ -15,7 +15,7 @@ public class CompilationContext(IReadOnlyList<IonFileSyntax> files)
 
 
     public IonType Void =>
-        ResolveBuiltinType(new IonUnderlyingTypeSyntax(new IonIdentifier("void"), [], false, false))!;
+        ResolveBuiltinType(new IonUnderlyingTypeSyntax(new IonIdentifier("void"), [], false, false, false))!;
 
 
     public required IReadOnlyList<IonModule> GlobalModules { get; init; }
@@ -50,7 +50,7 @@ public class CompilationContext(IReadOnlyList<IonFileSyntax> files)
             {
                 var resolvedArgs = type.generics
                     .Select(g => ResolveTypeFor(owner,
-                        new IonUnderlyingTypeSyntax(g.Name, [], false, false).WithPos(g.StartPosition,
+                        new IonUnderlyingTypeSyntax(g.Name, [], false, false, false).WithPos(g.StartPosition,
                             g.EndPosition!.Value), allowUnresolved))
                     .ToList();
 
@@ -71,6 +71,9 @@ public class CompilationContext(IReadOnlyList<IonFileSyntax> files)
     private IonType WrapModifiers(IonType inner, IonUnderlyingTypeSyntax type)
     {
         var result = inner;
+
+        if (type.IsPartial)
+            result = ResolveSpecialGeneric("Partial", result) ?? result;
 
         if (type.IsArray)
             result = ResolveSpecialGeneric("Array", result) ?? result;
@@ -126,9 +129,16 @@ public class CompilationContext(IReadOnlyList<IonFileSyntax> files)
         };
     }
 
-    public void OnCompiler(IonModule module)
+    public void OnPrepare(IonModule module)
     {
         ProcessedModules.Add(module);
+    }
+
+    public void OnCompiler(IonFileSyntax syntax, Action<IonModule> selector)
+    {
+        var mod = ProcessedModules.First(x => x.Path.Equals(syntax.file.FullName));
+
+        selector(mod);
     }
 
     private static void AddIf(IList<IonModule> modules, Func<IonModule> moduleSelector, Func<bool> predicate)

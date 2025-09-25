@@ -20,15 +20,28 @@ public partial class IonParser
 
     private static readonly Parser<char, IonUnderlyingTypeSyntax> Type =
         Map(
-            (pos, name, generics, isOptional, isArray) => new IonUnderlyingTypeSyntax(name,
-                    generics.GetValueOrDefault() ?? [], isArray.HasValue, isOptional.HasValue)
-                .WithPos(pos),
+            (pos, name, generics, modifiers) =>
+            {
+                var isOptional = modifiers.Contains("?");
+                var isArray = modifiers.Contains("[]");
+                var isPartial = modifiers.Contains("~");
+
+                return new IonUnderlyingTypeSyntax(name,
+                        generics.GetValueOrDefault() ?? [], isArray, isOptional, isPartial)
+                    .WithPos(pos);
+            },
             CurrentPos,
             Identifier.Before(SkipWhitespaces),
             GenericParameterList.Optional(),
-            Char('?').Before(SkipWhitespaces).Optional(),
-            Try(String("[]")).Before(SkipWhitespaces).Optional()
+            ModifierOfType.Many().Select(m => m.ToArray())
         );
+
+    private static Parser<char, string> ModifierOfType =>
+        OneOf(
+            Char('?').Select(_ => "?"),
+            Try(String("[]")).Select(_ => "[]"),
+            Char('~').Select(_ => "~")
+        ).Before(SkipWhitespaces);
 
     public static Parser<char, Maybe<Unit>> ForbidNext(char c, string message) =>
         Lookahead(
