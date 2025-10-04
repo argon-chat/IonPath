@@ -36,7 +36,7 @@ public sealed class Ion_MathInteraction_ClientImpl(IonClientContext context) : I
 
     
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
-    public async Task<i4> Add(i4 __leftoperand, i4 __rightoperand)
+    public async Task<i4> Add(i4 __leftoperand, i4 __rightoperand, CancellationToken ct = default)
     {
         var req = new IonRequest(context, typeof(IMathInteraction), Add_Ref.Value);
     
@@ -51,10 +51,10 @@ public sealed class Ion_MathInteraction_ClientImpl(IonClientContext context) : I
         
         writer.WriteEndArray();
     
-        return await req.CallAsync<i4>(writer.Encode());
+        return await req.CallAsync<i4>(writer.Encode(), ct: ct);
     }
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
-    public async Task<i4> Mul(i4 __leftoperand, i4 __rightoperand)
+    public async Task<i4> Mul(i4 __leftoperand, i4 __rightoperand, CancellationToken ct = default)
     {
         var req = new IonRequest(context, typeof(IMathInteraction), Mul_Ref.Value);
     
@@ -69,10 +69,10 @@ public sealed class Ion_MathInteraction_ClientImpl(IonClientContext context) : I
         
         writer.WriteEndArray();
     
-        return await req.CallAsync<i4>(writer.Encode());
+        return await req.CallAsync<i4>(writer.Encode(), ct: ct);
     }
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
-    public async Task<i4> Sub(i4 __leftoperand, i4 __rightoperand)
+    public async Task<i4> Sub(i4 __leftoperand, i4 __rightoperand, CancellationToken ct = default)
     {
         var req = new IonRequest(context, typeof(IMathInteraction), Sub_Ref.Value);
     
@@ -87,10 +87,10 @@ public sealed class Ion_MathInteraction_ClientImpl(IonClientContext context) : I
         
         writer.WriteEndArray();
     
-        return await req.CallAsync<i4>(writer.Encode());
+        return await req.CallAsync<i4>(writer.Encode(), ct: ct);
     }
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
-    public async Task<i4> Div(i4 __leftoperand, i4 __rightoperand)
+    public async Task<i4> Div(i4 __leftoperand, i4 __rightoperand, CancellationToken ct = default)
     {
         var req = new IonRequest(context, typeof(IMathInteraction), Div_Ref.Value);
     
@@ -105,10 +105,10 @@ public sealed class Ion_MathInteraction_ClientImpl(IonClientContext context) : I
         
         writer.WriteEndArray();
     
-        return await req.CallAsync<i4>(writer.Encode());
+        return await req.CallAsync<i4>(writer.Encode(), ct: ct);
     }
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
-    public async Task<i4> Pow(i4 __leftoperand, i4 __rightoperand)
+    public async Task<i4> Pow(i4 __leftoperand, i4 __rightoperand, CancellationToken ct = default)
     {
         var req = new IonRequest(context, typeof(IMathInteraction), Pow_Ref.Value);
     
@@ -123,10 +123,10 @@ public sealed class Ion_MathInteraction_ClientImpl(IonClientContext context) : I
         
         writer.WriteEndArray();
     
-        return await req.CallAsync<i4>(writer.Encode());
+        return await req.CallAsync<i4>(writer.Encode(), ct: ct);
     }
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
-    public async Task<IonArray<i4>> PowArray(i4 __leftoperand, IonArray<i4> __rightoperand)
+    public async Task<IonArray<i4>> PowArray(i4 __leftoperand, IonArray<i4> __rightoperand, CancellationToken ct = default)
     {
         var req = new IonRequest(context, typeof(IMathInteraction), PowArray_Ref.Value);
     
@@ -141,10 +141,10 @@ public sealed class Ion_MathInteraction_ClientImpl(IonClientContext context) : I
         
         writer.WriteEndArray();
     
-        return await req.CallAsyncWithArray<i4>(writer.Encode());
+        return await req.CallAsyncWithArray<i4>(writer.Encode(), ct: ct);
     }
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
-    public async Task<i4?> ToPositive(i4 __leftoperand, i4? __rightoperand)
+    public async Task<i4?> ToPositive(i4 __leftoperand, i4? __rightoperand, CancellationToken ct = default)
     {
         var req = new IonRequest(context, typeof(IMathInteraction), ToPositive_Ref.Value);
     
@@ -159,7 +159,7 @@ public sealed class Ion_MathInteraction_ClientImpl(IonClientContext context) : I
         
         writer.WriteEndArray();
     
-        return await req.CallAsyncNullable<i4>(writer.Encode());
+        return await req.CallAsyncNullable<i4>(writer.Encode(), ct: ct);
     }
 
 }
@@ -170,12 +170,31 @@ public sealed class Ion_RandomStreamInteraction_ClientImpl(IonClientContext cont
     
     private static readonly Lazy<MethodInfo> Integer_Ref = new(() =>
         typeof(IRandomStreamInteraction).GetMethod(nameof(Integer), BindingFlags.Public | BindingFlags.Instance)!);
+    private static readonly Lazy<MethodInfo> Floats_Ref = new(() =>
+        typeof(IRandomStreamInteraction).GetMethod(nameof(Floats), BindingFlags.Public | BindingFlags.Instance)!);
 
 
     
-    public IAsyncEnumerable<i4> Integer(i4 __seed)
+    public IAsyncEnumerable<i4> Integer(i4 __seed, i4 __i, CancellationToken ct = default)
     {
         var ws = new IonWsClient(context, typeof(IRandomStreamInteraction), Integer_Ref.Value);
+    
+        var writer = new CborWriter();
+
+        const int argsSize = 2;
+        
+        writer.WriteStartArray(argsSize);
+        
+        IonFormatterStorage<i4>.Write(writer, __seed);
+        IonFormatterStorage<i4>.Write(writer, __i);
+        
+        writer.WriteEndArray();
+    
+        return ws.CallServerStreamingAsync<i4>(writer.Encode(), ct: ct);
+    }
+    public IAsyncEnumerable<f4> Floats(i4 __seed, IAsyncEnumerable<f4> inputStream, CancellationToken ct = default)
+    {
+        var ws = new IonWsClient(context, typeof(IRandomStreamInteraction), Floats_Ref.Value);
     
         var writer = new CborWriter();
 
@@ -187,7 +206,7 @@ public sealed class Ion_RandomStreamInteraction_ClientImpl(IonClientContext cont
         
         writer.WriteEndArray();
     
-        return ws.CallServerStreamingAsync<i4>(writer.Encode());
+        return ws.CallServerStreamingAsync<f4, f4>(writer.Encode(), inputStream, ct: ct);
     }
 
 }

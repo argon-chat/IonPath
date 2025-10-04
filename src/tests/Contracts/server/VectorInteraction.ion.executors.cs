@@ -18,7 +18,7 @@ public sealed class Ion_VectorMathInteraction_ServiceExecutor(AsyncServiceScope 
 {
     
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
-    public async Task Abs_Execute(CborReader reader, CborWriter writer)
+    public async Task Abs_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
     {
         var service = scope.ServiceProvider.GetRequiredService<IVectorMathInteraction>();
     
@@ -35,7 +35,7 @@ public sealed class Ion_VectorMathInteraction_ServiceExecutor(AsyncServiceScope 
         IonFormatterStorage<Vector>.Write(writer, result);
     }
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
-    public async Task Add_Execute(CborReader reader, CborWriter writer)
+    public async Task Add_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
     {
         var service = scope.ServiceProvider.GetRequiredService<IVectorMathInteraction>();
     
@@ -53,7 +53,7 @@ public sealed class Ion_VectorMathInteraction_ServiceExecutor(AsyncServiceScope 
         IonFormatterStorage<Vector>.Write(writer, result);
     }
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
-    public async Task AndNot_Execute(CborReader reader, CborWriter writer)
+    public async Task AndNot_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
     {
         var service = scope.ServiceProvider.GetRequiredService<IVectorMathInteraction>();
     
@@ -71,7 +71,7 @@ public sealed class Ion_VectorMathInteraction_ServiceExecutor(AsyncServiceScope 
         IonFormatterStorage<Vector>.Write(writer, result);
     }
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
-    public async Task Clamp_Execute(CborReader reader, CborWriter writer)
+    public async Task Clamp_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
     {
         var service = scope.ServiceProvider.GetRequiredService<IVectorMathInteraction>();
     
@@ -90,7 +90,7 @@ public sealed class Ion_VectorMathInteraction_ServiceExecutor(AsyncServiceScope 
         IonFormatterStorage<Vector>.Write(writer, result);
     }
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
-    public async Task Do_Execute(CborReader reader, CborWriter writer)
+    public async Task Do_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
     {
         var service = scope.ServiceProvider.GetRequiredService<IVectorMathInteraction>();
     
@@ -110,22 +110,28 @@ public sealed class Ion_VectorMathInteraction_ServiceExecutor(AsyncServiceScope 
     
     
     
-        public Task RouteExecuteAsync(string methodName, CborReader reader, CborWriter writer)
+        public Task RouteExecuteAsync(string methodName, CborReader reader, CborWriter writer, CancellationToken ct = default)
     {
         
         if (methodName.Equals("Abs", StringComparison.InvariantCultureIgnoreCase))
-            return Abs_Execute(reader, writer);
+            return Abs_Execute(reader, writer, ct);
         if (methodName.Equals("Add", StringComparison.InvariantCultureIgnoreCase))
-            return Add_Execute(reader, writer);
+            return Add_Execute(reader, writer, ct);
         if (methodName.Equals("AndNot", StringComparison.InvariantCultureIgnoreCase))
-            return AndNot_Execute(reader, writer);
+            return AndNot_Execute(reader, writer, ct);
         if (methodName.Equals("Clamp", StringComparison.InvariantCultureIgnoreCase))
-            return Clamp_Execute(reader, writer);
+            return Clamp_Execute(reader, writer, ct);
         if (methodName.Equals("Do", StringComparison.InvariantCultureIgnoreCase))
-            return Do_Execute(reader, writer);
+            return Do_Execute(reader, writer, ct);
 
         
         throw new InvalidOperationException("no method defined");
     }
+    
+    private static readonly string[] __allowedStreamingMethods = [
+        
+    ];
+    
+    public bool IsAllowInputStream(string methodName) => __allowedStreamingMethods.Contains(methodName);
 }
 

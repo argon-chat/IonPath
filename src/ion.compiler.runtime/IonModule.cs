@@ -135,7 +135,8 @@ public record IonConstant(
 public record IonArgument(
     IonIdentifier name,
     IonType type,
-    IReadOnlyList<IonAttributeInstance> attributes)
+    IReadOnlyList<IonAttributeInstance> attributes, 
+    IonArgumentModifiers mod = IonArgumentModifiers.None)
     : IonBase(name, attributes), ITypeWithName
 {
     public IonType Type => type;

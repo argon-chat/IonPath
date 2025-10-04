@@ -77,6 +77,7 @@ public class Tests
         That(response1 == null);
         That(response2 == 1);
     }
+
     [Test]
     public async Task UnaryCall_Test_StreamRandomInt()
     {
@@ -86,10 +87,37 @@ public class Tests
 
         var list = new List<int>();
 
-        await foreach (var number in service.Integer(0))
+        await foreach (var number in service.Integer(0, 1))
         {
             list.Add(number);
         }
+
         That(list, Has.Count.EqualTo(10));
+    }
+
+    [Test]
+    public async Task FullDuplexStream_Test_StreamRandomFloats()
+    {
+        await using var scope = _factoryAsp.Services.CreateAsyncScope();
+        var client = IonClient.Create(httpClient, (uri, ct) => webSocketClient.ConnectAsync(uri, ct));
+        var service = client.ForService<IRandomStreamInteraction>(scope);
+
+        var result = new List<float>();
+        float[] floats = [1.1f, 2.2f, 3.3f, 4.4f, 5.5f, 6.6f, 7.7f, 8.8f, 9.9f];
+
+        await foreach (var number in service.Floats(0, ToAsyncEnumerable(floats)))
+            result.Add(number);
+
+        That(result, Has.Count.EqualTo(floats.Length));
+        That(result, Is.EqualTo(floats));
+
+        static async IAsyncEnumerable<float> ToAsyncEnumerable(float[] values)
+        {
+            foreach (var v in values)
+            {
+                yield return v;
+                await Task.Yield();
+            }
+        }
     }
 }

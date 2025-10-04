@@ -67,7 +67,7 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
                 if (t is null)
                     Error(IonAnalyticCodes.ION0003_TypeNotFoundOrNotBuiltin, arg, arg.type.Name);
                 else
-                    args.Add(new IonArgument(arg.argName, t, []));
+                    args.Add(new IonArgument(arg.argName, t, [], arg.modifiers));
             }
 
             var attr = new IonAttributeType(syntax.Name, args);
@@ -326,7 +326,7 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
             let parsedArgs = (from argSyntax in combinedArgs
                 let type = context.ResolveTypeFor(argSyntax, argSyntax.type, true)
                 let attrs = CompileAttributeInstancesFor(argSyntax)
-                select new IonArgument(argSyntax.argName, type!, attrs)).ToList()
+                select new IonArgument(argSyntax.argName, type!, attrs, argSyntax.modifiers)).ToList()
             let returnType = methodSyntax.returnType is not null
                 ? context.ResolveTypeFor(methodSyntax, methodSyntax.returnType, true) ?? context.Void
                 : context.Void
@@ -343,7 +343,7 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
         file.unionSyntaxes
             .Select(x => new IonUnion(x.unionName, PrependUnionTypes(x),
                 x.baseFields
-                    .Select(fq => new IonArgument(fq.argName, context.ResolveTypeFor(x, fq.type, true)!, []))
+                    .Select(fq => new IonArgument(fq.argName, context.ResolveTypeFor(x, fq.type, true)!, [], fq.modifiers))
                     .ToList(),
                 [..CompileAttributeInstancesFor(x), new IonUnionAttributeInstance()])).ToList();
 

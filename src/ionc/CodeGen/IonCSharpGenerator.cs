@@ -335,7 +335,8 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
                 }
             }
 
-            var args = string.Join(", ", method.arguments.Select(GenerateArgument));
+            var args = string.Join(", ",
+                method.arguments.Select(GenerateArgument).Concat(["CancellationToken ct = default"]));
             sb.AppendLine($"    {GenerateReturnType(method)} {method.name.Identifier}({args});");
         }
 
@@ -345,7 +346,12 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
     private static string GenerateField(IonField field) => $"{UnwrapType(field.type)} {field.name.Identifier}";
 
-    private static string GenerateArgument(IonArgument field) => $"{UnwrapType(field.type)} {field.name.Identifier}";
+    private static string GenerateArgument(IonArgument arg)
+    {
+        if (arg.mod is IonArgumentModifiers.Stream)
+            return $"IAsyncEnumerable<{UnwrapType(arg.type)}>?  {arg.name.Identifier}";
+        return $"{UnwrapType(arg.type)} {arg.name.Identifier}";
+    }
 
     private static string UnwrapType(IonType type) =>
         (type, UseMaybeWrapper) switch
@@ -353,7 +359,8 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             (IonGenericType { IsMaybe: true } maybe, true) => $"IonMaybe<{ResolveTypeName(maybe.TypeArguments[0])}>",
             (IonGenericType { IsMaybe: true } maybe, false) => $"{ResolveTypeName(maybe.TypeArguments[0])}?",
             (IonGenericType { IsArray: true } array, _) => $"IonArray<{ResolveTypeName(array.TypeArguments[0])}>",
-            (IonGenericType { IsPartial: true } partial, _) => $"IonPartial<{ResolveTypeName(partial.TypeArguments[0])}>",
+            (IonGenericType { IsPartial: true } partial, _) =>
+                $"IonPartial<{ResolveTypeName(partial.TypeArguments[0])}>",
             (IonGenericType generic, _) => GenerateGenericTypeName(generic),
             _ => ResolveTypeName(type)
         };
@@ -528,8 +535,13 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     private static string GenerateCaptureField(IonType type)
         => string.Join(", ", type.fields.Select(x => $"__{x.name.Identifier.ToLowerInvariant()}"));
 
-    private static string GenerateCaptureField(IonMethod method)
-        => string.Join(", ", method.arguments.Select(x => $"__{x.name.Identifier.ToLowerInvariant()}"));
+    private static string GenerateCaptureField(IonMethod method, params string[] additional)
+        => string.Join(", ", method.arguments.Select(x =>
+        {
+            if (x.mod is IonArgumentModifiers.Stream)
+                return "inputStreamCasted";
+            return $"__{x.name.Identifier.ToLowerInvariant()}";
+        }).Concat(additional));
 
     private static string GenerateReadField(IonType type) =>
         string.Join($"\n{new string(' ', 8)}", type.fields.Select(GenerateReadField));
@@ -558,6 +570,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     {
         return "";
     }
+
     private static string GenerateWritePartialField(IonArgument arg)
     {
         return "";
@@ -568,6 +581,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     {
         return "";
     }
+
     private static string GenerateWriteArgument(IonArgument argument) =>
         argument switch
         {
@@ -591,7 +605,8 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         if (field.Type is not IonGenericType { IsMaybe: true } arrayType)
             throw new InvalidOperationException();
         if (UseMaybeWrapper)
-            return $"var __{field.Name.Identifier.ToLowerInvariant()} = IonFormatterStorage<{ResolveTypeName(arrayType.TypeArguments[0])}>.ReadMaybe(reader);";
+            return
+                $"var __{field.Name.Identifier.ToLowerInvariant()} = IonFormatterStorage<{ResolveTypeName(arrayType.TypeArguments[0])}>.ReadMaybe(reader);";
         return
             $"var __{field.Name.Identifier.ToLowerInvariant()} = reader.ReadNullable<{ResolveTypeName(arrayType.TypeArguments[0])}>();";
     }
@@ -656,10 +671,11 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     }
 
     private static string GenerateReadArguments(IonMethod method)
-        => string.Join($"\n{new string(' ', 8)}", method.arguments.Select(GenerateReadArgument));
+        => string.Join($"\n{new string(' ', 8)}",
+            method.arguments.Where(x => x.mod is not IonArgumentModifiers.Stream).Select(GenerateReadArgument));
 
     private static string GenerateWriteArguments(IonMethod method)
-        => string.Join($"\n{new string(' ', 8)}", method.arguments.Select(GenerateWriteArgument));
+        => string.Join($"\n{new string(' ', 8)}", method.arguments.Where(x => x.mod is not IonArgumentModifiers.Stream).Select(GenerateWriteArgument));
 
     private static string GenerateWriteArrayField(IonField field)
     {
@@ -686,12 +702,18 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             {routerStreaming}
             
             {routerUnary}
+            
+            private static readonly string[] __allowedStreamingMethods = [
+                {allowedInputStreamMethods}
+            ];
+            
+            public bool IsAllowInputStream(string methodName) => __allowedStreamingMethods.Contains(methodName);
         }
         """;
 
     private static readonly string RouterStreamMethodTemplate =
         """
-            public IAsyncEnumerable<Memory<byte>> StreamRouteExecuteAsync(string methodName, CborReader reader, [EnumeratorCancellation] CancellationToken ct)
+            public IAsyncEnumerable<Memory<byte>> StreamRouteExecuteAsync(string methodName, CborReader reader, IAsyncEnumerable<ReadOnlyMemory<byte>>? inputStream, [EnumeratorCancellation] CancellationToken ct)
             {
                 {serviceStreamRouteBranch}
                 
@@ -701,7 +723,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string RouterMethodTemplate =
         """
-            public Task RouteExecuteAsync(string methodName, CborReader reader, CborWriter writer)
+            public Task RouteExecuteAsync(string methodName, CborReader reader, CborWriter writer, CancellationToken ct = default)
             {
                 {serviceRouteBranch}
                 
@@ -709,13 +731,30 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             }
         """;
 
+    private static readonly string CastedInputStreamTemplate =
+        """
+        var inputStreamCasted = inputStream is null
+        ? null
+        : inputStream.Select(bytes =>
+        {
+            var reader = new CborReader(bytes);
+            var arr = reader.ReadStartArray();
+            var result = IonFormatterStorage<{inputStreamType}>.Read(reader);
+            reader.ReadEndArray();
+
+            return result;
+        });
+        """;
+
     private static readonly string ServiceStreamExecutorMethodTemplate =
         """
-            public async IAsyncEnumerable<Memory<byte>> {methodName}_Execute(CborReader reader)
+            public async IAsyncEnumerable<Memory<byte>> {methodName}_Execute(CborReader reader, IAsyncEnumerable<ReadOnlyMemory<byte>>? inputStream, CancellationToken ct = default)
             {
                 var service = scope.ServiceProvider.GetRequiredService<I{serviceTypename}>();
 
                 const int argumentSize = {argSize};
+                
+                {inputCastedStream}
 
                 var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
                     
@@ -743,7 +782,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     private static readonly string ServiceExecutorMethodNoReturnTemplate =
         """
             {compileGeneratedAttributes}
-            public async Task {methodName}_Execute(CborReader reader, CborWriter writer)
+            public async Task {methodName}_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
             {
                 var service = scope.ServiceProvider.GetRequiredService<I{serviceTypename}>();
             
@@ -762,7 +801,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     private static readonly string ServiceExecutorMethodWithReturnTemplate =
         """
             {compileGeneratedAttributes}
-            public async Task {methodName}_Execute(CborReader reader, CborWriter writer)
+            public async Task {methodName}_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
             {
                 var service = scope.ServiceProvider.GetRequiredService<I{serviceTypename}>();
             
@@ -783,13 +822,13 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     private static readonly string ServiceBranchExecute =
         """
                 if (methodName.Equals("{methodName}", StringComparison.InvariantCultureIgnoreCase))
-                    return {methodName}_Execute(reader, writer);
+                    return {methodName}_Execute(reader, writer, ct);
         """;
 
     private static readonly string ServiceStreamBranchExecute =
         """
                 if (methodName.Equals("{methodName}", StringComparison.InvariantCultureIgnoreCase))
-                    return {methodName}_Execute(reader);
+                    return {methodName}_Execute(reader, inputStream, ct);
         """;
 
     private string GenerateServiceExecutor(IonService service)
@@ -810,8 +849,19 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             .Replace("{serviceTypename}", serviceTypename)
             .Replace("{routerInterfaces}", interfaces)
             .Replace("{routerStreaming}",
-                interfaces.Contains("IServiceStreamExecutorRouter") ? RouterStreamMethodTemplate : "")
+                interfaces.Contains("IServiceStreamExecutorRouter") ? $"\n{RouterStreamMethodTemplate}" : "")
             .Replace("{routerUnary}", interfaces.Contains("IServiceExecutorRouter") ? RouterMethodTemplate : "");
+
+
+        var allowedInputStreamMethods = service.methods
+            .Where(x => x.arguments.Any(a => a.mod is IonArgumentModifiers.Stream))
+            .Select(x => x.name.Identifier)
+            .ToList();
+
+        builder = builder.Replace("{allowedInputStreamMethods}",
+            allowedInputStreamMethods.Count != 0
+                ? string.Join(",", allowedInputStreamMethods.Select(x => $"\"{x}\""))
+                : "");
 
         branchBuilder.AppendLine();
         methodsBuilder.AppendLine();
@@ -836,12 +886,24 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         StringBuilder branchBuilder)
     {
         var methodName = method.name.Identifier;
-        var argSize = method.arguments.Count;
+        var argSize = method.arguments.Count(x => x.mod is not IonArgumentModifiers.Stream);
 
         var readArgsExpression = GenerateReadArguments(method);
-        var captureArgsExpression = GenerateCaptureField(method);
+        var captureArgsExpression = GenerateCaptureField(method, "ct");
 
         var template = ServiceStreamExecutorMethodTemplate;
+
+        var inputStreamArg = method.arguments.FirstOrDefault(x => x.mod is IonArgumentModifiers.Stream);
+
+        if (inputStreamArg is not null)
+        {
+            template = template.Replace("{inputCastedStream}",
+                CastedInputStreamTemplate
+                    .Replace("{inputStreamType}", UnwrapType(inputStreamArg.Type))
+                );
+        }
+        else
+            template = template.Replace("{inputCastedStream}", "");
 
         var templateMethod =
             template
@@ -917,7 +979,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     private static readonly string ServiceClientMethodDecl =
         """
             {compileGeneratedAttributes}
-            public async Task<{methodReturnType}> {methodName}({args})
+            public async Task<{methodReturnType}> {methodName}({args}, CancellationToken ct = default)
             {
                 var req = new IonRequest(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
             
@@ -931,14 +993,14 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
                 
                 writer.WriteEndArray();
             
-                return await req.CallAsync<{methodReturnType}>(writer.Encode());
+                return await req.CallAsync<{methodReturnType}>(writer.Encode(), ct: ct);
             }
         """;
 
     private static readonly string ServiceClientMethodDeclArray =
         """
             {compileGeneratedAttributes}
-            public async Task<{methodReturnType}> {methodName}({args})
+            public async Task<{methodReturnType}> {methodName}({args}, CancellationToken ct = default)
             {
                 var req = new IonRequest(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
             
@@ -952,14 +1014,14 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
                 
                 writer.WriteEndArray();
             
-                return await req.CallAsyncWithArray<{methodReturnTypeUnwrapped}>(writer.Encode());
+                return await req.CallAsyncWithArray<{methodReturnTypeUnwrapped}>(writer.Encode(), ct: ct);
             }
         """;
 
     private static readonly string ServiceClientMethodDeclNullable =
         """
             {compileGeneratedAttributes}
-            public async Task<{methodReturnType}> {methodName}({args})
+            public async Task<{methodReturnType}> {methodName}({args}, CancellationToken ct = default)
             {
                 var req = new IonRequest(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
             
@@ -973,14 +1035,14 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
                 
                 writer.WriteEndArray();
             
-                return await req.CallAsyncNullable<{methodReturnTypeUnwrapped}>(writer.Encode());
+                return await req.CallAsyncNullable<{methodReturnTypeUnwrapped}>(writer.Encode(), ct: ct);
             }
         """;
 
     private static readonly string ServiceClientMethodDeclNoReturn =
         """
             {compileGeneratedAttributes}
-            public async Task {methodName}({args})
+            public async Task {methodName}({args}, CancellationToken ct = default)
             {
                 var req = new IonRequest(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
 
@@ -994,13 +1056,13 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
                 
                 writer.WriteEndArray();
 
-                await req.CallAsync(writer.Encode());
+                await req.CallAsync(writer.Encode(), ct: ct);
             }
         """;
 
     private static readonly string ServiceClientMethodDeclStream =
         """
-            public IAsyncEnumerable<{methodReturnType}> {methodName}({args})
+            public IAsyncEnumerable<{methodReturnType}> {methodName}({args}, CancellationToken ct = default)
             {
                 var ws = new IonWsClient(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
             
@@ -1014,7 +1076,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
                 
                 writer.WriteEndArray();
             
-                return ws.CallServerStreamingAsync<{methodReturnType}>(writer.Encode());
+                return {streamReturnMatched};
             }
         """;
 
@@ -1031,7 +1093,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         foreach (var method in service.methods)
         {
             var methodName = method.name.Identifier;
-            var argSize = method.arguments.Count;
+            var argSize = method.arguments.Count(x => x.mod is not IonArgumentModifiers.Stream);
 
             var writeArgsExpression = GenerateWriteArguments(method);
 
@@ -1048,13 +1110,22 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
                                 ? ServiceClientMethodDeclNullable
                                 : ServiceClientMethodDecl;
 
+            var inputStreamArg = method.arguments.FirstOrDefault(x => x.mod is IonArgumentModifiers.Stream);
+            if (method.IsStreamable && inputStreamArg is not null)
+                template = template.Replace("{streamReturnMatched}",
+                    $"ws.CallServerStreamingAsync<{{methodReturnType}}, {UnwrapType(inputStreamArg.Type)}>(writer.Encode(), inputStream, ct: ct)");
+            else
+                template = template.Replace("{streamReturnMatched}",
+                    "ws.CallServerStreamingAsync<{methodReturnType}>(writer.Encode(), ct: ct)");
+
+
             var templateMethod =
-                template
-                    .Replace("{serviceTypename}", serviceTypename)
-                    .Replace("{methodName}", methodName)
-                    .Replace("{argSize}", argSize.ToString())
-                    .Replace("{argsWrite}", writeArgsExpression)
-                    .Replace("{args}", methodArgs);
+                    template
+                        .Replace("{serviceTypename}", serviceTypename)
+                        .Replace("{methodName}", methodName)
+                        .Replace("{argSize}", argSize.ToString())
+                        .Replace("{argsWrite}", writeArgsExpression)
+                        .Replace("{args}", methodArgs);
 
             if (method.returnType is { IsVoid: false })
                 templateMethod = templateMethod
@@ -1085,8 +1156,13 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             .Replace("{body}", methodsBuilder.ToString())
             .Replace("{serviceTypename}", serviceTypename);
 
-        static string GenerateClientMethodArgument(IonArgument field) =>
-            $"{UnwrapType(field.type)} __{field.name.Identifier.ToLowerInvariant()}";
+        static string GenerateClientMethodArgument(IonArgument field)
+        {
+            if (field.mod is IonArgumentModifiers.Stream)
+                return $"IAsyncEnumerable<{UnwrapType(field.type)}> inputStream";
+
+            return $"{UnwrapType(field.type)} __{field.name.Identifier.ToLowerInvariant()}";
+        }
     }
 
     private static readonly string AttributeTemplate =

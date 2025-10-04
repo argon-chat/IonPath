@@ -90,6 +90,8 @@ public class CompileCommand : AsyncCommand<CompileOptions>
         Checks(ctx);
         new TransformStage(ctx).DoProcess();
         Checks(ctx);
+        new StreamParameterValidationStage(ctx).DoProcess();
+        Checks(ctx);
         new RestoreUnresolvedTypeStage(ctx).DoProcess();
         Checks(ctx);
         var graph = new IonDependencyGraph(ctx.ProcessedModules.Concat(ctx.GlobalModules));

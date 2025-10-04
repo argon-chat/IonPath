@@ -17,20 +17,21 @@ namespace TestContracts;
 [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
 public interface IMathInteraction : IIonService
 {
-    Task<i4> Add(i4 leftOperand, i4 rightOperand);
-    Task<i4> Mul(i4 leftOperand, i4 rightOperand);
-    Task<i4> Sub(i4 leftOperand, i4 rightOperand);
-    Task<i4> Div(i4 leftOperand, i4 rightOperand);
-    Task<i4> Pow(i4 leftOperand, i4 rightOperand);
-    Task<IonArray<i4>> PowArray(i4 leftOperand, IonArray<i4> rightOperand);
-    Task<i4?> ToPositive(i4 leftOperand, i4? rightOperand);
+    Task<i4> Add(i4 leftOperand, i4 rightOperand, CancellationToken ct = default);
+    Task<i4> Mul(i4 leftOperand, i4 rightOperand, CancellationToken ct = default);
+    Task<i4> Sub(i4 leftOperand, i4 rightOperand, CancellationToken ct = default);
+    Task<i4> Div(i4 leftOperand, i4 rightOperand, CancellationToken ct = default);
+    Task<i4> Pow(i4 leftOperand, i4 rightOperand, CancellationToken ct = default);
+    Task<IonArray<i4>> PowArray(i4 leftOperand, IonArray<i4> rightOperand, CancellationToken ct = default);
+    Task<i4?> ToPositive(i4 leftOperand, i4? rightOperand, CancellationToken ct = default);
 }
 
 
 [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
 public interface IRandomStreamInteraction : IIonService
 {
-    IAsyncEnumerable<i4> Integer(i4 seed);
+    IAsyncEnumerable<i4> Integer(i4 seed, i4 i, CancellationToken ct = default);
+    IAsyncEnumerable<f4> Floats(i4 seed, IAsyncEnumerable<f4>?  i, CancellationToken ct = default);
 }
 
 

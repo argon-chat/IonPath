@@ -1,4 +1,4 @@
-import { CborReader } from "../cbor";
+import { CborReader, CborWriter } from "../cbor";
 import { IonFormatterStorage } from "../logic/IonFormatter";
 import { safeFetchBuffer } from "../yetAnotherFetch";
 import {
@@ -81,9 +81,10 @@ export class IonWsClient {
     });
 
     if (!resp.buffer)
-      throw new IonRequestException(IonProtocolError.UPSTREAM_ERROR("no buffer return"));
-    
-    
+      throw new IonRequestException(
+        IonProtocolError.UPSTREAM_ERROR("no buffer return")
+      );
+
     const buf = new Uint8Array(await resp.buffer);
     c.responsePayload = buf;
 
@@ -248,6 +249,139 @@ export class IonWsClient {
         throw new Error("WebSocket closed unexpectedly");
       } catch (err) {
         wss?.close();
+        console.error(err);
+        attempt++;
+        const delay = Math.min(1000 * 2 ** attempt, 30000);
+
+        IonWsClient.emit("reconnecting", attempt, delay);
+
+        await new Promise((res) => setTimeout(res, delay));
+
+        if (signal?.aborted) {
+          IonWsClient.emit("closed");
+          throw new DOMException("Aborted", "AbortError");
+        }
+
+        continue;
+      }
+    }
+  }
+
+  async *callServerStreamingFullDuplex<TResponse, TRequest>(
+    responseTypename: string,
+    requestPayload: Uint8Array,
+    inputStream: AsyncIterable<TRequest>,
+    inputStreamTypeName: string,
+    signal?: AbortSignal
+  ): AsyncGenerator<TResponse, void, unknown> {
+    if (typeof WebSocketStream === "undefined")
+      throw new Error("WebSocketStream is not supported in this browser");
+
+    const wsUrl = `${toWebSocketUrl(this.context.baseUrl)}/ion/${
+      this.interfaceName
+    }/${this.methodName}.ws`;
+
+    let attempt = 0;
+    let wss: WebSocketStream | null = null;
+    let inputPump: Promise<void> | null = null;
+
+    while (true) {
+      try {
+        const exchangeToken = await this.createExchangeToken(signal);
+        wss = new WebSocketStream(wsUrl, {
+          signal,
+          protocols: [`ion!ticket#${exchangeToken}!ver#1`],
+        });
+        const { readable, writable } = await wss.opened;
+        const reader = readable.getReader();
+        const writer = writable.getWriter();
+
+        await writer.write(requestPayload);
+
+        inputPump = (async () => {
+          try {
+            if (inputStream) {
+              const serializer =
+                IonFormatterStorage.get<TRequest>(inputStreamTypeName);
+
+              for await (const item of inputStream) {
+                const cborWriter = new CborWriter();
+                cborWriter.writeStartArray();
+                serializer.write(cborWriter, item);
+                cborWriter.writeEndArray();
+                const payload = cborWriter.data;
+
+                const frame = new Uint8Array(1 + payload.length);
+                frame[0] = 0x00; 
+                frame.set(payload, 1);
+
+                await writer.write(frame);
+              }
+              await writer.write(new Uint8Array([0x00]));
+            }
+          } catch (e) {
+            console.error("inputStream pump failed", e);
+            try {
+              await wss?.close();
+            } catch {}
+          }
+        })();
+
+        if (attempt > 0) {
+          IonWsClient.emit("reconnected", attempt);
+        }
+        attempt = 0;
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+
+          if (!(value instanceof ArrayBuffer)) {
+            console.error(`invalid frame type: ${value},  ${typeof value}`);
+            throw new Error(`Invalid frame type: ${typeof value}`);
+          }
+
+          const msg = new Uint8Array(value);
+          const opcode = msg[0];
+          const body = msg.slice(1);
+          const cborReader = new CborReader(body);
+
+          if (opcode === 0x00) {
+            yield IonFormatterStorage.get<TResponse>(responseTypename).read(
+              cborReader
+            );
+            continue;
+          } else if (opcode === 0x01) {
+            wss.close();
+            continue;
+          } else if (opcode === 0x02) {
+            const err =
+              IonFormatterStorage.get<IonProtocolError>(
+                "IonProtocolError"
+              ).read(cborReader);
+            wss.close();
+            throw new IonRequestException(err);
+          } else {
+            try {
+              yield IonFormatterStorage.get<TResponse>(responseTypename).read(
+                cborReader
+              );
+              continue;
+            } catch (ex: any) {
+              console.error(ex);
+              wss.close();
+              throw new IonRequestException({
+                code: "-1",
+                message: `Invalid WS frame: ${ex.message}`,
+              });
+            }
+          }
+        }
+        wss.close();
+        throw new Error("WebSocket closed unexpectedly");
+      } catch (err) {
+        wss?.close();
+        await inputPump?.catch(() => {});
         console.error(err);
         attempt++;
         const delay = Math.min(1000 * 2 ** attempt, 30000);

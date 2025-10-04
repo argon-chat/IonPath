@@ -12,5 +12,6 @@
 
 
 service RandomStreamInteraction(seed: i4) {
-    stream Integer(): i4;
+    stream Integer(i: i4): i4;
+    stream Floats(stream i: f4): f4;
 }

@@ -9,11 +9,17 @@ using Microsoft.Extensions.DependencyInjection;
 
 public interface IServiceExecutorRouter
 {
-    Task RouteExecuteAsync(string methodName, CborReader reader, CborWriter writer);
+    Task RouteExecuteAsync(string methodName, CborReader reader, CborWriter writer, CancellationToken ct = default);
 }
 
 public interface IServiceStreamExecutorRouter
 {
-    IAsyncEnumerable<Memory<byte>> StreamRouteExecuteAsync(string methodName, CborReader reader, [EnumeratorCancellation] CancellationToken ct);
-}
 
+    bool IsAllowInputStream(string methodName);
+
+    IAsyncEnumerable<Memory<byte>> StreamRouteExecuteAsync(
+        string methodName,
+        CborReader initialArgs,
+        IAsyncEnumerable<ReadOnlyMemory<byte>>? inputStream,
+        [EnumeratorCancellation] CancellationToken ct);
+}

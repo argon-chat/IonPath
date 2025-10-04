@@ -2,7 +2,6 @@
 
 using syntax;
 
-
 public sealed class VerifyInvalidStatementsStage(CompilationContext context) : CompilationStage(context)
 {
     public override void DoProcess()
@@ -45,10 +44,40 @@ public sealed class DuplicateSymbolValidationStage(CompilationContext context)
                         when nameToDef.TryGetValue(service.serviceName.Identifier, out var existing):
                         Error(IonAnalyticCodes.ION0002_DuplicateDefinition, def, service.serviceName.Identifier,
                             module.file.FullName, existing.SourceFile?.FullName ?? "unknown");
-                    break;
+                        break;
                     case IonServiceSyntax service:
                         nameToDef[service.serviceName.Identifier] = def;
                         break;
+                }
+            }
+        }
+    }
+}
+
+public sealed class StreamParameterValidationStage(CompilationContext context)
+    : CompilationStage(context)
+{
+    public override void DoProcess()
+    {
+        foreach (var module in context.Files)
+        {
+            foreach (var def in module.Definitions)
+            {
+                if (def is not IonServiceSyntax service)
+                    continue;
+
+                foreach (var method in from method in service.Methods
+                         let streamParams = method.arguments
+                             .Where(p => p.modifiers == IonArgumentModifiers.Stream)
+                             .ToList()
+                         where streamParams.Count > 1
+                         select method)
+                {
+                    Error(
+                        IonAnalyticCodes.ION0013_MultipleStreamParameters,
+                        method,
+                        method.methodName.Identifier
+                    );
                 }
             }
         }

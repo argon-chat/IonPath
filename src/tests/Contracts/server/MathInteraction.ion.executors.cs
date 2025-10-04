@@ -18,7 +18,7 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
 {
     
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
-    public async Task Add_Execute(CborReader reader, CborWriter writer)
+    public async Task Add_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
     {
         var service = scope.ServiceProvider.GetRequiredService<IMathInteraction>();
     
@@ -36,7 +36,7 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
         IonFormatterStorage<i4>.Write(writer, result);
     }
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
-    public async Task Mul_Execute(CborReader reader, CborWriter writer)
+    public async Task Mul_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
     {
         var service = scope.ServiceProvider.GetRequiredService<IMathInteraction>();
     
@@ -54,7 +54,7 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
         IonFormatterStorage<i4>.Write(writer, result);
     }
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
-    public async Task Sub_Execute(CborReader reader, CborWriter writer)
+    public async Task Sub_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
     {
         var service = scope.ServiceProvider.GetRequiredService<IMathInteraction>();
     
@@ -72,7 +72,7 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
         IonFormatterStorage<i4>.Write(writer, result);
     }
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
-    public async Task Div_Execute(CborReader reader, CborWriter writer)
+    public async Task Div_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
     {
         var service = scope.ServiceProvider.GetRequiredService<IMathInteraction>();
     
@@ -90,7 +90,7 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
         IonFormatterStorage<i4>.Write(writer, result);
     }
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
-    public async Task Pow_Execute(CborReader reader, CborWriter writer)
+    public async Task Pow_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
     {
         var service = scope.ServiceProvider.GetRequiredService<IMathInteraction>();
     
@@ -108,7 +108,7 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
         IonFormatterStorage<i4>.Write(writer, result);
     }
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
-    public async Task PowArray_Execute(CborReader reader, CborWriter writer)
+    public async Task PowArray_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
     {
         var service = scope.ServiceProvider.GetRequiredService<IMathInteraction>();
     
@@ -126,7 +126,7 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
         IonFormatterStorage<i4>.WriteArray(writer, result);
     }
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
-    public async Task ToPositive_Execute(CborReader reader, CborWriter writer)
+    public async Task ToPositive_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
     {
         var service = scope.ServiceProvider.GetRequiredService<IMathInteraction>();
     
@@ -147,45 +147,54 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
     
     
     
-        public Task RouteExecuteAsync(string methodName, CborReader reader, CborWriter writer)
+        public Task RouteExecuteAsync(string methodName, CborReader reader, CborWriter writer, CancellationToken ct = default)
     {
         
         if (methodName.Equals("Add", StringComparison.InvariantCultureIgnoreCase))
-            return Add_Execute(reader, writer);
+            return Add_Execute(reader, writer, ct);
         if (methodName.Equals("Mul", StringComparison.InvariantCultureIgnoreCase))
-            return Mul_Execute(reader, writer);
+            return Mul_Execute(reader, writer, ct);
         if (methodName.Equals("Sub", StringComparison.InvariantCultureIgnoreCase))
-            return Sub_Execute(reader, writer);
+            return Sub_Execute(reader, writer, ct);
         if (methodName.Equals("Div", StringComparison.InvariantCultureIgnoreCase))
-            return Div_Execute(reader, writer);
+            return Div_Execute(reader, writer, ct);
         if (methodName.Equals("Pow", StringComparison.InvariantCultureIgnoreCase))
-            return Pow_Execute(reader, writer);
+            return Pow_Execute(reader, writer, ct);
         if (methodName.Equals("PowArray", StringComparison.InvariantCultureIgnoreCase))
-            return PowArray_Execute(reader, writer);
+            return PowArray_Execute(reader, writer, ct);
         if (methodName.Equals("ToPositive", StringComparison.InvariantCultureIgnoreCase))
-            return ToPositive_Execute(reader, writer);
+            return ToPositive_Execute(reader, writer, ct);
 
         
         throw new InvalidOperationException("no method defined");
     }
+    
+    private static readonly string[] __allowedStreamingMethods = [
+        
+    ];
+    
+    public bool IsAllowInputStream(string methodName) => __allowedStreamingMethods.Contains(methodName);
 }
 
 public sealed class Ion_RandomStreamInteraction_ServiceExecutor(AsyncServiceScope scope) : IServiceStreamExecutorRouter
 {
     
-    public async IAsyncEnumerable<Memory<byte>> Integer_Execute(CborReader reader)
+    public async IAsyncEnumerable<Memory<byte>> Integer_Execute(CborReader reader, IAsyncEnumerable<ReadOnlyMemory<byte>>? inputStream, CancellationToken ct = default)
     {
         var service = scope.ServiceProvider.GetRequiredService<IRandomStreamInteraction>();
 
-        const int argumentSize = 1;
+        const int argumentSize = 2;
+        
+        
 
         var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
             
         var __seed = IonFormatterStorage<i4>.Read(reader);
+        var __i = IonFormatterStorage<i4>.Read(reader);
 
         reader.ReadEndArrayAndSkip(arraySize - argumentSize);
 
-        await foreach (var e in service.Integer(__seed))
+        await foreach (var e in service.Integer(__seed, __i, ct))
         {
             var writer = new CborWriter();
 
@@ -200,18 +209,66 @@ public sealed class Ion_RandomStreamInteraction_ServiceExecutor(AsyncServiceScop
             mem.Dispose();
         }
     }
+    public async IAsyncEnumerable<Memory<byte>> Floats_Execute(CborReader reader, IAsyncEnumerable<ReadOnlyMemory<byte>>? inputStream, CancellationToken ct = default)
+    {
+        var service = scope.ServiceProvider.GetRequiredService<IRandomStreamInteraction>();
+
+        const int argumentSize = 1;
+        
+        var inputStreamCasted = inputStream is null
+? null
+: inputStream.Select(bytes =>
+{
+    var reader = new CborReader(bytes);
+    var arr = reader.ReadStartArray();
+    var result = IonFormatterStorage<f4>.Read(reader);
+    reader.ReadEndArray();
+
+    return result;
+});
+
+        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+            
+        var __seed = IonFormatterStorage<i4>.Read(reader);
+
+        reader.ReadEndArrayAndSkip(arraySize - argumentSize);
+
+        await foreach (var e in service.Floats(__seed, inputStreamCasted, ct))
+        {
+            var writer = new CborWriter();
+
+            IonFormatterStorage<f4>.Write(writer, e);
+
+            var mem = MemoryPool<byte>.Shared.Rent(writer.BytesWritten);
+
+            writer.Encode(mem.Memory.Span);
+
+            yield return mem.Memory;
+
+            mem.Dispose();
+        }
+    }
 
     
-        public IAsyncEnumerable<Memory<byte>> StreamRouteExecuteAsync(string methodName, CborReader reader, [EnumeratorCancellation] CancellationToken ct)
+    
+    public IAsyncEnumerable<Memory<byte>> StreamRouteExecuteAsync(string methodName, CborReader reader, IAsyncEnumerable<ReadOnlyMemory<byte>>? inputStream, [EnumeratorCancellation] CancellationToken ct)
     {
         
         if (methodName.Equals("Integer", StringComparison.InvariantCultureIgnoreCase))
-            return Integer_Execute(reader);
+            return Integer_Execute(reader, inputStream, ct);
+        if (methodName.Equals("Floats", StringComparison.InvariantCultureIgnoreCase))
+            return Floats_Execute(reader, inputStream, ct);
 
         
         throw new InvalidOperationException("no method defined");
     }
     
     
+    
+    private static readonly string[] __allowedStreamingMethods = [
+        "Floats"
+    ];
+    
+    public bool IsAllowInputStream(string methodName) => __allowedStreamingMethods.Contains(methodName);
 }
 

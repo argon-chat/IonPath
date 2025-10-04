@@ -29,11 +29,11 @@ public sealed record VectorOfVectorOfVector(VectorOfVector z, VectorOfVector w);
 [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
 public interface IVectorMathInteraction : IIonService
 {
-    Task<Vector> Abs(Vector leftOperand);
-    Task<Vector> Add(Vector leftOperand, Vector rightOperand);
-    Task<Vector> AndNot(Vector leftOperand, Vector rightOperand);
-    Task<Vector> Clamp(Vector leftOperand, Vector min, Vector max);
-    Task<VectorOfVectorOfVector> Do(Vector leftOperand);
+    Task<Vector> Abs(Vector leftOperand, CancellationToken ct = default);
+    Task<Vector> Add(Vector leftOperand, Vector rightOperand, CancellationToken ct = default);
+    Task<Vector> AndNot(Vector leftOperand, Vector rightOperand, CancellationToken ct = default);
+    Task<Vector> Clamp(Vector leftOperand, Vector min, Vector max, CancellationToken ct = default);
+    Task<VectorOfVectorOfVector> Do(Vector leftOperand, CancellationToken ct = default);
 }
 
 

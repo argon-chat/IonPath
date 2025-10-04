@@ -28,6 +28,9 @@ public static class IonAnalyticCodes
 
     public static readonly IonAnalyticCode ION0012_UnionSharedFieldsWithReferencedCase
         = new("ION0012", "Union '{0}' declares shared fields but contains case '{1}' that is a type reference; unions with referenced cases cannot declare shared fields.");
+
+    public static readonly IonAnalyticCode ION0013_MultipleStreamParameters
+        = new("ION0013", "Method '{0}' declares multiple stream parameters; only one parameter may be marked as 'stream'.");
 }
 
 public record IonAnalyticCode(string code, string template);

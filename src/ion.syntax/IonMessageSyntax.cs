@@ -47,7 +47,7 @@ public record IonUseSyntax(string Path) : IonSyntaxMember;
 
 public record IonTypedefSyntax(IonUnderlyingTypeSyntax TypeName, IonUnderlyingTypeSyntax? BaseType) : IonSyntaxMember;
 
-public record IonArgumentSyntax(IonIdentifier argName, IonUnderlyingTypeSyntax type) : IonSyntaxMember;
+public record IonArgumentSyntax(IonIdentifier argName, IonUnderlyingTypeSyntax type, IonArgumentModifiers modifiers = IonArgumentModifiers.None) : IonSyntaxMember;
 
 public record IonAttributeDefSyntax(IonIdentifier Name, List<IonArgumentSyntax> Args) : IonSyntaxMember;
 
@@ -83,6 +83,12 @@ public enum IonMethodModifiers
     Unary,
     Stream,
     Internal
+}
+
+public enum IonArgumentModifiers
+{
+    None,
+    Stream
 }
 
 public record IonFileSyntax(

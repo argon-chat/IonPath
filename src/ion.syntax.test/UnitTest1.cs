@@ -362,7 +362,67 @@ public class Tests
 
         var result = IonParser.IonFile.Parse(input);
 
+        That(!result.Success);
+        That(result.Error!.Message, Is.EqualTo("'?' is not allowed after field name"));
+    }
+
+
+    [Test]
+    public void Test22()
+    {
+        const string input = """
+                             service InventoryInteraction() {
+                                 stream GetMyInventoryItems(stream e: InventoryItem): InventoryItem;
+                             }
+                             """;
+
+        var result = IonParser.IonFile.Parse(input);
+
         That(result.Success);
     }
 
+    [Test]
+    public void Test23()
+    {
+        const string input = """
+                             service RandomStreamInteraction() {
+                                 stream Integer(): i4;
+                             }
+                             """;
+
+        var result = IonParser.IonFile.Parse(input);
+
+        That(result.Success);
+    }
+
+    [Test]
+    public void Test24()
+    {
+        const string input = """
+                             service RandomStreamInteraction(seed: i4) {
+                                 stream Integer(): i4;
+                             }
+                             """;
+
+        var result = IonParser.Service.Parse(input);
+
+        That(result.Success);
+    }
+
+    /*service MathInteraction(leftOperand: i4) {
+           Add(rightOperand: i4): i4;
+           Mul(rightOperand: i4): i4;
+           Sub(rightOperand: i4): i4;
+           Div(rightOperand: i4): i4;
+           Pow(rightOperand: i4): i4;
+       
+           PowArray(rightOperand: i4[]): i4[];
+       
+           ToPositive(rightOperand: i4?): i4?;
+       }
+       
+       
+       service RandomStreamInteraction(seed: i4) {
+           stream Integer(steam i: i4): i4;
+       }*/
 }

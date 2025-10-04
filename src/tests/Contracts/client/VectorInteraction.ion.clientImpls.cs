@@ -32,7 +32,7 @@ public sealed class Ion_VectorMathInteraction_ClientImpl(IonClientContext contex
 
     
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
-    public async Task<Vector> Abs(Vector __leftoperand)
+    public async Task<Vector> Abs(Vector __leftoperand, CancellationToken ct = default)
     {
         var req = new IonRequest(context, typeof(IVectorMathInteraction), Abs_Ref.Value);
     
@@ -46,10 +46,10 @@ public sealed class Ion_VectorMathInteraction_ClientImpl(IonClientContext contex
         
         writer.WriteEndArray();
     
-        return await req.CallAsync<Vector>(writer.Encode());
+        return await req.CallAsync<Vector>(writer.Encode(), ct: ct);
     }
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
-    public async Task<Vector> Add(Vector __leftoperand, Vector __rightoperand)
+    public async Task<Vector> Add(Vector __leftoperand, Vector __rightoperand, CancellationToken ct = default)
     {
         var req = new IonRequest(context, typeof(IVectorMathInteraction), Add_Ref.Value);
     
@@ -64,10 +64,10 @@ public sealed class Ion_VectorMathInteraction_ClientImpl(IonClientContext contex
         
         writer.WriteEndArray();
     
-        return await req.CallAsync<Vector>(writer.Encode());
+        return await req.CallAsync<Vector>(writer.Encode(), ct: ct);
     }
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
-    public async Task<Vector> AndNot(Vector __leftoperand, Vector __rightoperand)
+    public async Task<Vector> AndNot(Vector __leftoperand, Vector __rightoperand, CancellationToken ct = default)
     {
         var req = new IonRequest(context, typeof(IVectorMathInteraction), AndNot_Ref.Value);
     
@@ -82,10 +82,10 @@ public sealed class Ion_VectorMathInteraction_ClientImpl(IonClientContext contex
         
         writer.WriteEndArray();
     
-        return await req.CallAsync<Vector>(writer.Encode());
+        return await req.CallAsync<Vector>(writer.Encode(), ct: ct);
     }
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
-    public async Task<Vector> Clamp(Vector __leftoperand, Vector __min, Vector __max)
+    public async Task<Vector> Clamp(Vector __leftoperand, Vector __min, Vector __max, CancellationToken ct = default)
     {
         var req = new IonRequest(context, typeof(IVectorMathInteraction), Clamp_Ref.Value);
     
@@ -101,10 +101,10 @@ public sealed class Ion_VectorMathInteraction_ClientImpl(IonClientContext contex
         
         writer.WriteEndArray();
     
-        return await req.CallAsync<Vector>(writer.Encode());
+        return await req.CallAsync<Vector>(writer.Encode(), ct: ct);
     }
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
-    public async Task<VectorOfVectorOfVector> Do(Vector __leftoperand)
+    public async Task<VectorOfVectorOfVector> Do(Vector __leftoperand, CancellationToken ct = default)
     {
         var req = new IonRequest(context, typeof(IVectorMathInteraction), Do_Ref.Value);
     
@@ -118,7 +118,7 @@ public sealed class Ion_VectorMathInteraction_ClientImpl(IonClientContext contex
         
         writer.WriteEndArray();
     
-        return await req.CallAsync<VectorOfVectorOfVector>(writer.Encode());
+        return await req.CallAsync<VectorOfVectorOfVector>(writer.Encode(), ct: ct);
     }
 
 }
