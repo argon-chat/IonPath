@@ -592,30 +592,47 @@ public static class RpcEndpoints
         WebSocket ws,
         [EnumeratorCancellation] CancellationToken ct)
     {
-        while (!ct.IsCancellationRequested)
+        try
         {
-            var (msgType, opcode, payload) = await ReceiveOpFrameAsync(ws, ct).ConfigureAwait(false);
-
-            if (msgType == WebSocketMessageType.Close)
-                yield break;
-
-            switch (opcode)
+            while (!ct.IsCancellationRequested)
             {
-                case IonWs.OPCODE_DATA:
-                    if (payload.IsEmpty)
-                        yield break;
-                    yield return payload;
-                    break;
+                var (msgType, opcode, payload) = await ReceiveOpFrameAsync(ws, ct).ConfigureAwait(false);
 
-                case IonWs.OPCODE_END:
+                if (msgType == WebSocketMessageType.Close)
                     yield break;
 
-                case IonWs.OPCODE_ERROR:
-                    throw new InvalidOperationException("Received OPCODE_ERROR from client");
+                switch (opcode)
+                {
+                    case IonWs.OPCODE_DATA:
+                        if (payload.IsEmpty)
+                            yield break;
+                        yield return payload;
+                        break;
 
-                default:
-                    throw new InvalidOperationException($"Unknown opcode {opcode}");
+                    case IonWs.OPCODE_END:
+                        yield break;
+
+                    case IonWs.OPCODE_ERROR:
+                        throw new InvalidOperationException("Received OPCODE_ERROR from client");
+
+                    default:
+                        throw new InvalidOperationException($"Unknown opcode {opcode}");
+                }
+            }
+        }
+        finally
+        {
+            if (ws.State == WebSocketState.Open || ws.State == WebSocketState.CloseReceived)
+            {
+                try
+                {
+                    await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "Stream disposed", CancellationToken.None);
+                }
+                catch
+                {
+                }
             }
         }
     }
+
 }
