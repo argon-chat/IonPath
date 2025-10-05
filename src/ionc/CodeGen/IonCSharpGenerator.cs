@@ -979,7 +979,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     private static readonly string ServiceClientMethodDecl =
         """
             {compileGeneratedAttributes}
-            public async Task<{methodReturnType}> {methodName}({args}, CancellationToken ct = default)
+            public async Task<{methodReturnType}> {methodName}({args})
             {
                 var req = new IonRequest(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
             
@@ -1000,7 +1000,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     private static readonly string ServiceClientMethodDeclArray =
         """
             {compileGeneratedAttributes}
-            public async Task<{methodReturnType}> {methodName}({args}, CancellationToken ct = default)
+            public async Task<{methodReturnType}> {methodName}({args})
             {
                 var req = new IonRequest(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
             
@@ -1021,7 +1021,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     private static readonly string ServiceClientMethodDeclNullable =
         """
             {compileGeneratedAttributes}
-            public async Task<{methodReturnType}> {methodName}({args}, CancellationToken ct = default)
+            public async Task<{methodReturnType}> {methodName}({args})
             {
                 var req = new IonRequest(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
             
@@ -1042,7 +1042,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     private static readonly string ServiceClientMethodDeclNoReturn =
         """
             {compileGeneratedAttributes}
-            public async Task {methodName}({args}, CancellationToken ct = default)
+            public async Task {methodName}({args})
             {
                 var req = new IonRequest(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
 
@@ -1062,7 +1062,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string ServiceClientMethodDeclStream =
         """
-            public IAsyncEnumerable<{methodReturnType}> {methodName}({args}, CancellationToken ct = default)
+            public IAsyncEnumerable<{methodReturnType}> {methodName}({args})
             {
                 var ws = new IonWsClient(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
             
@@ -1097,7 +1097,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
             var writeArgsExpression = GenerateWriteArguments(method);
 
-            var methodArgs = string.Join(", ", method.arguments.Select(GenerateClientMethodArgument));
+            var methodArgs = string.Join(", ", method.arguments.Select(GenerateClientMethodArgument).Concat(["CancellationToken ct = default"]));
 
             var template =
                 method.IsStreamable
