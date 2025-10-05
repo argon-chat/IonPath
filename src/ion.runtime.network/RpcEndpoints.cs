@@ -393,7 +393,7 @@ public static class RpcEndpoints
 
                 async Task TerminalAsync(IIonCallContext _, CancellationToken token)
                 {
-                    await router.RouteExecuteAsync(methodName, reader, writer);
+                    await router.RouteExecuteAsync(methodName, reader, writer, token);
                     resp.StatusCode = StatusCodes.Status200OK;
                     resp.ContentType = IonContentType;
 
