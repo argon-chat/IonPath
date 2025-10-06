@@ -19,6 +19,11 @@
       "commandName": "Project",
       "commandLineArgs": "compile -n",
       "workingDirectory": "Z:\\!argon\\argxctl\\ArgxContracts"
+    },
+    "build mobile": {
+      "commandName": "Project",
+      "commandLineArgs": "compile -n -o Dotnet",
+      "workingDirectory": "Z:\\!argon\\mobile\\src\\Argon.Ion"
     }
   }
 }

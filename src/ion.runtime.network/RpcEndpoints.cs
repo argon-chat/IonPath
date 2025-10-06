@@ -588,49 +588,56 @@ public static class RpcEndpoints
         }
     }
 
-    public static async IAsyncEnumerable<ReadOnlyMemory<byte>> ReadIncomingStreamAsync(
-        WebSocket ws,
-        [EnumeratorCancellation] CancellationToken ct)
+    sealed class WebSocketScope(WebSocket ws) : IAsyncDisposable
     {
-        try
+        public async ValueTask DisposeAsync()
         {
-            while (!ct.IsCancellationRequested)
-            {
-                var (msgType, opcode, payload) = await ReceiveOpFrameAsync(ws, ct).ConfigureAwait(false);
-
-                if (msgType == WebSocketMessageType.Close)
-                    yield break;
-
-                switch (opcode)
-                {
-                    case IonWs.OPCODE_DATA:
-                        if (payload.IsEmpty)
-                            yield break;
-                        yield return payload;
-                        break;
-
-                    case IonWs.OPCODE_END:
-                        yield break;
-
-                    case IonWs.OPCODE_ERROR:
-                        throw new InvalidOperationException("Received OPCODE_ERROR from client");
-
-                    default:
-                        throw new InvalidOperationException($"Unknown opcode {opcode}");
-                }
-            }
-        }
-        finally
-        {
-            if (ws.State == WebSocketState.Open || ws.State == WebSocketState.CloseReceived)
+            if (ws.State is WebSocketState.Open or WebSocketState.CloseReceived)
             {
                 try
                 {
-                    await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "Stream disposed", CancellationToken.None);
+                    await ws.CloseAsync(
+                        WebSocketCloseStatus.NormalClosure,
+                        "Stream disposed",
+                        CancellationToken.None
+                    ).ConfigureAwait(false);
                 }
                 catch
                 {
                 }
+            }
+        }
+    }
+
+    public static async IAsyncEnumerable<ReadOnlyMemory<byte>> ReadIncomingStreamAsync(
+        WebSocket ws,
+        [EnumeratorCancellation] CancellationToken ct)
+    {
+        await using var _ = new WebSocketScope(ws);
+
+        while (!ct.IsCancellationRequested)
+        {
+            var (msgType, opcode, payload) = await ReceiveOpFrameAsync(ws, ct).ConfigureAwait(false);
+
+            if (msgType == WebSocketMessageType.Close)
+                yield break;
+
+            switch (opcode)
+            {
+                case IonWs.OPCODE_DATA:
+                    if (payload.IsEmpty)
+                        yield break;
+                    yield return payload;
+                    break;
+
+                case IonWs.OPCODE_END:
+                    yield break;
+
+                case IonWs.OPCODE_ERROR:
+                    throw new InvalidOperationException("Received OPCODE_ERROR from client");
+
+                default:
+                    throw new InvalidOperationException($"Unknown opcode {opcode}");
             }
         }
     }
