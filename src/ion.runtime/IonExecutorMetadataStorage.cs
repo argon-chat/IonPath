@@ -1,6 +1,6 @@
 ﻿namespace ion.runtime;
 
-using ion.runtime.network;
+using network;
 using Microsoft.Extensions.DependencyInjection;
 
 public static class IonExecutorMetadataStorage
@@ -10,13 +10,11 @@ public static class IonExecutorMetadataStorage
     public static void AddExecutor<T>(string typeName)
     {
         if (typeof(T).GetInterfaces().Contains(typeof(IServiceExecutorRouter)) || typeof(T).GetInterfaces().Contains(typeof(IServiceStreamExecutorRouter)))
-            ServerTypes.Add(typeName, typeof(T));
-        else
-            throw new InvalidOperationException();
+            ServerTypes.TryAdd(typeName, typeof(T));
     }
 
-    public static void AddClient<T>(string typeName) where T : IIonService
-        => ClientTypes.Add(typeName, typeof(T));
+    public static void AddClient<T>(string typeName) where T : IIonService 
+        => ClientTypes.TryAdd(typeName, typeof(T));
 
     public static IServiceExecutorRouter Take(string serviceName, AsyncServiceScope scope)
     {
