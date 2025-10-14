@@ -24,7 +24,13 @@ public class IonClient
         return cws;
     }
 
-    public static IonClient Create(string endpoint, HttpClientHandler? httpHandle, IonWebSocketFactory? webSocketClient)
+    public static IonClient Create(string endpoint, IServiceProvider provider, HttpClientHandler? httpHandle = null, IonWebSocketFactory? webSocketClient = null)
+        => new(new IonClientContext(new HttpClient(httpHandle ?? new HttpClientHandler())
+        {
+            BaseAddress = new Uri(endpoint)
+        }, webSocketClient ?? Default, provider));
+
+    public static IonClient Create(string endpoint, HttpClientHandler? httpHandle = null, IonWebSocketFactory? webSocketClient = null)
         => new(new IonClientContext(new HttpClient(httpHandle ?? new HttpClientHandler())
         {
             BaseAddress = new Uri(endpoint)
@@ -47,12 +53,15 @@ public class IonClient
 
     public T ForService<T>(AsyncServiceScope scope) where T : IIonService =>
         IonExecutorMetadataStorage.TakeClient<T>(scope, _context);
+
+    public T ForService<T>(IServiceProvider provider) where T : IIonService =>
+        IonExecutorMetadataStorage.TakeClient<T>(provider, _context);
 }
 
-public class IonClientContext(HttpClient client, IonWebSocketFactory wsFactory)
+public class IonClientContext(HttpClient client, IonWebSocketFactory wsFactory, IServiceProvider? serviceProvider = null)
 {
     private readonly List<IIonInterceptor> interceptors = [];
-    internal IServiceProvider serviceProvider = new ServiceContainer();
+    internal IServiceProvider serviceProvider = serviceProvider ?? new ServiceContainer();
 
     public IonClientContext Use(IIonInterceptor interceptor)
     {

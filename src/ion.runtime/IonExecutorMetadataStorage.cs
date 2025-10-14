@@ -48,6 +48,13 @@ public static class IonExecutorMetadataStorage
         throw new InvalidOperationException();
     }
 
+    public static IIonService TakeClient(string serviceName, IServiceProvider provider, params object[] args)
+    {
+        if (ClientTypes.TryGetValue(serviceName, out var type))
+            return (IIonService)ActivatorUtilities.CreateInstance(provider, type, args)!;
+        throw new InvalidOperationException();
+    }
+
     public static T TakeClient<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T
     >(AsyncServiceScope scope, params object[] args)
@@ -55,6 +62,16 @@ public static class IonExecutorMetadataStorage
     {
         if (ClientTypes.TryGetValue(typeof(T).Name, out var type))
             return (T)ActivatorUtilities.CreateInstance(scope.ServiceProvider, type, args)!;
+        throw new InvalidOperationException();
+    }
+
+    public static T TakeClient<
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T
+    >(IServiceProvider provider, params object[] args)
+        where T : IIonService
+    {
+        if (ClientTypes.TryGetValue(typeof(T).Name, out var type))
+            return (T)ActivatorUtilities.CreateInstance(provider, type, args)!;
         throw new InvalidOperationException();
     }
 }
