@@ -603,7 +603,7 @@ public sealed class IonCallContext(
     public Stopwatch Stopwatch { get; } = Stopwatch.StartNew();
     [Obsolete]
     public AsyncServiceScope AsyncServiceScope => new(provider.CreateScope());
-    public IServiceProvider Provider => provider;
+    public IServiceProvider ServiceProvider => provider;
 
     public void Dispose()
     {
