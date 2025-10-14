@@ -417,7 +417,7 @@ public class IonRequest(IonClientContext context, Type interfaceName, MethodInfo
     {
         var httpClient = context.HttpClient;
 
-        var ctx = new IonCallContext(new AsyncServiceScope(), httpClient, interfaceName, methodName, typeof(void), payload);
+        var ctx = new IonCallContext(context.serviceProvider, httpClient, interfaceName, methodName, typeof(void), payload);
 
         var next = TerminalAsync;
         for (var i = context.Interceptors.Count - 1; i >= 0; i--)
@@ -515,7 +515,7 @@ public class IonRequest(IonClientContext context, Type interfaceName, MethodInfo
     {
         var httpClient = context.HttpClient;
 
-        using var ctx = new IonCallContext(new AsyncServiceScope(), httpClient, interfaceName, methodName,
+        using var ctx = new IonCallContext(context.serviceProvider, httpClient, interfaceName, methodName,
             typeof(TResponse), payload);
 
         var next = TerminalAsync;
@@ -579,7 +579,7 @@ public class IonRequest(IonClientContext context, Type interfaceName, MethodInfo
 }
 
 public sealed class IonCallContext(
-    AsyncServiceScope scope,
+    IServiceProvider provider,
     HttpClient client,
     Type iface,
     MethodInfo method,
@@ -601,7 +601,9 @@ public sealed class IonCallContext(
     public HttpResponseMessage? HttpResponse { get; set; }
     public int Attempt { get; set; } = 1;
     public Stopwatch Stopwatch { get; } = Stopwatch.StartNew();
-    public AsyncServiceScope AsyncServiceScope => scope;
+    [Obsolete]
+    public AsyncServiceScope AsyncServiceScope => new(provider.CreateScope());
+    public IServiceProvider Provider => provider;
 
     public void Dispose()
     {
