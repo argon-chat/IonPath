@@ -30,7 +30,8 @@ public class ServerSideCallContext(AsyncServiceScope scope, Type @interface, Met
         new Dictionary<string, string>([], StringComparer.InvariantCultureIgnoreCase);
 
     public Stopwatch Stopwatch { get; } = Stopwatch.StartNew();
-    public AsyncServiceScope AsyncServiceScope { get; } = scope;
+    public AsyncServiceScope AsyncServiceScope => scope;
+    public IServiceProvider ServiceProvider => scope.ServiceProvider;
     public void Dispose() => Stopwatch.Stop();
 }
 
@@ -143,7 +144,7 @@ public static class RpcEndpoints
 
                 async Task TerminalAsync(IIonCallContext c, CancellationToken cancellationToken)
                 {
-                    var exchanger = c.AsyncServiceScope.ServiceProvider.GetService<IIonTicketExchange>();
+                    var exchanger = c.ServiceProvider.GetService<IIonTicketExchange>();
 
                     if (exchanger is null)
                     {

@@ -24,4 +24,5 @@ public interface IIonCallContext : IDisposable
     IDictionary<string, string> ResponseItems { get; }
     Stopwatch Stopwatch { get; }
     AsyncServiceScope AsyncServiceScope { get; }
+    IServiceProvider ServiceProvider { get; }
 }
