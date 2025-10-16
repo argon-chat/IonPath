@@ -116,24 +116,30 @@ public class IonWsClient(IonClientContext context, Type interfaceName, MethodInf
     {
         if (callContext is not IonCallContext c)
             throw new InvalidOperationException($"Invalid configuration, call context broken");
-        using var content = new ByteArrayContent([]);
-        var contentType = c.RequestItems.TryGetValue("Content-Type", out var ctHeader)
-            ? ctHeader
-            : "application/ion";
-        content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
 
-        foreach (var item in callContext.RequestItems) content.Headers.Add(item.Key, item.Value);
+        c.HttpRequest ??=
+            new HttpRequestMessage(HttpMethod.Post, "/ion.att")
+            {
+                Content = new ReadOnlyMemoryContent(c.RequestPayload)
+                {
+                    Headers = { ContentType = new MediaTypeHeaderValue("application/ion") }
+                }
+            };
 
-        var url = new Uri(http.BaseAddress!, "/ion.att");
-        using var resp = await http.PostAsync(url, content, ct).ConfigureAwait(false);
+        foreach (var (hKey, hValue) in c.RequestItems)
+            c.HttpRequest.Headers.Add(hKey, hValue);
 
-        var buf = await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+        c.HttpResponse?.Dispose();
+        c.HttpResponse = await c.Client.SendAsync(c.HttpRequest, HttpCompletionOption.ResponseHeadersRead, ct)
+            .ConfigureAwait(false);
+
+        var buf = await c.HttpResponse.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
         c.ResponsePayload = buf;
 
-        foreach (var header in resp.Headers) 
+        foreach (var header in c.HttpResponse.Headers) 
             callContext.ResponseItems.Add(header.Key, header.Value.ToString() ?? "");
 
-        if (!resp.IsSuccessStatusCode)
+        if (!c.HttpResponse.IsSuccessStatusCode)
         {
             try
             {
@@ -145,7 +151,7 @@ public class IonWsClient(IonClientContext context, Type interfaceName, MethodInf
             catch
             {
                 throw new IonRequestException(
-                    IonProtocolError.UPSTREAM_ERROR(((int)resp.StatusCode).ToString()));
+                    IonProtocolError.UPSTREAM_ERROR(((int)c.HttpResponse.StatusCode).ToString()));
             }
         }
 
