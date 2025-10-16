@@ -1,5 +1,6 @@
 ﻿namespace IonTestClientServer;
 
+using System.Net.WebSockets;
 using ion.runtime.client;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,14 +15,12 @@ public class Tests
 {
     private IonTestFactoryAsp _factoryAsp = null!;
     private HttpClient httpClient = null!;
-    private WebSocketClient webSocketClient = null!;
 
     [SetUp]
     public void Setup()
     {
         _factoryAsp = new IonTestFactoryAsp();
         httpClient = _factoryAsp.CreateClient();
-        webSocketClient = _factoryAsp.Server.CreateWebSocketClient();
     }
 
     [TearDown]
@@ -31,23 +30,30 @@ public class Tests
         _factoryAsp.Dispose();
     }
 
-
     [Test]
     public async Task UnaryCall_Test_Add_4_Plus_4()
     {
         await using var scope = _factoryAsp.Services.CreateAsyncScope();
-        var client = IonClient.Create(httpClient, (uri, ct) => webSocketClient.ConnectAsync(uri, ct));
+        var client = IonClient.Create(httpClient, WsFactory);
         var service = client.ForService<IMathInteraction>(scope);
 
         var response = await service.Add(4, 4);
         That(response == 8);
     }
 
+    private Task<WebSocket> WsFactory(Uri uri, CancellationToken ct, string[]? protocols)
+    {
+        var socket = _factoryAsp.Server.CreateWebSocketClient();
+        protocols ??= [];
+        foreach (var protocol in protocols) socket.SubProtocols.Add(protocol);
+        return socket.ConnectAsync(uri, ct);
+    }
+
     [Test]
     public async Task UnaryCall_Test_TreeObj()
     {
         await using var scope = _factoryAsp.Services.CreateAsyncScope();
-        var client = IonClient.Create(httpClient, (uri, ct) => webSocketClient.ConnectAsync(uri, ct));
+        var client = IonClient.Create(httpClient, WsFactory);
         var service = client.ForService<IVectorMathInteraction>(scope);
 
         var response = await service.Do(new Vector(1, 2, 3));
@@ -57,7 +63,7 @@ public class Tests
     public async Task UnaryCall_Test_ArrPow()
     {
         await using var scope = _factoryAsp.Services.CreateAsyncScope();
-        var client = IonClient.Create(httpClient, (uri, ct) => webSocketClient.ConnectAsync(uri, ct));
+        var client = IonClient.Create(httpClient, WsFactory);
         var service = client.ForService<IMathInteraction>(scope);
 
         var response = await service.PowArray(1, new IonArray<int>([1, 2, 3, 4]));
@@ -68,7 +74,7 @@ public class Tests
     public async Task UnaryCall_Test_Nullable()
     {
         await using var scope = _factoryAsp.Services.CreateAsyncScope();
-        var client = IonClient.Create(httpClient, (uri, ct) => webSocketClient.ConnectAsync(uri, ct));
+        var client = IonClient.Create(httpClient, WsFactory);
         var service = client.ForService<IMathInteraction>(scope);
 
         var response1 = await service.ToPositive(1, null);
@@ -82,7 +88,7 @@ public class Tests
     public async Task UnaryCall_Test_StreamRandomInt()
     {
         await using var scope = _factoryAsp.Services.CreateAsyncScope();
-        var client = IonClient.Create(httpClient, (uri, ct) => webSocketClient.ConnectAsync(uri, ct));
+        var client = IonClient.Create(httpClient, WsFactory);
         var service = client.ForService<IRandomStreamInteraction>(scope);
 
         var list = new List<int>();
@@ -99,7 +105,7 @@ public class Tests
     public async Task FullDuplexStream_Test_StreamRandomFloats()
     {
         await using var scope = _factoryAsp.Services.CreateAsyncScope();
-        var client = IonClient.Create(httpClient, (uri, ct) => webSocketClient.ConnectAsync(uri, ct));
+        var client = IonClient.Create(httpClient, WsFactory);
         var service = client.ForService<IRandomStreamInteraction>(scope);
 
         var result = new List<float>();

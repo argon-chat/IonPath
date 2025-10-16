@@ -9,6 +9,8 @@ builder.Services.AddIonProtocol(i =>
     i.AddService<IMathInteraction, MathImpl>();
     i.AddService<IVectorMathInteraction, VectorImpl>();
     i.AddService<IRandomStreamInteraction, RandomStreamImpl>();
+
+    i.IonWithSubProtocolTicketExchange<TicketExchanger>();
 });
 
 var app = builder.Build();
@@ -24,6 +26,25 @@ app.UseWebSockets();
 app.Run();
 
 
+public class TicketExchanger : IIonTicketExchange
+{
+    public async Task<ReadOnlyMemory<byte>> OnExchangeCreateAsync(IIonCallContext callContext)
+    {
+        return new ReadOnlyMemory<byte>([1, 2]);
+    }
+
+    public async Task<(IonProtocolError?, object? ticket)> OnExchangeTransactionAsync(ReadOnlyMemory<byte> exchangeToken)
+    {
+        if (exchangeToken.ToArray().SequenceEqual<byte>([1, 2]))
+            return (null, "ok");
+        return (IonProtocolError.UPSTREAM_ERROR("Bad token"), null);
+    }
+
+    public void OnTicketApply(object ticketObject)
+    {
+        // ok
+    }
+}
 
 
 public class MathImpl : IMathInteraction

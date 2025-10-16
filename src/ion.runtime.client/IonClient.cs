@@ -8,18 +8,26 @@ using System.Diagnostics;
 using System.Formats.Cbor;
 using System.Net.Http.Headers;
 using System.Net.WebSockets;
+using System.Numerics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-public delegate Task<WebSocket> IonWebSocketFactory(Uri uri, CancellationToken ct);
+using System.Text;
+
+public delegate Task<WebSocket> IonWebSocketFactory(Uri uri, CancellationToken ct, string[]? protocols = null);
 public class IonClient
 {
     private readonly IonClientContext _context;
 
     private IonClient(IonClientContext context) => _context = context;
 
-    private static async Task<WebSocket> Default(Uri uri, CancellationToken ct)
+    private static async Task<WebSocket> Default(Uri uri, CancellationToken ct, string[] protocols = null)
     {
         var cws = new ClientWebSocket();
+        protocols ??= [];
+
+        foreach (var protocol in protocols) 
+            cws.Options.AddSubProtocol(protocol);
+
         await cws.ConnectAsync(uri, ct);
         return cws;
     }
@@ -101,13 +109,120 @@ public class IonWsClient(IonClientContext context, Type interfaceName, MethodInf
         return b.Uri;
     }
 
+    private static async Task TerminalExchangeAsync(
+        IIonCallContext callContext,
+        HttpClient http,
+        CancellationToken ct)
+    {
+        if (callContext is not IonCallContext c)
+            throw new InvalidOperationException($"Invalid configuration, call context broken");
+        using var content = new ByteArrayContent([]);
+        var contentType = c.RequestItems.TryGetValue("Content-Type", out var ctHeader)
+            ? ctHeader
+            : "application/ion";
+        content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+
+        var url = new Uri(http.BaseAddress!, "/ion.att");
+        using var resp = await http.PostAsync(url, content, ct).ConfigureAwait(false);
+
+        var buf = await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+        c.ResponsePayload = buf;
+
+        if (!resp.IsSuccessStatusCode)
+        {
+            try
+            {
+                var reader = new CborReader(buf);
+                var error = IonFormatterStorage<IonProtocolError>.Read(reader);
+                throw new IonRequestException(error);
+            }
+            catch (IonRequestException) { throw; }
+            catch
+            {
+                throw new IonRequestException(
+                    IonProtocolError.UPSTREAM_ERROR(((int)resp.StatusCode).ToString()));
+            }
+        }
+
+        if (buf.Length == 0)
+            throw new IonRequestException(IonProtocolError.UPSTREAM_ERROR("Empty response from ion.att"));
+    }
+
+
+    private static async Task<string> CreateExchangeTokenAsync(
+        IIonCallContext callContext,
+        IonClientContext context,
+        CancellationToken ct)
+    {
+
+        if (callContext is not IonCallContext c)
+            throw new InvalidOperationException($"Invalid configuration, call context broken");
+        
+        Func<IIonCallContext, CancellationToken, Task> next =
+            (c, token) => TerminalExchangeAsync(c, context.HttpClient, token);
+
+        for (var i = context.Interceptors.Count - 1; i >= 0; i--)
+        {
+            var interceptor = context.Interceptors[i];
+            var currentNext = next;
+            next = (c, token) => interceptor.InvokeAsync(c, currentNext, token);
+        }
+
+        await next(callContext, ct).ConfigureAwait(false);
+
+        var reader = new CborReader(c.ResponsePayload.ToArray());
+        reader.ReadStartArray();
+        var tokenBytes = reader.ReadByteString();
+        reader.ReadEndArray();
+
+        return ToBase56(tokenBytes);
+    }
+
+    private static string ToBase56(ReadOnlySpan<byte> bytes)
+    {
+        const string alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz";
+        const int @base = 56;
+
+        var value = BigInteger.Zero;
+        foreach (var b in bytes)
+        {
+            value = (value << 8) + b;
+        }
+
+        var leadingZeroes = 0;
+        foreach (var b in bytes)
+        {
+            if (b == 0) leadingZeroes++;
+            else break;
+        }
+
+        var result = new StringBuilder();
+        while (value > 0)
+        {
+            var rem = (int)(value % @base);
+            value /= @base;
+            result.Insert(0, alphabet[rem]);
+        }
+
+        if (result.Length == 0)
+            result.Append(alphabet[0]);
+
+        if (leadingZeroes > 0)
+            result.Insert(0, new string(alphabet[0], leadingZeroes));
+
+        return result.ToString();
+    }
+
     public async IAsyncEnumerable<TResponse> CallServerStreamingAsync<TResponse>(
         ReadOnlyMemory<byte> requestPayload,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
+        var token = await CreateExchangeTokenAsync(new IonCallContext(context.serviceProvider, context.HttpClient, null, null, null, ReadOnlyMemory<byte>.Empty), context, ct)
+            .ConfigureAwait(false);
+
         var wsUri = new Uri(ToWebSocketUri(context.HttpClient.BaseAddress!), $"/ion/{interfaceName.Name}/{methodName.Name}.ws");
 
-        var ws = await context.WebSocketClient(wsUri, ct);
+        var ws = await context.WebSocketClient(wsUri, ct, [$"ion!ticket#{token}!ver#1"]); ;
 
         await ws.SendAsync(requestPayload, WebSocketMessageType.Binary, endOfMessage: true, ct).ConfigureAwait(false);
 
