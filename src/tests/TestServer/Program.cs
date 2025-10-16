@@ -30,7 +30,9 @@ public class TicketExchanger : IIonTicketExchange
 {
     public async Task<ReadOnlyMemory<byte>> OnExchangeCreateAsync(IIonCallContext callContext)
     {
-        return new ReadOnlyMemory<byte>([1, 2]);
+        if (callContext.RequestItems.TryGetValue("authToken", out var value))
+            return new ReadOnlyMemory<byte>([1, 2]);
+        return ReadOnlyMemory<byte>.Empty;
     }
 
     public async Task<(IonProtocolError?, object? ticket)> OnExchangeTransactionAsync(ReadOnlyMemory<byte> exchangeToken)

@@ -84,11 +84,21 @@ public class Tests
         That(response2 == 1);
     }
 
+
+    private class InterceptorTest : IIonInterceptor
+    {
+        public Task InvokeAsync(IIonCallContext context, Func<IIonCallContext, CancellationToken, Task> next, CancellationToken ct)
+        {
+            context.RequestItems.Add("authToken", "123");
+            return next(context, ct);
+        }
+    }
+
     [Test]
     public async Task UnaryCall_Test_StreamRandomInt()
     {
         await using var scope = _factoryAsp.Services.CreateAsyncScope();
-        var client = IonClient.Create(httpClient, WsFactory);
+        var client = IonClient.Create(httpClient, WsFactory).WithInterceptor<InterceptorTest>();
         var service = client.ForService<IRandomStreamInteraction>(scope);
 
         var list = new List<int>();

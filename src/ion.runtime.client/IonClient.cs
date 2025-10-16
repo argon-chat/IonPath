@@ -20,7 +20,7 @@ public class IonClient
 
     private IonClient(IonClientContext context) => _context = context;
 
-    private static async Task<WebSocket> Default(Uri uri, CancellationToken ct, string[] protocols = null)
+    private static async Task<WebSocket> Default(Uri uri, CancellationToken ct, string[]? protocols = null)
     {
         var cws = new ClientWebSocket();
         protocols ??= [];
@@ -122,11 +122,16 @@ public class IonWsClient(IonClientContext context, Type interfaceName, MethodInf
             : "application/ion";
         content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
 
+        foreach (var item in callContext.RequestItems) content.Headers.Add(item.Key, item.Value);
+
         var url = new Uri(http.BaseAddress!, "/ion.att");
         using var resp = await http.PostAsync(url, content, ct).ConfigureAwait(false);
 
         var buf = await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
         c.ResponsePayload = buf;
+
+        foreach (var header in resp.Headers) 
+            callContext.ResponseItems.Add(header.Key, header.Value.ToString() ?? "");
 
         if (!resp.IsSuccessStatusCode)
         {
@@ -159,13 +164,13 @@ public class IonWsClient(IonClientContext context, Type interfaceName, MethodInf
             throw new InvalidOperationException($"Invalid configuration, call context broken");
         
         Func<IIonCallContext, CancellationToken, Task> next =
-            (c, token) => TerminalExchangeAsync(c, context.HttpClient, token);
+            (cr, token) => TerminalExchangeAsync(cr, context.HttpClient, token);
 
         for (var i = context.Interceptors.Count - 1; i >= 0; i--)
         {
             var interceptor = context.Interceptors[i];
             var currentNext = next;
-            next = (c, token) => interceptor.InvokeAsync(c, currentNext, token);
+            next = (cr, token) => interceptor.InvokeAsync(cr, currentNext, token);
         }
 
         await next(callContext, ct).ConfigureAwait(false);
