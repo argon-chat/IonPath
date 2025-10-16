@@ -348,9 +348,12 @@ public class IonWsClient(IonClientContext context, Type interfaceName, MethodInf
         IAsyncEnumerable<TRequest>? inputStream,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
+        var token = await CreateExchangeTokenAsync(new IonCallContext(context.serviceProvider, context.HttpClient, null, null, null, ReadOnlyMemory<byte>.Empty), context, ct)
+            .ConfigureAwait(false);
+
         var wsUri = new Uri(ToWebSocketUri(context.HttpClient.BaseAddress!), $"/ion/{interfaceName.Name}/{methodName.Name}.ws");
 
-        var ws = await context.WebSocketClient(wsUri, ct);
+        var ws = await context.WebSocketClient(wsUri, ct, [$"ion!ticket#{token}!ver#1"]); ;
 
         await ws.SendAsync(requestPayload, WebSocketMessageType.Binary, endOfMessage: true, ct).ConfigureAwait(false);
 
