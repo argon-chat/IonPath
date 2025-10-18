@@ -233,7 +233,7 @@ public static class IonFormatterStorage<T>
 
         reader.ReadEndArray();
 
-        return new IonArray<T>(span.Memory.Span);
+        return new IonArray<T>(span.Memory.Span[..size.Value]);
     }
 
     public static void WriteArray(CborWriter writer, IonArray<T> array)
