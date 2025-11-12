@@ -5,7 +5,6 @@ using ion.runtime.network;
 using System.Buffers;
 using System.Buffers.Binary;
 using System.Numerics;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 
 public static class IonBinarySerializer

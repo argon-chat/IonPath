@@ -82,7 +82,7 @@ export class IonWsClient {
 
     if (!resp.buffer)
       throw new IonRequestException(
-        IonProtocolError.UPSTREAM_ERROR("no buffer return")
+        IonProtocolError.UPSTREAM_ERROR(`no buffer return, status: ${resp.status}`)
       );
 
     const buf = new Uint8Array(await resp.buffer);

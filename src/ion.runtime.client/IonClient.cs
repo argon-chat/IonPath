@@ -730,8 +730,6 @@ public sealed class IonCallContext(
     public HttpResponseMessage? HttpResponse { get; set; }
     public int Attempt { get; set; } = 1;
     public Stopwatch Stopwatch { get; } = Stopwatch.StartNew();
-    [Obsolete]
-    public AsyncServiceScope AsyncServiceScope => new(provider.CreateScope());
     public IServiceProvider ServiceProvider => provider;
 
     public void Dispose()

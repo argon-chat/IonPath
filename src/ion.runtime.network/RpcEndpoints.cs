@@ -30,11 +30,37 @@ public class ServerSideCallContext(AsyncServiceScope scope, Type @interface, Met
         new Dictionary<string, string>([], StringComparer.InvariantCultureIgnoreCase);
 
     public Stopwatch Stopwatch { get; } = Stopwatch.StartNew();
-    public AsyncServiceScope AsyncServiceScope => scope;
     public IServiceProvider ServiceProvider => scope.ServiceProvider;
     public void Dispose() => Stopwatch.Stop();
 }
 
+public interface IIonRequestTerminator
+{
+    Type InterfaceName { get; }
+    MethodInfo MethodName { get; }
+
+    Task OnTerminateAsync(HttpResponse response, CancellationToken ct = default);
+}
+
+internal class IonRequestTerminatorStorage
+{
+    private readonly Lazy<Dictionary<(Type, MethodInfo), IIonRequestTerminator>> terminators;
+
+    public IonRequestTerminatorStorage(IEnumerable<IIonRequestTerminator> t)
+    {
+        terminators = new(() =>
+            t.ToDictionary(
+                x => (x.InterfaceName, x.MethodName),
+                x => x));
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public IIonRequestTerminator? TakeTerminator(Type interfaceName, MethodInfo methodName)
+    {
+        terminators.Value.TryGetValue((interfaceName, methodName), out var result);
+        return result;
+    }
+}
 public interface IIonTicketExchange
 {
     Task<ReadOnlyMemory<byte>> OnExchangeCreateAsync(IIonCallContext callContext);
@@ -53,11 +79,19 @@ internal interface __internal_ion
 
 public static class RpcEndpoints
 {
+    public static IServiceCollection AddIonRequestTerminator<T>(this IServiceCollection services)
+        where T : class, IIonRequestTerminator
+    {
+        services.AddSingleton<IIonRequestTerminator, T>();
+        return services;
+    }
+
     public static IServiceCollection AddIonProtocol(this IServiceCollection services,
         Action<IIonTransportRegistration> onRegistration)
     {
         services.Configure<IonTransportOptions>(_ => { });
         services.AddSingleton<IonDescriptorStorage>();
+        services.AddSingleton<IonRequestTerminatorStorage>();
         var reg = new IonDescriptorRegistration(services);
         onRegistration(reg);
         return services;
@@ -166,6 +200,8 @@ public static class RpcEndpoints
 
                     foreach (var (k, v) in c.ResponseItems)
                         resp.Headers.Append(k, v);
+
+
 
                     await resp.BodyWriter.WriteAsync(writer.Encode(), cancellationToken);
                     await resp.BodyWriter.FlushAsync(cancellationToken);
@@ -354,7 +390,9 @@ public static class RpcEndpoints
                 [FromServices] IonDescriptorStorage store,
                 [FromServices] IServiceProvider provider,
                 [FromServices] IEnumerable<IIonInterceptor> interceptors,
-                [FromServices] ILoggerFactory lf, CancellationToken ct) =>
+                [FromServices] ILoggerFactory lf,
+                [FromServices] IonRequestTerminatorStorage terminatorStorage,
+                CancellationToken ct) =>
             {
                 var log = lf.CreateLogger("RPC");
                 if (req.ContentType is null ||
@@ -392,13 +430,22 @@ public static class RpcEndpoints
                 var reader = new CborReader(memory);
                 var writer = new CborWriter();
 
-                async Task TerminalAsync(IIonCallContext _, CancellationToken token)
+                async Task TerminalAsync(IIonCallContext ctxIn, CancellationToken token)
                 {
                     await router.RouteExecuteAsync(methodName, reader, writer, token);
+
+                    var terminator = terminatorStorage.TakeTerminator(ctxIn.InterfaceName, ctxIn.MethodName);
+
+                    if (terminator is not null)
+                    {
+                        await terminator.OnTerminateAsync(resp, token);
+                        return;
+                    }
+
                     resp.StatusCode = StatusCodes.Status200OK;
                     resp.ContentType = IonContentType;
 
-                    foreach (var (k, v) in _.ResponseItems)
+                    foreach (var (k, v) in ctxIn.ResponseItems)
                         resp.Headers.Append(k, v);
 
                     if (writer.BytesWritten != 0)

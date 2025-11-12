@@ -30,9 +30,17 @@ internal readonly struct IonDescriptorRegistration(IServiceCollection col) : IIo
         return this;
     }
 
+    public IIonTransportRegistration AddRequestTerminator<TImpl>() where TImpl : class, IIonRequestTerminator
+    {
+        col.AddIonRequestTerminator<TImpl>();
+        return this;
+    }
+
     public IIonTransportRegistration IonWithSubProtocolTicketExchange<T>() where T : class, IIonTicketExchange
     {
         col.IonWithSubProtocolTicketExchange<T>();
         return this;
     }
+
+
 }
