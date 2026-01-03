@@ -31,7 +31,7 @@ public partial class IonParser
         ).Before(SkipWhitespaces);
 
     private static Parser<char, IEnumerable<IonMethodModifiers>> MethodModifiers =>
-        MethodModifierOne.Many();
+        Try(MethodModifierOne).Many();
 
     public static Parser<char, IonServiceSyntax> Service =>
         Map(

@@ -20,11 +20,10 @@ public partial class IonParser
                     )
                     .Before(Char(')'))
             ).Optional().Select(opt => opt.HasValue ? opt.Value : [])
-        );
+        ).Before(SkipWhitespaces);
 
     private static Parser<char, IEnumerable<IonAttributeSyntax>> Attributes =>
-        Attribute.Many().Before(SkipWhitespaces);
-
+        Attribute.Many();
 
     public static Parser<char, IonAttributeDefSyntax> AttributeDef =>
         Map(

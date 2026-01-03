@@ -41,7 +41,7 @@ jobs:
         run: dotnet pack src/ion.runtime.network/ion.runtime.network.csproj -c Release -o ./nupkgs
 
       - name: Pack ion.compiler (tools)
-        run: dotnet pack src/ion.compiler/ion.compiler.csproj -c Release -o ./nupkgs
+        run: dotnet pack src/ionc/ionc.csproj -c Release -o ./nupkgs
 
       - name: Push packages
         run: |

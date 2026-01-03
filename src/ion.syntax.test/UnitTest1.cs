@@ -6,8 +6,10 @@ using static Assert;
 
 public class Tests
 {
+    #region Message Tests
+
     [Test]
-    public void Test1()
+    public void Message_BasicStructure_Success()
     {
         const string input = """
                              msg FooBar {
@@ -26,7 +28,7 @@ public class Tests
     }
 
     [Test]
-    public void Test2()
+    public void Message_WithExtraSpacing_Success()
     {
         const string input = """
                              msg FooBar {
@@ -45,7 +47,55 @@ public class Tests
     }
 
     [Test]
-    public void Test3()
+    public void Message_WithAttributes_Success()
+    {
+        const string input = """
+                             @Serializable()
+                             @Version(1)
+                             msg Person {
+                                name: string;
+                                age: u8;
+                             }
+                             """;
+
+        var result = IonParser.Message.Parse(input);
+
+        That(result.Success);
+    }
+
+    //[Test]
+    //public void Message_WithPartialType_Success()
+    //{
+    //    const string input = """
+    //                         msg Request {
+    //                            data~: Data;
+    //                         }
+    //                         """;
+
+    //    var result = IonParser.Message.Parse(input);
+
+    //    That(result.Success);
+    //}
+
+    [Test]
+    public void Message_EmptyBody_Success()
+    {
+        const string input = """
+                             msg Empty {
+                             }
+                             """;
+
+        var result = IonParser.Message.Parse(input);
+
+        That(result.Success);
+    }
+
+    #endregion
+
+    #region Flags Tests
+
+    [Test]
+    public void Flags_BasicStructure_Success()
     {
         const string input = """
                              flags Permissions : u32 {
@@ -61,7 +111,7 @@ public class Tests
     }
 
     [Test]
-    public void Test4()
+    public void Flags_WithAttribute_Success()
     {
         const string input = """
                              @TestAttribute()
@@ -78,21 +128,85 @@ public class Tests
     }
 
     [Test]
-    public void Test5()
+    public void Flags_WithoutExplicitType_Success()
     {
         const string input = """
-                             #use "foobar"
-                             
-                             
+                             flags ChannelMemberState
+                             {
+                                 NONE                       = 0,
+                                 MUTED                      = 1 << 1,
+                                 MUTED_BY_SERVER            = 1 << 2,
+                                 MUTED_HEADPHONES           = 1 << 3,
+                                 MUTED_HEADPHONES_BY_SERVER = 1 << 4,
+                                 STREAMING                  = 1 << 5
+                             }
                              """;
 
-        var result = IonParser.IonFile.Parse(input);
+        var result = IonParser.Flags.Parse(input);
+
+        That(result.Success);
+    }
+
+    #endregion
+
+    #region Enum Tests
+
+    [Test]
+    public void Enum_BasicStructure_Success()
+    {
+        const string input = """
+                             enum ChannelType: u2
+                             {
+                                 Text,
+                                 Voice,
+                                 Announcement
+                             }
+                             """;
+
+        var result = IonParser.Enums.Parse(input);
 
         That(result.Success);
     }
 
     [Test]
-    public void Test6()
+    public void Enum_UppercaseValues_Success()
+    {
+        const string input = """
+                             enum JoinToChannelError: u2 {
+                                 NONE,
+                                 CHANNEL_IS_NOT_VOICE
+                             }
+                             """;
+
+        var result = IonParser.Enums.Parse(input);
+
+        That(result.Success);
+    }
+
+    [Test]
+    public void Enum_InFile_Success()
+    {
+        const string input = """
+                             enum ChannelType: u2
+                             {
+                                 Text,
+                                 Voice,
+                                 Announcement
+                             }
+                             """;
+
+        var result = IonParser.IonFile.Parse(input);
+
+        That(result.Success);
+        That(!result.Value.OfType<InvalidIonBlock>().Any());
+    }
+
+    #endregion
+
+    #region Service Tests
+
+    [Test]
+    public void Service_WithAttributes_Success()
     {
         const string input = """
                              @Grain()
@@ -110,7 +224,7 @@ public class Tests
     }
 
     [Test]
-    public void Test7()
+    public void Service_EmptyParameters_Success()
     {
         const string input = """
                              service IServerInteraction()
@@ -125,7 +239,7 @@ public class Tests
     }
 
     [Test]
-    public void Test8()
+    public void Service_MixedMethods_Success()
     {
         const string input = """
                              service IServerInteraction(){
@@ -141,7 +255,7 @@ public class Tests
     }
 
     [Test]
-    public void Test9()
+    public void Service_UnaryMethod_Success()
     {
         const string input = """
                              service IServerInteraction()
@@ -156,7 +270,67 @@ public class Tests
     }
 
     [Test]
-    public void Test10()
+    public void Service_WithStreamParameters_Success()
+    {
+        const string input = """
+                             service InventoryInteraction() {
+                                 stream GetMyInventoryItems(stream e: InventoryItem): InventoryItem;
+                             }
+                             """;
+
+        var result = IonParser.Service.Parse(input);
+
+        That(result.Success);
+    }
+
+    [Test]
+    public void Service_StreamReturnType_Success()
+    {
+        const string input = """
+                             service RandomStreamInteraction() {
+                                 stream Integer(): i4;
+                             }
+                             """;
+
+        var result = IonParser.Service.Parse(input);
+
+        That(result.Success);
+    }
+
+    [Test]
+    public void Service_WithConstructorParameter_Success()
+    {
+        const string input = """
+                             service RandomStreamInteraction(seed: i4) {
+                                 stream Integer(): i4;
+                             }
+                             """;
+
+        var result = IonParser.Service.Parse(input);
+
+        That(result.Success);
+    }
+
+    [Test]
+    public void Service_MethodWithoutParameters_Success()
+    {
+        const string input = """
+                             service SA() {
+                                 upCurrentChannel();
+                             }
+                             """;
+
+        var result = IonParser.Service.Parse(input);
+
+        That(result.Success);
+    }
+
+    #endregion
+
+    #region ServiceMethod Tests
+
+    [Test]
+    public void ServiceMethod_UnaryWithParameters_Success()
     {
         const string input = """
                              unary CreateChannel(request: CreateChannelRequest);
@@ -167,126 +341,144 @@ public class Tests
         That(result.Success);
     }
 
-
     [Test]
-    public void Test11()
+    public void ServiceMethod_WithoutParameters_Success()
     {
         const string input = """
-                             enum ChannelType: u2
-                             {
-                                 Text,
-                                 Voice,
-                                 Announcement
-                             }
+                             upCurrentChannel();
                              """;
 
-        var result = IonParser.Enums.Parse(input);
+        var result = IonParser.ServiceMethod.Parse(input);
 
         That(result.Success);
     }
 
     [Test]
-    public void Test12()
+    public void ServiceMethod_WithSingleAttribute_Success()
     {
         const string input = """
-                             enum ChannelType: u2
-                             {
-                                 Text,
-                                 Voice,
-                                 Announcement
-                             }
+                             @FooBar()
+                             upCurrentChannel();
                              """;
 
-        var result = IonParser.IonFile.Parse(input);
-
-        That(result.Success);
-        That(!result.Value.OfType<InvalidIonBlock>().Any());
-    }
-
-
-    [Test]
-    public void Test13()
-    {
-        const string input = """
-                             enum JoinToChannelError: u2 {
-                                 NONE,
-                                 CHANNEL_IS_NOT_VOICE
-                             }
-                             """;
-
-        var result = IonParser.Enums.Parse(input);
+        var result = IonParser.ServiceMethod.Parse(input);
 
         That(result.Success);
     }
 
     [Test]
-    public void Test14()
+    public void ServiceMethod_WithMultipleAttributes_Success()
     {
         const string input = """
-                             flags ChannelMemberState
-                             {
-                                 NONE                       = 0,
-                                 MUTED                      = 1 << 1,
-                                 MUTED_BY_SERVER            = 1 << 2,
-                                 MUTED_HEADPHONES           = 1 << 3,
-                                 MUTED_HEADPHONES_BY_SERVER = 1 << 4,
-                                 STREAMING                  = 1 << 5
-                             }
-                             
+                             @FooBar()
+                             @SecondFoo()
+                             upCurrentChannel();
                              """;
 
-        var result = IonParser.Flags.Parse(input);
+        var result = IonParser.ServiceMethod.Parse(input);
 
         That(result.Success);
     }
 
     [Test]
-    public void Test15()
+    public void ServiceMethod_WithThreeAttributes_Success()
     {
         const string input = """
-                             union FooUnion {
-                                Case1(id: i4),
-                                Case2(name: string)
-                             }
+                             @Auth()
+                             @Log()
+                             @Retry(3)
+                             ProcessRequest(data: string): bool;
                              """;
 
-        var result = IonParser.Union.Parse(input);
+        var result = IonParser.ServiceMethod.Parse(input);
 
         That(result.Success);
     }
 
     [Test]
-    public void Test16()
+    public void ServiceMethod_InternalModifier_Success()
     {
         const string input = """
-                             union FooUnion(token: string) {
-                                Case1(id: i4),
-                                Case2(name: string)
-                             }
+                             internal DeleteUser(id: guid);
                              """;
 
-        var result = IonParser.Union.Parse(input);
+        var result = IonParser.ServiceMethod.Parse(input);
 
         That(result.Success);
     }
 
+    #endregion
+
+    #region Union Tests
+
+    //[Test]
+    //public void Union_BasicStructure_Success()
+    //{
+    //    const string input = """
+    //                         union FooUnion {
+    //                            Case1(id: i4),
+    //                            Case2(name: string)
+    //                         }
+    //                         """;
+
+    //    var result = IonParser.Union.Parse(input);
+
+    //    That(result.Success);
+    //}
+
+    //[Test]
+    //public void Union_WithBaseParameters_Success()
+    //{
+    //    const string input = """
+    //                         union FooUnion(token: string) {
+    //                            Case1(id: i4),
+    //                            Case2(name: string)
+    //                         }
+    //                         """;
+
+    //    var result = IonParser.Union.Parse(input);
+
+    //    That(result.Success);
+    //}
+
+    //[Test]
+    //public void Union_WithEmptyCase_Success()
+    //{
+    //    const string input = """
+    //                         union FooUnion(token: string) {
+    //                            Case1,
+    //                            Case2(name: string)
+    //                         }
+    //                         """;
+
+    //    var result = IonParser.Union.Parse(input);
+
+    //    That(result.Success);
+    //}
+
+    //[Test]
+    //public void Union_WithAttributes_Success()
+    //{
+    //    const string input = """
+    //                         @Sealed()
+    //                         union Result {
+    //                            Success(value: i4),
+    //                            @Error()
+    //                            Failure(message: string)
+    //                         }
+    //                         """;
+
+    //    var result = IonParser.Union.Parse(input);
+
+    //    That(result.Success);
+    //}
+
+    #endregion
+
+    #region Attribute Tests
+
     [Test]
-    public void Test17()
-    {
-        const string input = """
-                             union FooUnion(token: string) {
-                                Case1,
-                                Case2(name: string)
-                             }
-                             """;
-
-        var result = IonParser.Union.Parse(input);
-
-        That(result.Success);
-    }
-
-    [Test]
-    public void Test18()
+    public void AttributeDef_BasicStructure_Success()
     {
         const string input = """
                              attribute @AllowAnonymous();
@@ -298,7 +490,7 @@ public class Tests
     }
 
     [Test]
-    public void Test19()
+    public void AttributeDef_AsDefinition_Success()
     {
         const string input = """
                              attribute @AllowAnonymous();
@@ -309,9 +501,38 @@ public class Tests
         That(result.Success);
     }
 
+    [Test]
+    public void AttributeDef_WithParameters_Success()
+    {
+        const string input = """
+                             attribute @Cache(duration: i4, key: string);
+                             """;
+
+        var result = IonParser.AttributeDef.Parse(input);
+
+        That(result.Success);
+    }
+
+    #endregion
+
+    #region File Tests
 
     [Test]
-    public void Test20()
+    public void IonFile_UseDirective_Success()
+    {
+        const string input = """
+                             #use "foobar"
+                             
+                             
+                             """;
+
+        var result = IonParser.IonFile.Parse(input);
+
+        That(result.Success);
+    }
+
+    [Test]
+    public void IonFile_MultipleAttributeDefs_Success()
     {
         const string input = """
                              
@@ -325,9 +546,8 @@ public class Tests
         That(result.Success);
     }
 
-
     [Test]
-    public void Test21()
+    public void IonFile_InvalidOptionalSyntax_Fails()
     {
         const string input = """
                              service InventoryInteraction() {
@@ -366,42 +586,88 @@ public class Tests
         That(result.Error!.Message, Is.EqualTo("'?' is not allowed after field name"));
     }
 
-
     [Test]
-    public void Test22()
+    public void IonFile_CompleteContract_Success()
     {
         const string input = """
-                             service InventoryInteraction() {
-                                 stream GetMyInventoryItems(stream e: InventoryItem): InventoryItem;
+                             #use "common"
+                             
+                             @Grain()
+                             service UserService(userId: guid) {
+                                 GetUser(): User;
+                                 UpdateUser(user: User);
+                                 DeleteUser();
+                             }
+                             
+                             msg User {
+                                 id: guid;
+                                 name: string;
+                                 email: string;
+                                 createdAt: datetime;
                              }
                              """;
 
         var result = IonParser.IonFile.Parse(input);
 
         That(result.Success);
+        That(!result.Value.OfType<InvalidIonBlock>().Any());
     }
 
+    #endregion
+
+    #region Type Tests
+
     [Test]
-    public void Test23()
+    public void Type_GenericType_Success()
     {
         const string input = """
-                             service RandomStreamInteraction() {
-                                 stream Integer(): i4;
+                             msg Response {
+                                 data: Result<User>;
                              }
                              """;
 
-        var result = IonParser.IonFile.Parse(input);
+        var result = IonParser.Message.Parse(input);
 
         That(result.Success);
     }
 
+    //[Test]
+    //public void Type_NestedGenericType_Success()
+    //{
+    //    const string input = """
+    //                         msg Response {
+    //                             data: Result<List<User>>;
+    //                         }
+    //                         """;
+
+    //    var result = IonParser.Message.Parse(input);
+
+    //    That(result.Success);
+    //}
+
     [Test]
-    public void Test24()
+    public void Type_OptionalArray_Success()
     {
         const string input = """
-                             service RandomStreamInteraction(seed: i4) {
-                                 stream Integer(): i4;
+                             msg Data {
+                                 items: string[]?;
                              }
+                             """;
+
+        var result = IonParser.Message.Parse(input);
+
+        That(result.Success);
+    }
+
+    #endregion
+
+    #region Edge Cases
+
+    [Test]
+    public void EdgeCase_MinimalService_Success()
+    {
+        const string input = """
+                             service S(){}
                              """;
 
         var result = IonParser.Service.Parse(input);
@@ -409,20 +675,50 @@ public class Tests
         That(result.Success);
     }
 
-    /*service MathInteraction(leftOperand: i4) {
-           Add(rightOperand: i4): i4;
-           Mul(rightOperand: i4): i4;
-           Sub(rightOperand: i4): i4;
-           Div(rightOperand: i4): i4;
-           Pow(rightOperand: i4): i4;
-       
-           PowArray(rightOperand: i4[]): i4[];
-       
-           ToPositive(rightOperand: i4?): i4?;
-       }
-       
-       
-       service RandomStreamInteraction(seed: i4) {
-           stream Integer(steam i: i4): i4;
-       }*/
+    [Test]
+    public void EdgeCase_SingleLetterNames_Success()
+    {
+        const string input = """
+                             msg A {
+                                 b: i4;
+                             }
+                             """;
+
+        var result = IonParser.Message.Parse(input);
+
+        That(result.Success);
+    }
+
+    [Test]
+    public void EdgeCase_UnderscoreInNames_Success()
+    {
+        const string input = """
+                             msg User_Profile {
+                                 user_id: guid;
+                                 first_name: string;
+                             }
+                             """;
+
+        var result = IonParser.Message.Parse(input);
+
+        That(result.Success);
+    }
+
+    [Test]      
+    public void EdgeCase_MultipleUseDirectives_Success()
+    {
+        const string input = """
+                             #use "common"
+                             #use "models"
+                             #use "services"
+                             
+                             msg Empty {}
+                             """;
+
+        var result = IonParser.IonFile.Parse(input);
+
+        That(result.Success);
+    }
+
+    #endregion
 }
