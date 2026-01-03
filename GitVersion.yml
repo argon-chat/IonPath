@@ -1,4 +1,4 @@
-﻿mode: ContinuousDelivery
+﻿mode: ContinuousDeployment
 semantic-version-format: Strict
 next-version: 1.2.6
 
@@ -17,6 +17,6 @@ branches:
   main:
     regex: ^(master|main)$
     increment: Patch
-    mode: ContinuousDelivery
+    mode: ContinuousDeployment
     prevent-increment:
       of-merged-branch: true
