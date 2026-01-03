@@ -1,7 +1,6 @@
 ﻿namespace ion.runtime.network;
 
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Components.Routing;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
@@ -10,133 +9,73 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
 using System.Buffers;
-using System.Diagnostics;
 using System.Formats.Cbor;
 using System.Linq;
 using System.Net.WebSockets;
-using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Threading.Channels;
-
-public class ServerSideCallContext(AsyncServiceScope scope, Type @interface, MethodInfo @method) : IIonCallContext
-{
-    public Type InterfaceName { get; } = @interface;
-    public MethodInfo MethodName { get; } = @method;
-
-    public IDictionary<string, string> RequestItems { get; } =
-        new Dictionary<string, string>([], StringComparer.InvariantCultureIgnoreCase);
-
-    public IDictionary<string, string> ResponseItems { get; } =
-        new Dictionary<string, string>([], StringComparer.InvariantCultureIgnoreCase);
-
-    public Stopwatch Stopwatch { get; } = Stopwatch.StartNew();
-    public IServiceProvider ServiceProvider => scope.ServiceProvider;
-    public void Dispose() => Stopwatch.Stop();
-}
-
-public interface IIonRequestTerminator
-{
-    Type InterfaceName { get; }
-    MethodInfo MethodName { get; }
-
-    Task OnTerminateAsync(HttpResponse response, CancellationToken ct = default);
-}
-
-internal class IonRequestTerminatorStorage
-{
-    private readonly Lazy<Dictionary<(Type, MethodInfo), IIonRequestTerminator>> terminators;
-
-    public IonRequestTerminatorStorage(IEnumerable<IIonRequestTerminator> t)
-    {
-        terminators = new(() =>
-            t.ToDictionary(
-                x => (x.InterfaceName, x.MethodName),
-                x => x));
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public IIonRequestTerminator? TakeTerminator(Type interfaceName, MethodInfo methodName)
-    {
-        terminators.Value.TryGetValue((interfaceName, methodName), out var result);
-        return result;
-    }
-}
-public interface IIonTicketExchange
-{
-    Task<ReadOnlyMemory<byte>> OnExchangeCreateAsync(IIonCallContext callContext);
-    Task<(IonProtocolError?, object? ticket)> OnExchangeTransactionAsync(ReadOnlyMemory<byte> exchangeToken);
-    void OnTicketApply(object ticketObject);
-}
-
-internal interface __internal_ion
-{
-    void __exchange();
-
-
-    static MethodInfo __exchange_ref =>
-        typeof(__internal_ion).GetMethod(nameof(__exchange), BindingFlags.Public | BindingFlags.Instance)!;
-}
 
 public static class RpcEndpoints
 {
-    public static IServiceCollection AddIonRequestTerminator<T>(this IServiceCollection services)
-        where T : class, IIonRequestTerminator
+    extension(IServiceCollection services)
     {
-        services.AddSingleton<IIonRequestTerminator, T>();
-        return services;
-    }
-
-    public static IServiceCollection AddIonProtocol(this IServiceCollection services,
-        Action<IIonTransportRegistration> onRegistration)
-    {
-        services.Configure<IonTransportOptions>(_ => { });
-        services.AddSingleton<IonDescriptorStorage>();
-        services.AddSingleton<IonRequestTerminatorStorage>();
-        var reg = new IonDescriptorRegistration(services);
-        onRegistration(reg);
-        return services;
-    }
-
-    internal static IServiceCollection IonWithSubProtocolTicketExchange<T>(this IServiceCollection services)
-        where T : class, IIonTicketExchange
-    {
-        services.AddScoped<IIonTicketExchange, T>();
-        services.Configure<IonTransportOptions>(x =>
+        public IServiceCollection AddIonRequestTerminator<T>()
+            where T : class, IIonRequestTerminator
         {
-            x.WebSocketOptions.Flow = IonWebSocketAuthFlow.SubProtocol;
-            x.WebSocketOptions.TicketExchangeHandle = typeof(T);
-        });
-        return services;
-    }
+            services.AddSingleton<IIonRequestTerminator, T>();
+            return services;
+        }
 
-    public static IServiceCollection AddIonService<TInterface, TImplementation>(this IServiceCollection services)
-        where TInterface : class, IIonService
-        where TImplementation : class, TInterface
-    {
-        services.AddScoped<TInterface, TImplementation>();
-        services.Configure<IonTransportOptions>(options =>
-            options.Services.Add(typeof(TInterface), typeof(TImplementation)));
-        return services;
-    }
+        public IServiceCollection AddIonProtocol(Action<IIonTransportRegistration> onRegistration)
+        {
+            services.Configure<IonTransportOptions>(_ => { });
+            services.AddSingleton<IonDescriptorStorage>();
+            services.AddSingleton<IonRequestTerminatorStorage>();
+            var reg = new IonDescriptorRegistration(services);
+            onRegistration(reg);
+            return services;
+        }
 
-    public static IServiceCollection AddIonInterceptor<TImplementation>(this IServiceCollection services)
-        where TImplementation : class, IIonInterceptor
-    {
-        services.AddScoped<IIonInterceptor, TImplementation>();
-        services.Configure<IonTransportOptions>(options =>
-            options.Interceptors.Add(typeof(TImplementation)));
-        return services;
+        internal IServiceCollection IonWithSubProtocolTicketExchange<T>()
+            where T : class, IIonTicketExchange
+        {
+            services.AddScoped<IIonTicketExchange, T>();
+            services.Configure<IonTransportOptions>(x =>
+            {
+                x.WebSocketOptions.Flow = IonWebSocketAuthFlow.SubProtocol;
+                x.WebSocketOptions.TicketExchangeHandle = typeof(T);
+            });
+            return services;
+        }
+
+        public IServiceCollection AddIonService<TInterface, TImplementation>()
+            where TInterface : class, IIonService
+            where TImplementation : class, TInterface
+        {
+            services.AddScoped<TInterface, TImplementation>();
+            services.Configure<IonTransportOptions>(options =>
+                options.Services.Add(typeof(TInterface), typeof(TImplementation)));
+            return services;
+        }
+
+        public IServiceCollection AddIonInterceptor<TImplementation>()
+            where TImplementation : class, IIonInterceptor
+        {
+            services.AddScoped<IIonInterceptor, TImplementation>();
+            services.Configure<IonTransportOptions>(options =>
+                options.Interceptors.Add(typeof(TImplementation)));
+            return services;
+        }
     }
 
 
     public const string HeaderDeadlineMs = "X-Deadline";
-    public static string IonContentType = "application/ion";
-    public static string IonContentTypeOutput = "application/ion; charset=binary; ver=1";
+    public const string IonContentType = "application/ion";
+    public const string IonContentTypeOutput = "application/ion; charset=binary; ver=1";
 
-    public static string IdempotencyHeader = "X-Idempotency-Key";
-    public static string RequestSignatureHeader = "X-Sig-Key";
-    public static string IonStatusCode = "X-Ion-Status";
-    public static string SubProtocolTemplate = "ion; ticket={ticket}; ver=1";
+    public const string IdempotencyHeader = "X-Idempotency-Key";
+    public const string RequestSignatureHeader = "X-Sig-Key";
+    public const string IonStatusCode = "X-Ion-Status";
+    public const string SubProtocolTemplate = "ion; ticket={ticket}; ver=1";
 
     static class IonWs
     {
@@ -144,6 +83,11 @@ public static class RpcEndpoints
         public const byte OPCODE_END = 0x01;
         public const byte OPCODE_ERROR = 0x02;
     }
+
+    // Cached opcode frames to avoid allocations
+    private static readonly byte[] OpcodeDataFrame = [IonWs.OPCODE_DATA];
+    private static readonly byte[] OpcodeEndFrame = [IonWs.OPCODE_END];
+    private static readonly byte[] OpcodeErrorFrame = [IonWs.OPCODE_ERROR];
 
     public static IEndpointRouteBuilder MapRpcEndpoints(this IEndpointRouteBuilder app)
     {
@@ -320,13 +264,13 @@ public static class RpcEndpoints
 
             if (invokeMsg.messageType == WebSocketMessageType.Close)
             {
-                await CloseGracefully(ws, ct);
+                await CloseGracefullyAsync(ws, "ack", ct);
                 return;
             }
 
             if (invokeMsg.messageType != WebSocketMessageType.Binary || invokeMsg.payload.Length == 0)
             {
-                await CloseErrorGracefully(ws, "Expected binary INVOKE frame", ct);
+                await CloseGracefullyAsync(ws, "Expected binary INVOKE frame", ct);
                 return;
             }
 
@@ -347,7 +291,7 @@ public static class RpcEndpoints
                     await SendOpFrameAsync(ws, IonWs.OPCODE_DATA, encodedItem, ct);
 
                 await SendOpFrameAsync(ws, IonWs.OPCODE_END, ReadOnlyMemory<byte>.Empty, ct);
-                await CloseGracefully(ws, ct);
+                await CloseGracefullyAsync(ws, "done", ct);
             }
             catch (OperationCanceledException)
             {
@@ -518,8 +462,14 @@ public static class RpcEndpoints
     {
         if (cborPayload.IsEmpty)
         {
-            var one = new byte[] { opcode };
-            await ws.SendAsync(one, WebSocketMessageType.Binary, true, ct).ConfigureAwait(false);
+            var frame = opcode switch
+            {
+                IonWs.OPCODE_DATA => OpcodeDataFrame,
+                IonWs.OPCODE_END => OpcodeEndFrame,
+                IonWs.OPCODE_ERROR => OpcodeErrorFrame,
+                _ => [opcode]
+            };
+            await ws.SendAsync(frame, WebSocketMessageType.Binary, true, ct).ConfigureAwait(false);
             return;
         }
 
@@ -558,7 +508,8 @@ public static class RpcEndpoints
                     ms.Write(buffer, 0, result.Count);
             } while (!result.EndOfMessage);
 
-            return (WebSocketMessageType.Binary, new ReadOnlyMemory<byte>(ms.GetBuffer(), 0, (int)ms.Length));
+            // Copy data before returning buffer to pool to avoid use-after-return
+            return (WebSocketMessageType.Binary, ms.ToArray());
         }
         finally
         {
@@ -566,44 +517,19 @@ public static class RpcEndpoints
         }
     }
 
-    private static async Task CloseGracefully(WebSocket ws, CancellationToken ct)
+    private static async Task CloseGracefullyAsync(WebSocket ws, string message, CancellationToken ct)
     {
-        if (ws.State == WebSocketState.CloseReceived)
-            try
-            {
-                await ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "ack", ct).ConfigureAwait(false);
-            }
-            catch
-            {
-            }
-        else if (ws.State == WebSocketState.Open)
-            try
-            {
-                await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", ct).ConfigureAwait(false);
-            }
-            catch
-            {
-            }
-    }
-
-    private static async Task CloseErrorGracefully(WebSocket ws, string error, CancellationToken ct)
-    {
-        if (ws.State == WebSocketState.CloseReceived)
-            try
-            {
-                await ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, error, ct).ConfigureAwait(false);
-            }
-            catch
-            {
-            }
-        else if (ws.State == WebSocketState.Open)
-            try
-            {
-                await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, error, ct).ConfigureAwait(false);
-            }
-            catch
-            {
-            }
+        try
+        {
+            if (ws.State == WebSocketState.CloseReceived)
+                await ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, message, ct).ConfigureAwait(false);
+            else if (ws.State == WebSocketState.Open)
+                await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, message, ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Ignore close errors - connection may already be terminated
+        }
     }
 
     private static async Task<(WebSocketMessageType messageType, byte opcode, ReadOnlyMemory<byte> payload)>
@@ -613,7 +539,7 @@ public static class RpcEndpoints
         try
         {
             var segment = new ArraySegment<byte>(rented);
-            var result = await ws.ReceiveAsync(segment, ct);
+            var result = await ws.ReceiveAsync(segment, ct).ConfigureAwait(false);
 
             if (result.MessageType == WebSocketMessageType.Close)
                 return (result.MessageType, 0, ReadOnlyMemory<byte>.Empty);
@@ -622,13 +548,12 @@ public static class RpcEndpoints
                 throw new InvalidOperationException("Expected non-empty binary frame");
 
             var opcode = rented[0];
+            // Copy payload before returning buffer to pool
             var payload = result.Count > 1
-                ? new ReadOnlyMemory<byte>(rented, 1, result.Count - 1)
-                : ReadOnlyMemory<byte>.Empty;
+                ? rented.AsSpan(1, result.Count - 1).ToArray()
+                : [];
 
-            var copy = payload.ToArray();
-
-            return (result.MessageType, opcode, copy);
+            return (result.MessageType, opcode, payload);
         }
         finally
         {

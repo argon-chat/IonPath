@@ -411,67 +411,67 @@ public class Tests
 
     #region Union Tests
 
-    //[Test]
-    //public void Union_BasicStructure_Success()
-    //{
-    //    const string input = """
-    //                         union FooUnion {
-    //                            Case1(id: i4),
-    //                            Case2(name: string)
-    //                         }
-    //                         """;
+    [Test]
+    public void Union_BasicStructure_Success()
+    {
+        const string input = """
+                             union FooUnion {
+                                Case1(id: i4),
+                                Case2(name: string)
+                             }
+                             """;
 
-    //    var result = IonParser.Union.Parse(input);
+        var result = IonParser.Union.Parse(input);
 
-    //    That(result.Success);
-    //}
+        That(result.Success);
+    }
 
-    //[Test]
-    //public void Union_WithBaseParameters_Success()
-    //{
-    //    const string input = """
-    //                         union FooUnion(token: string) {
-    //                            Case1(id: i4),
-    //                            Case2(name: string)
-    //                         }
-    //                         """;
+    [Test]
+    public void Union_WithBaseParameters_Success()
+    {
+        const string input = """
+                             union FooUnion(token: string) {
+                                Case1(id: i4),
+                                Case2(name: string)
+                             }
+                             """;
 
-    //    var result = IonParser.Union.Parse(input);
+        var result = IonParser.Union.Parse(input);
 
-    //    That(result.Success);
-    //}
+        That(result.Success);
+    }
 
-    //[Test]
-    //public void Union_WithEmptyCase_Success()
-    //{
-    //    const string input = """
-    //                         union FooUnion(token: string) {
-    //                            Case1,
-    //                            Case2(name: string)
-    //                         }
-    //                         """;
+    [Test]
+    public void Union_WithEmptyCase_Success()
+    {
+        const string input = """
+                             union FooUnion(token: string) {
+                                Case1,
+                                Case2(name: string)
+                             }
+                             """;
 
-    //    var result = IonParser.Union.Parse(input);
+        var result = IonParser.Union.Parse(input);
 
-    //    That(result.Success);
-    //}
+        That(result.Success);
+    }
 
-    //[Test]
-    //public void Union_WithAttributes_Success()
-    //{
-    //    const string input = """
-    //                         @Sealed()
-    //                         union Result {
-    //                            Success(value: i4),
-    //                            @Error()
-    //                            Failure(message: string)
-    //                         }
-    //                         """;
+    [Test]
+    public void Union_WithAttributes_Success()
+    {
+        const string input = """
+                             @Sealed()
+                             union Result {
+                                Success(value: i4),
+                                @Error()
+                                Failure(message: string)
+                             }
+                             """;
 
-    //    var result = IonParser.Union.Parse(input);
+        var result = IonParser.Union.Parse(input);
 
-    //    That(result.Success);
-    //}
+        That(result.Success);
+    }
 
     #endregion
 

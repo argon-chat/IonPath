@@ -23,7 +23,7 @@ public partial class IonParser
         ).Before(SkipWhitespaces);
 
     private static Parser<char, IEnumerable<IonAttributeSyntax>> Attributes =>
-        Attribute.Many();
+        Attribute.Many().Before(SkipWhitespaces);
 
     public static Parser<char, IonAttributeDefSyntax> AttributeDef =>
         Map(

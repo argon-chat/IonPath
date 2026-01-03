@@ -8,7 +8,7 @@
 		<RootNamespace>ion.compiler</RootNamespace>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<PackAsTool>True</PackAsTool>
-		<Version>1.2.5</Version>
+		<Version>1.2.6</Version>
 		<PackageId>ionpath.compiler</PackageId>
 	</PropertyGroup>
 

@@ -1,15 +1,13 @@
 ﻿mode: ContinuousDelivery
 semantic-version-format: Strict
-next-version: 1.2.5
-
-label: beta
+next-version: 1.2.6
 
 strategies:
   - ConfiguredNextVersion
   - Fallback
 
 assembly-file-versioning-format: '{Major}.{Minor}.{Patch}.{CommitsSinceVersionSource}'
-assembly-informational-format: '{Major}.{Minor}.{Patch}-beta.{CommitsSinceVersionSource}+{ShortSha}'
+assembly-informational-format: '{Major}.{Minor}.{Patch}+{ShortSha}'
 
 commit-message-incrementing: Enabled
 patch-version-bump-message: "^(add|bump|drop|mv|move|update|expose|remove|refactoring|additional|use|improvement|fix|refactor)(.+)?"
@@ -18,7 +16,6 @@ merge-message-formats: { }
 branches:
   main:
     regex: ^(master|main)$
-    label: beta
     increment: Patch
     mode: ContinuousDelivery
     prevent-increment:

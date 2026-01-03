@@ -22,7 +22,7 @@ public partial class IonParser
             CurrentPos,
             UnionKeyword.Then(Identifier),
             ArgList.Labelled("args").Optional(),
-            UnionCase.Separated(Char(',')).Between(Char('{'), Char('}'))
+            UnionCase.Separated(Char(',').Before(SkipWhitespaces)).Between(Char('{').Before(SkipWhitespaces), Char('}'))
         );
 
     public static Parser<char, IonUnionTypeCaseSyntax> UnionCase =>
