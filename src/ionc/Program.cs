@@ -4,8 +4,6 @@ using System.Runtime.InteropServices;
 using System.Text;
 using ion.compiler;
 using ion.compiler.Commands;
-using ion.runtime;
-using ion.runtime.locking;
 using Microsoft.Extensions.Logging;
 using Spectre.Console.Cli;
 

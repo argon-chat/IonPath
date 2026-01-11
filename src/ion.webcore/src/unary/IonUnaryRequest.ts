@@ -155,6 +155,7 @@ export class IonRequest {
       headers: c.requestHeadets,
       signal: signal,
       method: "POST",
+      credentials: "include"
     });
 
     if (!resp.buffer)
