@@ -1,8 +1,6 @@
 ﻿namespace ion.compiler.CodeGen;
 
 using ion.runtime;
-using Microsoft.Build.Construction;
-using Microsoft.Build.Evaluation;
 using syntax;
 using System.Text;
 

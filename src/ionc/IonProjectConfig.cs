@@ -1,6 +1,5 @@
 ﻿namespace ion.compiler;
 
-using Microsoft.Build.Framework;
 using runtime;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
@@ -134,6 +133,21 @@ public sealed record BrowserGeneratorConfig : IonPlatformConfig
     [JsonPropertyName("outputFile")] public required string OutputFile { get; init; }
 }
 
+public sealed record GoGeneratorConfig : IonPlatformConfig
+{
+    [JsonPropertyName("features")] public required HashSet<GoFeature> Features { get; init; }
+    [JsonPropertyName("outputs")] public required string Outputs { get; init; }
+    [JsonPropertyName("packageName")] public string? PackageName { get; init; }
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum GoFeature
+{
+    Server,
+    Client,
+    Models
+}
+
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum DotnetFeature
 {
@@ -149,18 +163,35 @@ internal sealed class IonPlatformConfigConverter : JsonConverter<IonPlatformConf
         using var doc = JsonDocument.ParseValue(ref reader);
         var root = doc.RootElement;
 
-        if (root.TryGetProperty("outputs", out _))
+        // Check for distinguishing properties
+        if (root.TryGetProperty("outputFile", out _))
+        {
+            // Browser config has outputFile
+            return JsonSerializer.Deserialize<BrowserGeneratorConfig>(root.GetRawText(), options);
+        }
+        else if (root.TryGetProperty("packageName", out _))
+        {
+            // Go config has packageName
+            return JsonSerializer.Deserialize<GoGeneratorConfig>(root.GetRawText(), options);
+        }
+        else if (root.TryGetProperty("outputs", out _) && root.TryGetProperty("features", out var features))
+        {
+            // Both dotnet and go have outputs+features, need to check feature values
+            var featuresRaw = features.GetRawText();
+            if (featuresRaw.Contains("Server", StringComparison.OrdinalIgnoreCase) ||
+                featuresRaw.Contains("Client", StringComparison.OrdinalIgnoreCase) ||
+                featuresRaw.Contains("Models", StringComparison.OrdinalIgnoreCase))
+            {
+                // Could be either dotnet or go, default to dotnet for backward compatibility
+                return JsonSerializer.Deserialize<DotnetGeneratorConfig>(root.GetRawText(), options);
+            }
+        }
+        else if (root.TryGetProperty("outputs", out _))
         {
             return JsonSerializer.Deserialize<DotnetGeneratorConfig>(root.GetRawText(), options);
         }
-        else if (root.TryGetProperty("outputFile", out _))
-        {
-            return JsonSerializer.Deserialize<BrowserGeneratorConfig>(root.GetRawText(), options);
-        }
-        else
-        {
-            throw new JsonException("Unknown platform config format.");
-        }
+        
+        throw new JsonException("Unknown platform config format.");
     }
 
     public override void Write(Utf8JsonWriter writer, IonPlatformConfig value, JsonSerializerOptions options)
@@ -172,6 +203,9 @@ internal sealed class IonPlatformConfigConverter : JsonConverter<IonPlatformConf
                 break;
             case BrowserGeneratorConfig b:
                 JsonSerializer.Serialize(writer, b, options);
+                break;
+            case GoGeneratorConfig g:
+                JsonSerializer.Serialize(writer, g, options);
                 break;
             default:
                 throw new JsonException($"Unsupported platform config type: {value.GetType().Name}");

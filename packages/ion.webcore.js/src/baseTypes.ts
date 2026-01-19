@@ -2,6 +2,9 @@ export type Guid = string;
 
 export type IonArray<T> = T[];
 
+export type IonBytes = Uint8Array;
+export type bytes = Uint8Array;
+
 export interface DateOnly {
   year: number;
   month: number;

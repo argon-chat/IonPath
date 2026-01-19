@@ -30,6 +30,7 @@ global using dateonly = System.DateOnly;
 global using timeonly = System.TimeOnly;
 global using duration = System.TimeSpan;
 global using datetime = System.DateTime;
+global using bytes = ion.runtime.IonBytes;
 
 global using System.CodeDom.Compiler;
 global using System.Runtime.CompilerServices;

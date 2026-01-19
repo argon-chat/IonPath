@@ -9,6 +9,7 @@ builder.Services.AddIonProtocol(i =>
     i.AddService<IMathInteraction, MathImpl>();
     i.AddService<IVectorMathInteraction, VectorImpl>();
     i.AddService<IRandomStreamInteraction, RandomStreamImpl>();
+    i.AddService<ITestBlobs, BytesTest>();
 
     i.IonWithSubProtocolTicketExchange<TicketExchanger>();
 });
@@ -82,6 +83,21 @@ public class VectorImpl : IVectorMathInteraction
     public Task<VectorOfVectorOfVector> Do(Vector leftOperand, CancellationToken ct = default) =>
         Task.FromResult(new VectorOfVectorOfVector(new VectorOfVector(leftOperand, leftOperand, leftOperand),
             new VectorOfVector(leftOperand, leftOperand, leftOperand)));
+}
+
+public class BytesTest : ITestBlobs
+{
+    public async Task Do(IonBytes data, CancellationToken ct = default)
+    {
+        return;
+    }
+
+    public async Task<IonBytes> DoIt(IonBytes data, CancellationToken ct = default)
+    {
+        var blob = data.Memory.ToArray();
+        blob.Reverse();
+        return new IonBytes(blob);
+    }
 }
 
 public class RandomStreamImpl : IRandomStreamInteraction

@@ -51,6 +51,8 @@ public sealed class IonModule
             new("uri", ["builtin"], [], true),
             new("duration", ["scalar", "builtin"], [], true),
 
+            new("bytes", ["builtin"], [], true),
+
             new IonGenericType("Maybe", ["builtin"], [], ["T"], []),
             new IonGenericType("Array", ["builtin"], [], ["T"], []),
             new IonGenericType("Partial", ["builtin"], [], ["T"], []),

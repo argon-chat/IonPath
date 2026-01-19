@@ -100,12 +100,12 @@ public class CompileCommand : AsyncCommand<CompileOptions>
 
         foreach (var (key, value) in project.Generators)
         {
-            if (key is IonGeneratorPlatform.Go or IonGeneratorPlatform.Rust)
-                throw new NotSupportedException($"Platform {key} currently is not support");
+            if (key is IonGeneratorPlatform.Rust)
+                throw new NotSupportedException($"Platform {key} currently is not supported");
 
             if (!string.IsNullOrEmpty(options.OnlyTarget))
             {
-                if (!options.OnlyTarget.Equals(key.ToString()))
+                if (!options.OnlyTarget.Equals(key.ToString(), StringComparison.OrdinalIgnoreCase))
                 {
                     AnsiConsole.MarkupLine($"Target [lime]{key}[/] skip because onlyTarget selected for [lime]'{options.OnlyTarget}'[/].");
                     continue;
@@ -127,7 +127,7 @@ public class CompileCommand : AsyncCommand<CompileOptions>
 
                 if (cfg.Features.Contains(DotnetFeature.Client))
                     GenerateClient(generator, outputDirectoryForFiles, ctx);
-                if (cfg.Features.Contains(DotnetFeature.Client))
+                if (cfg.Features.Contains(DotnetFeature.Server))
                     GenerateServer(generator, outputDirectoryForFiles, ctx);
             }
 
@@ -136,6 +136,33 @@ public class CompileCommand : AsyncCommand<CompileOptions>
                 var cfg = value as BrowserGeneratorConfig;
                 var gen = new IonTypeScriptGenerator(project.Name);
                 GenerateBrowserClient(gen, currentDir, project, ctx, cfg);
+            }
+
+            if (key is IonGeneratorPlatform.Go)
+            {
+                var cfg = value as GoGeneratorConfig;
+                var packageName = cfg!.PackageName ?? project.Name.ToLowerInvariant().Replace(".", "").Replace("-", "");
+                var generator = new GoCodeGenerator(packageName);
+                generator.UseMaybeWrapper = options.UseMaybeWrapper;
+                var outputDirectoryForFiles = new DirectoryInfo(projectFile.Directory!.Combine(cfg.Outputs).FullName);
+
+                if (!outputDirectoryForFiles.Exists)
+                    outputDirectoryForFiles.Create();
+
+                // Clean old .go files
+                foreach (var file in outputDirectoryForFiles.EnumerateFiles("*.go"))
+                    file.Delete();
+
+                // Generate go.mod
+                //generator.GenerateProjectFile(project.Name, outputDirectoryForFiles.File("go.mod"));
+
+                // Generate single file with everything
+                var content = generator.GenerateSingleFile(
+                    ctx,
+                    includeServer: cfg.Features.Contains(GoFeature.Server),
+                    includeClient: cfg.Features.Contains(GoFeature.Client));
+
+                File.WriteAllText(outputDirectoryForFiles.File($"{packageName}_generated.go").FullName, content);
             }
         }
 
@@ -276,7 +303,6 @@ public class CompileCommand : AsyncCommand<CompileOptions>
                 generator.GenerateAllServiceExecutors(module.Services));
         }
     }
-
 
     private static IIonCodeGenerator CreateGenerator(IonGeneratorPlatform platform, string @namespace)
     {

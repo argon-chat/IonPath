@@ -60,26 +60,29 @@ public interface IonFormatter<T>
 
 public static class IonFormatterEx
 {
-    public static T? ReadNullable<T>(this CborReader reader, _StructTag<T> _ = default)
-        where T : struct
+    extension(CborReader reader)
     {
-        var state = reader.PeekState();
-        if (state != CborReaderState.Null)
-            return IonFormatterStorage<T>.Read(reader);
+        public T? ReadNullable<T>(_StructTag<T> _ = default)
+            where T : struct
+        {
+            var state = reader.PeekState();
+            if (state != CborReaderState.Null)
+                return IonFormatterStorage<T>.Read(reader);
 
-        reader.ReadNull();
-        return null;
-    }
+            reader.ReadNull();
+            return null;
+        }
 
-    public static T ReadNullable<T>(this CborReader reader, _ClassTag<T> _ = default)
-        where T : class
-    {
-        var state = reader.PeekState();
-        if (state != CborReaderState.Null)
-            return IonFormatterStorage<T>.Read(reader);
+        public T ReadNullable<T>(_ClassTag<T> _ = default)
+            where T : class
+        {
+            var state = reader.PeekState();
+            if (state != CborReaderState.Null)
+                return IonFormatterStorage<T>.Read(reader);
 
-        reader.ReadNull();
-        return null!;
+            reader.ReadNull();
+            return null!;
+        }
     }
 
     public readonly struct _StructTag<T> where T : struct
@@ -264,6 +267,7 @@ public static class IonFormatterStorageModuleInit
         IonFormatterStorage<DateOnly>.Value = new Ion_dateonly_Formatter();
         IonFormatterStorage<TimeOnly>.Value = new Ion_timeonly_Formatter();
         IonFormatterStorage<TimeSpan>.Value = new Ion_duration_Formatter();
+        IonFormatterStorage<IonBytes>.Value = new Ion_bytes_Formatter();
         IonFormatterStorage<Half>.Value = new Ion_f2_Formatter();
         IonFormatterStorage<float>.Value = new Ion_f4_Formatter();
         IonFormatterStorage<double>.Value = new Ion_f8_Formatter();
@@ -434,4 +438,13 @@ public sealed class Ion_duration_Formatter : IonFormatter<TimeSpan>
 
     public void Write(CborWriter writer, TimeSpan value)
         => writer.WriteInt64(value.Ticks);
+}
+
+public sealed class Ion_bytes_Formatter : IonFormatter<IonBytes>
+{
+    public IonBytes Read(CborReader reader) 
+        => new(reader.ReadDefiniteLengthByteString());
+
+    public void Write(CborWriter writer, IonBytes value)
+        => writer.WriteByteString(value.Span);
 }

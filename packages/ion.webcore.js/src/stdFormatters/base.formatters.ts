@@ -1,8 +1,10 @@
 import {
+  bytes,
   DateOnly,
   DateTimeOffset,
   Duration,
   Guid,
+  IonBytes,
   TimeOnly,
 } from "../baseTypes";
 import { CborReader, CborWriter } from "../cbor";
@@ -23,6 +25,15 @@ IonFormatterStorage.register("string", {
   },
   write(writer: CborWriter, value: string): void {
     writer.writeTextString(value);
+  },
+});
+
+IonFormatterStorage.register("bytes", {
+  read(reader: CborReader): IonBytes {
+    return reader.readByteString();
+  },
+  write(writer: CborWriter, value: IonBytes): void {
+    writer.writeByteString(value);
   },
 });
 
@@ -124,5 +135,15 @@ IonFormatterStorage.register("datetime", {
     const iso = value.date.toISOString();
     writer.writeTag(0);
     writer.writeTextString(iso);
+  },
+});
+
+
+IonFormatterStorage.register("bytes", {
+  read(reader: CborReader): bytes {
+    return reader.readByteString();
+  },
+  write(writer: CborWriter, value: bytes): void {
+    writer.writeByteString(value);
   },
 });

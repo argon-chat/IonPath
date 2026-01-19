@@ -23,9 +23,11 @@ internal static class IonProjectFormatterStorageModuleInit
       IonFormatterStorage<Vector>.Value = new Ion_Vector_Formatter();
       IonFormatterStorage<VectorOfVector>.Value = new Ion_VectorOfVector_Formatter();
       IonFormatterStorage<VectorOfVectorOfVector>.Value = new Ion_VectorOfVectorOfVector_Formatter();
+      IonExecutorMetadataStorage.AddExecutor<Ion_TestBlobs_ServiceExecutor>("ITestBlobs");
       IonExecutorMetadataStorage.AddExecutor<Ion_MathInteraction_ServiceExecutor>("IMathInteraction");
       IonExecutorMetadataStorage.AddExecutor<Ion_RandomStreamInteraction_ServiceExecutor>("IRandomStreamInteraction");
       IonExecutorMetadataStorage.AddExecutor<Ion_VectorMathInteraction_ServiceExecutor>("IVectorMathInteraction");
+      IonExecutorMetadataStorage.AddClient<Ion_TestBlobs_ClientImpl>("ITestBlobs");
       IonExecutorMetadataStorage.AddClient<Ion_MathInteraction_ClientImpl>("IMathInteraction");
       IonExecutorMetadataStorage.AddClient<Ion_RandomStreamInteraction_ClientImpl>("IRandomStreamInteraction");
       IonExecutorMetadataStorage.AddClient<Ion_VectorMathInteraction_ClientImpl>("IVectorMathInteraction");

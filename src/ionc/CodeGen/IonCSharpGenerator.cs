@@ -1,8 +1,6 @@
 ﻿namespace ion.compiler.CodeGen;
 
 using ion.runtime;
-using Microsoft.Build.Construction;
-using Microsoft.Build.Evaluation;
 using Pidgin;
 using syntax;
 using System.Formats.Cbor;
@@ -20,27 +18,11 @@ public class IonProject
 
     public class IonProjectCSharpSettings
     {
-        public string TargetFramework { get; set; } = "net9.0";
+        public string TargetFramework { get; set; } = "net10.0";
 
         public string IonRuntimeVersion { get; set; } = "0.0.1";
 
         public required DirectoryInfo OutputPath { get; set; }
-    }
-}
-
-public static class FileEx
-{
-    public static FileInfo File(this DirectoryInfo directory, string file) =>
-        new(Path.Combine(directory.FullName, file));
-
-    public static DirectoryInfo Directory(this DirectoryInfo directory, string dir) =>
-        new(Path.Combine(directory.FullName, dir));
-
-    public static DirectoryInfo Combine(this DirectoryInfo directory, string atFolder)
-    {
-        if (atFolder.StartsWith("@"))
-            return new DirectoryInfo(Path.Combine(directory.FullName, atFolder.Replace("@", ".")));
-        return new DirectoryInfo(atFolder);
     }
 }
 
@@ -53,29 +35,12 @@ public static class IonCSharpGeneratorEx
         => builder.ToString().Replace("{compileGeneratedAttributes}", CompileGenerateAttributes);
 }
 
-public interface IIonCodeGenerator
-{
-    void GenerateProjectFile(string projectName, FileInfo outputFile);
-
-    string GenerateAllFormatters(IEnumerable<IonType> types);
-
-    string GenerateModuleInit(IEnumerable<IonType> types, IReadOnlyList<IonService> services, bool clientToo,
-        bool serverToo);
-
-    string GenerateModule(IonModule module);
-
-    string GenerateAllServiceExecutors(IEnumerable<IonService> service);
-
-    string GenerateAllServiceClientImpl(IEnumerable<IonService> service);
-
-    string GenerateGlobalTypes();
-}
-
 public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 {
     public static bool UseMaybeWrapper { get; set; }
 
-    private string FileHeader()
+    // Make FileHeader public to satisfy interface
+    public string FileHeader()
     {
         return $"""
                 //------------------------------------------------------------------------------
@@ -94,6 +59,47 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
                 namespace {@namespace};
                 """;
+    }
+
+    public void GenerateProjectFile(string projectName, FileInfo outputFile)
+    {
+    }
+
+    // Add GenerateTypes to satisfy interface
+    public string GenerateTypes(IEnumerable<IonType> types)
+    {
+        var sb = new StringBuilder();
+        var allTypes = types.ToList();
+
+        foreach (var type in allTypes.Where(type => type is { IsUnionCase: false, IsUnion: false }))
+        {
+            var generated = GenerateType(type);
+            if (!string.IsNullOrEmpty(generated))
+            {
+                sb.AppendLine(generated);
+                sb.AppendLine();
+            }
+        }
+
+        foreach (var union in allTypes.OfType<IonUnion>())
+        {
+            sb.AppendLine(GenerateUnion(union));
+            sb.AppendLine();
+        }
+
+        return sb.ToCompiledString();
+    }
+
+    // Add GenerateServices to satisfy interface
+    public string GenerateServices(IonModule module)
+    {
+        var sb = new StringBuilder();
+        foreach (var service in module.Services)
+        {
+            sb.AppendLine(GenerateService(service));
+            sb.AppendLine();
+        }
+        return sb.ToCompiledString();
     }
 
     private static readonly string ModuleInitTemplate =
@@ -156,27 +162,6 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
         return sb.ToCompiledString();
     }
-
-    public void GenerateProjectFile(string projectName, FileInfo outputFile)
-    {
-        var project = ProjectRootElement.Create(NewProjectFileOptions.None);
-        project.Sdk = "Microsoft.NET.Sdk";
-
-        var propertyGroup = project.AddPropertyGroup();
-        propertyGroup.AddProperty("OutputType", "Library");
-        propertyGroup.AddProperty("TargetFramework", "net9.0");
-        propertyGroup.AddProperty("ImplicitUsings", "enable");
-        propertyGroup.AddProperty("RootNamespace", projectName);
-
-        var itemGroup = project.AddItemGroup();
-        itemGroup.AddItem("PackageReference", "ion.runtime")
-            .AddMetadata("Version", "1.0.0-beta.1", expressAsAttribute: true);
-        itemGroup.AddItem("PackageReference", "ion.runtime.network")
-            .AddMetadata("Version", "1.0.0-beta.1", expressAsAttribute: true);
-
-        project.Save(outputFile.FullName);
-    }
-
 
     public string GenerateGlobalTypes() =>
         """
