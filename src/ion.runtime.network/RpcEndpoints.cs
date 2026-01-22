@@ -13,6 +13,7 @@ using System.Formats.Cbor;
 using System.Linq;
 using System.Net.WebSockets;
 using System.Runtime.CompilerServices;
+using ion.runtime;
 
 public static class RpcEndpoints
 {
@@ -72,8 +73,6 @@ public static class RpcEndpoints
     public const string IonContentType = "application/ion";
     public const string IonContentTypeOutput = "application/ion; charset=binary; ver=1";
 
-    public const string IdempotencyHeader = "X-Idempotency-Key";
-    public const string RequestSignatureHeader = "X-Sig-Key";
     public const string IonStatusCode = "X-Ion-Status";
     public const string SubProtocolTemplate = "ion; ticket={ticket}; ver=1";
 
@@ -99,6 +98,7 @@ public static class RpcEndpoints
                 CancellationToken ct
             ) =>
             {
+                var sw = System.Diagnostics.Stopwatch.StartNew();
                 var log = lf.CreateLogger("RPC");
                 var req = http.Request;
                 var resp = http.Response;
@@ -108,6 +108,10 @@ public static class RpcEndpoints
                 {
                     resp.StatusCode = StatusCodes.Status415UnsupportedMediaType;
                     await WriteError(log, resp, "UNSUPPORTED_MEDIA", $"Content-Type must be {IonContentType}");
+                    sw.Stop();
+                    IonInstruments.RecordRequest("att", "exchange", resp.StatusCode);
+                    IonInstruments.RecordRequestDuration("att", "exchange", sw.Elapsed.TotalMilliseconds);
+                    IonInstruments.RecordError("att", "exchange", "UNSUPPORTED_MEDIA");
                     return;
                 }
 
@@ -164,22 +168,38 @@ public static class RpcEndpoints
                     }
 
                     await next(callCtx, ct).ConfigureAwait(true);
+                    
+                    sw.Stop();
+                    IonInstruments.RecordRequest("att", "exchange", resp.StatusCode);
+                    IonInstruments.RecordRequestDuration("att", "exchange", sw.Elapsed.TotalMilliseconds);
                 }
                 catch (IonRequestException ionException)
                 {
                     resp.StatusCode = StatusCodes.Status400BadRequest;
                     await WriteError(log, resp, ionException.Error.code, ionException.Error.msg);
+                    sw.Stop();
+                    IonInstruments.RecordRequest("att", "exchange", resp.StatusCode);
+                    IonInstruments.RecordRequestDuration("att", "exchange", sw.Elapsed.TotalMilliseconds);
+                    IonInstruments.RecordError("att", "exchange", ionException.Error.code);
                 }
                 catch (OperationCanceledException)
                 {
                     resp.StatusCode = StatusCodes.Status504GatewayTimeout;
                     await WriteError(resp, IonProtocolError.DEADLINE_EXCEEDED());
+                    sw.Stop();
+                    IonInstruments.RecordRequest("att", "exchange", resp.StatusCode);
+                    IonInstruments.RecordRequestDuration("att", "exchange", sw.Elapsed.TotalMilliseconds);
+                    IonInstruments.RecordError("att", "exchange", "DEADLINE_EXCEEDED");
                 }
                 catch (Exception ex)
                 {
                     log.LogError(ex, "handler failed");
                     resp.StatusCode = StatusCodes.Status500InternalServerError;
                     await WriteError(log, resp, "INTERNAL_ERROR", ex.ToString());
+                    sw.Stop();
+                    IonInstruments.RecordRequest("att", "exchange", resp.StatusCode);
+                    IonInstruments.RecordRequestDuration("att", "exchange", sw.Elapsed.TotalMilliseconds);
+                    IonInstruments.RecordError("att", "exchange", "INTERNAL_ERROR");
                 }
             })
             .WithMetadata(new ConsumesAttribute(IonContentType))
@@ -198,133 +218,185 @@ public static class RpcEndpoints
             [FromServices] ILoggerFactory lf,
             CancellationToken ct) =>
         {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             var log = lf.CreateLogger("RPC.WS");
+            var endpoint = $"{interfaceName}/{methodName}";
 
-            await using var scope = provider.CreateAsyncScope();
-            var router = store.GetStreamRouter(interfaceName, scope);
-            var ticketExchange = provider.GetService<IIonTicketExchange>();
-
-            if (!http.WebSockets.IsWebSocketRequest)
-            {
-                log.LogWarning("UNSUPPORTED_TRANSPORT");
-                http.Response.StatusCode = StatusCodes.Status412PreconditionFailed;
-                await WriteError(log, http.Response, "UNSUPPORTED_TRANSPORT", $"Transport must be WebSocket");
-                return;
-            }
-
-            if (router is null)
-            {
-                log.LogWarning("ENTRYPOINT_NOT_FOUND");
-                http.Response.StatusCode = StatusCodes.Status412PreconditionFailed;
-                await WriteError(log, http.Response, "ENTRYPOINT_NOT_FOUND",
-                    $"Method {methodName} is not server-streaming");
-                return;
-            }
-
-            var subProtocol = http.WebSockets.WebSocketRequestedProtocols.FirstOrDefault(x => x.StartsWith("ion"));
-
-            if (string.IsNullOrEmpty(subProtocol) && ticketExchange is not null)
-            {
-                log.LogWarning("UNSUPPORTED_SUB_PROTOCOL");
-                http.Response.StatusCode = StatusCodes.Status412PreconditionFailed;
-                await WriteError(log, http.Response, "UNSUPPORTED_SUB_PROTOCOL", $"Transport sub-protocol must be ion");
-                return;
-            }
-
-            var ticket = string.IsNullOrEmpty(subProtocol) ? null : IonTicketExtractor.ExtractTicketBytes(subProtocol);
-
-            if (ticket is null && ticketExchange is not null)
-            {
-                log.LogWarning("TICKET_BROKEN");
-                http.Response.StatusCode = StatusCodes.Status412PreconditionFailed;
-                await WriteError(log, http.Response, "TICKET_BROKEN", $"Transport ticket has been broken");
-                return;
-            }
-
-            object? ticketData = null;
-
-            if (ticketExchange is not null)
-            {
-                var (error, t) =
-                    await ticketExchange.OnExchangeTransactionAsync(ticket.Value).ConfigureAwait(true);
-                ticketData = t;
-                if (error is not null)
-                {
-                    log.LogWarning(error.ToString());
-                    await WriteError(http.Response, error.Value);
-                    return;
-                }
-            }
-
-            
-
-            using var ws = await http.WebSockets.AcceptWebSocketAsync(subProtocol).ConfigureAwait(true);
-
-            var invokeMsg = await ReceiveSetupMessageAsync(ws, ct).ConfigureAwait(true);
-
-            if (invokeMsg.messageType == WebSocketMessageType.Close)
-            {
-                await CloseGracefullyAsync(ws, "ack", ct);
-                return;
-            }
-
-            if (invokeMsg.messageType != WebSocketMessageType.Binary || invokeMsg.payload.Length == 0)
-            {
-                await CloseGracefullyAsync(ws, "Expected binary INVOKE frame", ct);
-                return;
-            }
-
-            var reader = new CborReader(invokeMsg.payload);
+            IonInstruments.IncrementActiveConnections("ws");
 
             try
             {
+                await using var scope = provider.CreateAsyncScope();
+                var router = store.GetStreamRouter(interfaceName, scope);
+                var ticketExchange = provider.GetService<IIonTicketExchange>();
+
+                if (!http.WebSockets.IsWebSocketRequest)
+                {
+                    log.LogWarning("UNSUPPORTED_TRANSPORT");
+                    http.Response.StatusCode = StatusCodes.Status412PreconditionFailed;
+                    await WriteError(log, http.Response, "UNSUPPORTED_TRANSPORT", $"Transport must be WebSocket");
+                    sw.Stop();
+                    IonInstruments.RecordRequest("ws", endpoint, http.Response.StatusCode);
+                    IonInstruments.RecordRequestDuration("ws", endpoint, sw.Elapsed.TotalMilliseconds);
+                    IonInstruments.RecordError("ws", endpoint, "UNSUPPORTED_TRANSPORT");
+                    return;
+                }
+
+                if (router is null)
+                {
+                    log.LogWarning("ENTRYPOINT_NOT_FOUND");
+                    http.Response.StatusCode = StatusCodes.Status412PreconditionFailed;
+                    await WriteError(log, http.Response, "ENTRYPOINT_NOT_FOUND",
+                        $"Method {methodName} is not server-streaming");
+                    sw.Stop();
+                    IonInstruments.RecordRequest("ws", endpoint, http.Response.StatusCode);
+                    IonInstruments.RecordRequestDuration("ws", endpoint, sw.Elapsed.TotalMilliseconds);
+                    IonInstruments.RecordError("ws", endpoint, "ENTRYPOINT_NOT_FOUND");
+                    return;
+                }
+
+                var subProtocol = http.WebSockets.WebSocketRequestedProtocols.FirstOrDefault(x => x.StartsWith("ion"));
+
+                if (string.IsNullOrEmpty(subProtocol) && ticketExchange is not null)
+                {
+                    log.LogWarning("UNSUPPORTED_SUB_PROTOCOL");
+                    http.Response.StatusCode = StatusCodes.Status412PreconditionFailed;
+                    await WriteError(log, http.Response, "UNSUPPORTED_SUB_PROTOCOL", $"Transport sub-protocol must be ion");
+                    sw.Stop();
+                    IonInstruments.RecordRequest("ws", endpoint, http.Response.StatusCode);
+                    IonInstruments.RecordRequestDuration("ws", endpoint, sw.Elapsed.TotalMilliseconds);
+                    IonInstruments.RecordError("ws", endpoint, "UNSUPPORTED_SUB_PROTOCOL");
+                    return;
+                }
+
+                var ticket = string.IsNullOrEmpty(subProtocol) ? null : IonTicketExtractor.ExtractTicketBytes(subProtocol);
+
+                if (ticket is null && ticketExchange is not null)
+                {
+                    log.LogWarning("TICKET_BROKEN");
+                    http.Response.StatusCode = StatusCodes.Status412PreconditionFailed;
+                    await WriteError(log, http.Response, "TICKET_BROKEN", $"Transport ticket has been broken");
+                    sw.Stop();
+                    IonInstruments.RecordRequest("ws", endpoint, http.Response.StatusCode);
+                    IonInstruments.RecordRequestDuration("ws", endpoint, sw.Elapsed.TotalMilliseconds);
+                    IonInstruments.RecordError("ws", endpoint, "TICKET_BROKEN");
+                    return;
+                }
+
+                object? ticketData = null;
+
                 if (ticketExchange is not null)
-                    ticketExchange.OnTicketApply(ticketData!);
+                {
+                    var (error, t) =
+                        await ticketExchange.OnExchangeTransactionAsync(ticket.Value).ConfigureAwait(true);
+                    ticketData = t;
+                    if (error is not null)
+                    {
+                        log.LogWarning(error.ToString());
+                        await WriteError(http.Response, error.Value);
+                        sw.Stop();
+                        IonInstruments.RecordRequest("ws", endpoint, http.Response.StatusCode);
+                        IonInstruments.RecordRequestDuration("ws", endpoint, sw.Elapsed.TotalMilliseconds);
+                        IonInstruments.RecordError("ws", endpoint, error.Value.code);
+                        return;
+                    }
+                }
 
-                var inputStream = router.IsAllowInputStream(methodName) ? 
-                    ReadIncomingStreamAsync(ws, ct) : 
-                    null;
+                
 
-                await foreach (var encodedItem in router
-                                   .StreamRouteExecuteAsync(methodName, reader, inputStream, ct)
-                                   .ConfigureAwait(true)) 
-                    await SendOpFrameAsync(ws, IonWs.OPCODE_DATA, encodedItem, ct);
+                using var ws = await http.WebSockets.AcceptWebSocketAsync(subProtocol).ConfigureAwait(true);
 
-                await SendOpFrameAsync(ws, IonWs.OPCODE_END, ReadOnlyMemory<byte>.Empty, ct);
-                await CloseGracefullyAsync(ws, "done", ct);
+                var invokeMsg = await ReceiveSetupMessageAsync(ws, ct).ConfigureAwait(true);
+
+                if (invokeMsg.messageType == WebSocketMessageType.Close)
+                {
+                    await CloseGracefullyAsync(ws, "ack", ct);
+                    sw.Stop();
+                    IonInstruments.RecordRequest("ws", endpoint, StatusCodes.Status200OK);
+                    IonInstruments.RecordRequestDuration("ws", endpoint, sw.Elapsed.TotalMilliseconds);
+                    return;
+                }
+
+                if (invokeMsg.messageType != WebSocketMessageType.Binary || invokeMsg.payload.Length == 0)
+                {
+                    await CloseGracefullyAsync(ws, "Expected binary INVOKE frame", ct);
+                    sw.Stop();
+                    IonInstruments.RecordRequest("ws", endpoint, StatusCodes.Status400BadRequest);
+                    IonInstruments.RecordRequestDuration("ws", endpoint, sw.Elapsed.TotalMilliseconds);
+                    IonInstruments.RecordError("ws", endpoint, "INVALID_FRAME");
+                    return;
+                }
+
+                var reader = new CborReader(invokeMsg.payload);
+
+                try
+                {
+                    if (ticketExchange is not null)
+                        ticketExchange.OnTicketApply(ticketData!);
+
+                    var inputStream = router.IsAllowInputStream(methodName) ? 
+                        ReadIncomingStreamAsync(ws, ct) : 
+                        null;
+
+                    await foreach (var encodedItem in router
+                                       .StreamRouteExecuteAsync(methodName, reader, inputStream, ct)
+                                       .ConfigureAwait(true)) 
+                        await SendOpFrameAsync(ws, IonWs.OPCODE_DATA, encodedItem, ct);
+
+                    await SendOpFrameAsync(ws, IonWs.OPCODE_END, ReadOnlyMemory<byte>.Empty, ct);
+                    await CloseGracefullyAsync(ws, "done", ct);
+                    
+                    sw.Stop();
+                    IonInstruments.RecordRequest("ws", endpoint, StatusCodes.Status200OK);
+                    IonInstruments.RecordRequestDuration("ws", endpoint, sw.Elapsed.TotalMilliseconds);
+                }
+                catch (OperationCanceledException)
+                {
+                    try
+                    {
+                        await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "cancel", CancellationToken.None);
+                    }
+                    catch
+                    {
+                    }
+                    
+                    sw.Stop();
+                    IonInstruments.RecordRequest("ws", endpoint, StatusCodes.Status499ClientClosedRequest);
+                    IonInstruments.RecordRequestDuration("ws", endpoint, sw.Elapsed.TotalMilliseconds);
+                    IonInstruments.RecordError("ws", endpoint, "OPERATION_CANCELLED");
+                }
+                catch (Exception ex)
+                {
+                    log.LogError(ex, "WS handler failed");
+                    try
+                    {
+                        var err = IonProtocolError.INTERNAL_ERROR(ex.ToString());
+                        var writer = new CborWriter();
+                        IonFormatterStorage<IonProtocolError>.Write(writer, err);
+                        var bytes = writer.Encode();
+                        await SendOpFrameAsync(ws, IonWs.OPCODE_ERROR, bytes, ct);
+                    }
+                    catch
+                    {
+                    }
+
+                    try
+                    {
+                        await ws.CloseAsync(WebSocketCloseStatus.InternalServerError, "exception", CancellationToken.None);
+                    }
+                    catch
+                    {
+                    }
+                    
+                    sw.Stop();
+                    IonInstruments.RecordRequest("ws", endpoint, StatusCodes.Status500InternalServerError);
+                    IonInstruments.RecordRequestDuration("ws", endpoint, sw.Elapsed.TotalMilliseconds);
+                    IonInstruments.RecordError("ws", endpoint, "INTERNAL_ERROR");
+                }
             }
-            catch (OperationCanceledException)
+            finally
             {
-                try
-                {
-                    await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "cancel", CancellationToken.None);
-                }
-                catch
-                {
-                }
-            }
-            catch (Exception ex)
-            {
-                log.LogError(ex, "WS handler failed");
-                try
-                {
-                    var err = IonProtocolError.INTERNAL_ERROR(ex.ToString());
-                    var writer = new CborWriter();
-                    IonFormatterStorage<IonProtocolError>.Write(writer, err);
-                    var bytes = writer.Encode();
-                    await SendOpFrameAsync(ws, IonWs.OPCODE_ERROR, bytes, ct);
-                }
-                catch
-                {
-                }
-
-                try
-                {
-                    await ws.CloseAsync(WebSocketCloseStatus.InternalServerError, "exception", CancellationToken.None);
-                }
-                catch
-                {
-                }
+                IonInstruments.DecrementActiveConnections("ws");
             }
         });
 
@@ -338,12 +410,19 @@ public static class RpcEndpoints
                 [FromServices] IonRequestTerminatorStorage terminatorStorage,
                 CancellationToken ct) =>
             {
+                var sw = System.Diagnostics.Stopwatch.StartNew();
                 var log = lf.CreateLogger("RPC");
+                var endpoint = $"{interfaceName}/{methodName}";
+                
                 if (req.ContentType is null ||
                     !req.ContentType.StartsWith(IonContentType, StringComparison.OrdinalIgnoreCase))
                 {
                     resp.StatusCode = StatusCodes.Status415UnsupportedMediaType;
                     await WriteError(log, resp, "UNSUPPORTED_MEDIA", $"Content-Type must be {IonContentType}");
+                    sw.Stop();
+                    IonInstruments.RecordRequest("unary", endpoint, resp.StatusCode);
+                    IonInstruments.RecordRequestDuration("unary", endpoint, sw.Elapsed.TotalMilliseconds);
+                    IonInstruments.RecordError("unary", endpoint, "UNSUPPORTED_MEDIA");
                     return;
                 }
 
@@ -362,6 +441,10 @@ public static class RpcEndpoints
                 {
                     resp.StatusCode = StatusCodes.Status405MethodNotAllowed;
                     await WriteError(log, resp, "INTERFACE_NOT_FOUND", $"Interface {interfaceName} is not found");
+                    sw.Stop();
+                    IonInstruments.RecordRequest("unary", endpoint, resp.StatusCode);
+                    IonInstruments.RecordRequestDuration("unary", endpoint, sw.Elapsed.TotalMilliseconds);
+                    IonInstruments.RecordError("unary", endpoint, "INTERFACE_NOT_FOUND");
                     return;
                 }
 
@@ -410,22 +493,38 @@ public static class RpcEndpoints
                     }
 
                     await next(callCtx, ct).ConfigureAwait(false);
+                    
+                    sw.Stop();
+                    IonInstruments.RecordRequest("unary", endpoint, resp.StatusCode);
+                    IonInstruments.RecordRequestDuration("unary", endpoint, sw.Elapsed.TotalMilliseconds);
                 }
                 catch (IonRequestException ionException)
                 {
                     resp.StatusCode = StatusCodes.Status400BadRequest;
                     await WriteError(log, resp, ionException.Error.code, ionException.Error.msg);
+                    sw.Stop();
+                    IonInstruments.RecordRequest("unary", endpoint, resp.StatusCode);
+                    IonInstruments.RecordRequestDuration("unary", endpoint, sw.Elapsed.TotalMilliseconds);
+                    IonInstruments.RecordError("unary", endpoint, ionException.Error.code);
                 }
                 catch (OperationCanceledException)
                 {
                     resp.StatusCode = StatusCodes.Status504GatewayTimeout;
                     await WriteError(resp, IonProtocolError.DEADLINE_EXCEEDED());
+                    sw.Stop();
+                    IonInstruments.RecordRequest("unary", endpoint, resp.StatusCode);
+                    IonInstruments.RecordRequestDuration("unary", endpoint, sw.Elapsed.TotalMilliseconds);
+                    IonInstruments.RecordError("unary", endpoint, "DEADLINE_EXCEEDED");
                 }
                 catch (Exception ex)
                 {
                     log.LogError(ex, "handler failed");
                     resp.StatusCode = StatusCodes.Status500InternalServerError;
                     await WriteError(log, resp, "INTERNAL_ERROR", ex.ToString());
+                    sw.Stop();
+                    IonInstruments.RecordRequest("unary", endpoint, resp.StatusCode);
+                    IonInstruments.RecordRequestDuration("unary", endpoint, sw.Elapsed.TotalMilliseconds);
+                    IonInstruments.RecordError("unary", endpoint, "INTERNAL_ERROR");
                 }
             })
             .WithMetadata(new ConsumesAttribute(IonContentType))
