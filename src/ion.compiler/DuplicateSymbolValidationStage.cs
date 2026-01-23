@@ -2,23 +2,18 @@
 
 using syntax;
 
-public sealed class VerifyInvalidStatementsStage(CompilationContext context) : CompilationStage(context)
-{
-    public override void DoProcess()
-    {
-        foreach (var invalidStatement in context.Files.SelectMany(x => x.allTokens ?? []).OfType<InvalidIonBlock>())
-            Error(IonAnalyticCodes.ION0010_InvalidStatement, invalidStatement);
-    }
-}
-
 public sealed class DuplicateSymbolValidationStage(CompilationContext context)
     : CompilationStage(context)
 {
+    public override string StageName => "Symbol Validation";
+    public override string StageDescription => "Checking for duplicate definitions and symbol conflicts";
+    public override bool StopOnError => false; // Collect ALL duplicates, don't stop
+
     public override void DoProcess()
     {
         var nameToDef = new Dictionary<string, IonSyntaxMember>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var module in context.Files)
+        foreach (var module in Context.Files)
         {
             foreach (var def in module.Definitions)
             {
@@ -57,16 +52,20 @@ public sealed class DuplicateSymbolValidationStage(CompilationContext context)
 public sealed class StreamParameterValidationStage(CompilationContext context)
     : CompilationStage(context)
 {
+    public override string StageName => "Stream Parameter Validation";
+    public override string StageDescription => "Checking stream parameter constraints";
+    public override bool StopOnError => false; // Collect ALL issues, don't stop
+
     public override void DoProcess()
     {
-        foreach (var module in context.Files)
+        foreach (var module in Context.Files)
         {
             foreach (var def in module.Definitions)
             {
                 if (def is not IonServiceSyntax service)
                     continue;
 
-                foreach (var method in from method in service.Methods
+                foreach (var method in from method in service.Methods.OfType<IonMethodSyntax>()
                          let streamParams = method.arguments
                              .Where(p => p.modifiers == IonArgumentModifiers.Stream)
                              .ToList()

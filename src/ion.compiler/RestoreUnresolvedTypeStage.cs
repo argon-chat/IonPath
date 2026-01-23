@@ -4,10 +4,14 @@ using runtime;
 
 public class RestoreUnresolvedTypeStage(CompilationContext ctx) : CompilationStage(ctx)
 {
+    public override string StageName => "Type Resolution";
+    public override string StageDescription => "Resolving type references and dependencies";
+    public override bool StopOnError => false; // Collect ALL unresolved types, don't stop
+
     public override void DoProcess()
     {
-        var result = RebuildTypesGraph(ctx.ProcessedModules.AsReadOnly(), out var graph);
-        ctx.ProcessedModules.AddRange(result);
+        var result = RebuildTypesGraph(Context.ProcessedModules.AsReadOnly(), out var graph);
+        Context.ProcessedModules.AddRange(result);
     }
 
     private IReadOnlyList<IonModule> RebuildTypesGraph(

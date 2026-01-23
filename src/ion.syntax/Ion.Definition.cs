@@ -19,15 +19,6 @@ public partial class IonParser
             Union.OfType<IonSyntaxMember>()
         ).Before(SkipWhitespaces);
 
-    private static Parser<char, IonSyntaxMember> InvalidBlockFallback =>
-        from startPos in CurrentPos
-        from first in Any
-        from rest in Any.Until(Lookahead(Char('}').Or(Char(';')))).Optional()
-        from term in OneOf(Char('}'), Char(';'))
-        from endPos in CurrentPos
-        let content = first + string.Concat(rest.GetValueOrDefault() ?? []) + term
-        select (IonSyntaxMember)new InvalidIonBlock(content.Trim()).WithPos(startPos, endPos);
-
     public static Parser<char, IEnumerable<IonSyntaxMember>> IonFile =>
         SkipWhitespaces
             .Then(Definition.Many(), (_, defs) => defs)
@@ -60,9 +51,9 @@ public partial class IonParser
         var result = IonFile.Parse(File.ReadAllText(file.FullName));
 
         if (!result.Success)
-            throw new Exception();
+            throw new ParseException(result.Error);
 
-        return new IonFileSyntax(Path.GetFileNameWithoutExtension(file.Name), file,
+        return new IonFileSyntax(file.Name, file,
             result.Value.OfType<IonUseSyntax>().ToList(),
             result.Value.OfType<IonFeatureSyntax>().ToList(),
             result.Value.OfType<IonAttributeDefSyntax>().ToList(),

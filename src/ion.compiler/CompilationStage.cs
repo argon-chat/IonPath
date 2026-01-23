@@ -238,6 +238,8 @@ public class CompilationContext(IReadOnlyList<IonFileSyntax> files)
 
 public abstract class CompilationStage(CompilationContext context)
 {
+    protected CompilationContext Context => context;
+
     public void Error(string code, string message, IonSyntaxBase @base) =>
         context.Diagnostics.Add(new(code, IonDiagnosticSeverity.Error, message, @base));
 
@@ -258,5 +260,23 @@ public abstract class CompilationStage(CompilationContext context)
     public void Info(IonAnalyticCode code, IonSyntaxBase @base, params object[] args) =>
         context.Diagnostics.Add(new(code.code, IonDiagnosticSeverity.Info, string.Format(code.template, args), @base));
 
+    /// <summary>
+    /// Execute the compilation stage.
+    /// </summary>
     public abstract void DoProcess();
+
+    /// <summary>
+    /// Gets the stage name for display purposes.
+    /// </summary>
+    public virtual string StageName => GetType().Name.Replace("Stage", "");
+
+    /// <summary>
+    /// Gets the stage description.
+    /// </summary>
+    public virtual string StageDescription => $"Running {StageName}";
+
+    /// <summary>
+    /// Whether the pipeline should stop if this stage produces errors.
+    /// </summary>
+    public virtual bool StopOnError => true;
 }

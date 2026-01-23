@@ -7,16 +7,20 @@ using System.Numerics;
 
 public class TransformStage(CompilationContext context) : CompilationStage(context)
 {
+    public override string StageName => "Syntax Transform";
+    public override string StageDescription => "Converting syntax tree to intermediate representation";
+    public override bool StopOnError => false; // Continue even with errors, skip invalid nodes
+
     public override void DoProcess()
     {
-        foreach (var syntax in context.Files) 
-            context.OnPrepare(PrepareModule(syntax));
+        foreach (var syntax in Context.Files) 
+            Context.OnPrepare(PrepareModule(syntax));
 
-        foreach (var syntax in context.Files)
-            context.OnCompiler(syntax, x => GenerateAttributes(syntax, x));
+        foreach (var syntax in Context.Files)
+            Context.OnCompiler(syntax, x => GenerateAttributes(syntax, x));
 
-        foreach (var syntax in context.Files) 
-            context.OnCompiler(syntax, x => TransformFile(syntax, x));
+        foreach (var syntax in Context.Files) 
+            Context.OnCompiler(syntax, x => TransformFile(syntax, x));
     }
 
     private IonModule PrepareModule(IonFileSyntax file)
@@ -308,10 +312,10 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
     public IReadOnlyList<IonType> CompileMessages(IonFileSyntax file) =>
         (from syntax in file.messageSyntaxes
             let attributes = CompileAttributeInstancesFor(syntax)
-            select new IonType(syntax.Name, attributes, PrependFields(syntax))).ToList().AsReadOnly();
+            select new IonType(syntax.Name, attributes, PrepareFields(syntax))).ToList().AsReadOnly();
 
-    private IReadOnlyList<IonField> PrependFields(IonMessageSyntax syntax) =>
-        (from field in syntax.Fields
+    private IReadOnlyList<IonField> PrepareFields(IonMessageSyntax syntax) =>
+        (from field in syntax.Fields.OfType<IonFieldSyntax>() // ← Skip InvalidFieldSyntax
             let fieldType = context.ResolveTypeFor(syntax, field.Type, true)
             select new IonField(field.Name, fieldType!, CompileAttributeInstancesFor(field))).ToList().AsReadOnly();
 
@@ -321,7 +325,7 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
             select new IonField(field.argName, fieldType!, CompileAttributeInstancesFor(field))).ToList().AsReadOnly();
 
     private IReadOnlyList<IonMethod> PrependMethods(IonServiceSyntax syntax) =>
-        (from methodSyntax in syntax.Methods
+        (from methodSyntax in syntax.Methods.OfType<IonMethodSyntax>() // ← Skip InvalidMethodSyntax
             let combinedArgs = syntax.BaseArguments.Concat(methodSyntax.arguments).ToList()
             let parsedArgs = (from argSyntax in combinedArgs
                 let type = context.ResolveTypeFor(argSyntax, argSyntax.type, true)

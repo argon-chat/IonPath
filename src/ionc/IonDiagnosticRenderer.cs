@@ -69,9 +69,11 @@ public static class IonDiagnosticRenderer
                 IonDiagnosticSeverity.Info => "blue",
                 _ => "grey"
             };
-            var header = $"[{color} bold]{diagnostic.Severity.ToString().ToLower()}[/] [{color}]{diagnostic.Code}[/] - {diagnostic.Message}";
+            
+            var severityText = diagnostic.Severity.ToString().ToLower();
+            var header = $"[{color} bold]{severityText.EscapeMarkup()}[/][{color}]{$"[{diagnostic.Code}]".EscapeMarkup()}[/]: {diagnostic.Message.EscapeMarkup()}";
             var location = diagnostic.SourceFile != null
-                ? $"--> {diagnostic.SourceFile.FullName}:{diagnostic.StartPosition.Line}:{diagnostic.StartPosition.Col}"
+                ? $"--> {diagnostic.SourceFile.FullName.EscapeMarkup()}:{diagnostic.StartPosition.Line}:{diagnostic.StartPosition.Col}"
                 : "--> (unknown location)";
 
             AnsiConsole.MarkupLine(header);
@@ -89,18 +91,34 @@ public static class IonDiagnosticRenderer
                 }
                 else
                 {
+                    // Show context: 1 line before, error lines, 1 line after
+                    var contextStart = Math.Max(0, startLine - 1);
+                    var contextEnd = Math.Min(lines.Length - 1, endLine + 1);
+
                     AnsiConsole.MarkupLine("   |");
-                    for (var i = startLine; i <= endLine && i < lines.Length; i++)
+                    
+                    for (var i = contextStart; i <= contextEnd; i++)
                     {
                         var line = lines[i];
-                        AnsiConsole.MarkupLine($"{i + 1,2} | [white]{line.EscapeMarkup()}[/]");
+                        var isErrorLine = i >= startLine && i <= endLine;
+                        
+                        if (isErrorLine)
+                        {
+                            // Highlight error line
+                            AnsiConsole.MarkupLine($"[{color}]{i + 1,3}[/] | [white]{line.EscapeMarkup()}[/]");
 
-                        var underline = BuildUnderlineMultiline(line, i, diagnostic.StartPosition, diagnostic.EndPosition, color);
-                        AnsiConsole.MarkupLine($"   | {underline}");
+                            // Show underline
+                            var underline = BuildUnderlineMultiline(line, i, diagnostic.StartPosition, diagnostic.EndPosition, color);
+                            AnsiConsole.MarkupLine($"    | {underline}");
+                        }
+                        else
+                        {
+                            // Context line
+                            AnsiConsole.MarkupLine($"[dim]{i + 1,3} | {line.EscapeMarkup()}[/]");
+                        }
                     }
                 }
             }
-            AnsiConsole.MarkupLine($"  [{color}]{diagnostic.Message}[/]");
             AnsiConsole.WriteLine();
         }
     }
@@ -117,7 +135,20 @@ public static class IonDiagnosticRenderer
         if (end.HasValue && currentLineIndex == end.Value.Line - 1)
             endCol = Math.Max(Math.Min(end.Value.Col - 1, line.Length), startCol);
 
-        var length = Math.Max(endCol - startCol, 1);
+        var length = endCol - startCol;
+        
+        // Special case: point caret (start == end on same line)
+        // Show caret at exact position, no underline
+        if (end.HasValue && start.Line == end.Value.Line && start.Col == end.Value.Col)
+        {
+            sb.Append(' ', startCol);
+            sb.Append($"[{color}]^ expected here[/]");
+            return sb.ToString();
+        }
+
+        // Normal case: underline from start to end
+        if (length < 1)
+            length = 1;
 
         sb.Append(' ', startCol);
         sb.Append($"[{color}]");

@@ -150,7 +150,6 @@ public static class RpcEndpoints
                         resp.Headers.Append(k, v);
 
 
-
                     await resp.BodyWriter.WriteAsync(writer.Encode(), cancellationToken);
                     await resp.BodyWriter.FlushAsync(cancellationToken);
                 }
@@ -168,7 +167,7 @@ public static class RpcEndpoints
                     }
 
                     await next(callCtx, ct).ConfigureAwait(true);
-                    
+
                     sw.Stop();
                     IonInstruments.RecordRequest("att", "exchange", resp.StatusCode);
                     IonInstruments.RecordRequestDuration("att", "exchange", sw.Elapsed.TotalMilliseconds);
@@ -261,7 +260,8 @@ public static class RpcEndpoints
                 {
                     log.LogWarning("UNSUPPORTED_SUB_PROTOCOL");
                     http.Response.StatusCode = StatusCodes.Status412PreconditionFailed;
-                    await WriteError(log, http.Response, "UNSUPPORTED_SUB_PROTOCOL", $"Transport sub-protocol must be ion");
+                    await WriteError(log, http.Response, "UNSUPPORTED_SUB_PROTOCOL",
+                        $"Transport sub-protocol must be ion");
                     sw.Stop();
                     IonInstruments.RecordRequest("ws", endpoint, http.Response.StatusCode);
                     IonInstruments.RecordRequestDuration("ws", endpoint, sw.Elapsed.TotalMilliseconds);
@@ -269,7 +269,9 @@ public static class RpcEndpoints
                     return;
                 }
 
-                var ticket = string.IsNullOrEmpty(subProtocol) ? null : IonTicketExtractor.ExtractTicketBytes(subProtocol);
+                var ticket = string.IsNullOrEmpty(subProtocol)
+                    ? null
+                    : IonTicketExtractor.ExtractTicketBytes(subProtocol);
 
                 if (ticket is null && ticketExchange is not null)
                 {
@@ -302,7 +304,6 @@ public static class RpcEndpoints
                     }
                 }
 
-                
 
                 using var ws = await http.WebSockets.AcceptWebSocketAsync(subProtocol).ConfigureAwait(true);
 
@@ -334,18 +335,16 @@ public static class RpcEndpoints
                     if (ticketExchange is not null)
                         ticketExchange.OnTicketApply(ticketData!);
 
-                    var inputStream = router.IsAllowInputStream(methodName) ? 
-                        ReadIncomingStreamAsync(ws, ct) : 
-                        null;
+                    var inputStream = router.IsAllowInputStream(methodName) ? ReadIncomingStreamAsync(ws, ct) : null;
 
                     await foreach (var encodedItem in router
                                        .StreamRouteExecuteAsync(methodName, reader, inputStream, ct)
-                                       .ConfigureAwait(true)) 
+                                       .ConfigureAwait(true))
                         await SendOpFrameAsync(ws, IonWs.OPCODE_DATA, encodedItem, ct);
 
                     await SendOpFrameAsync(ws, IonWs.OPCODE_END, ReadOnlyMemory<byte>.Empty, ct);
                     await CloseGracefullyAsync(ws, "done", ct);
-                    
+
                     sw.Stop();
                     IonInstruments.RecordRequest("ws", endpoint, StatusCodes.Status200OK);
                     IonInstruments.RecordRequestDuration("ws", endpoint, sw.Elapsed.TotalMilliseconds);
@@ -359,7 +358,7 @@ public static class RpcEndpoints
                     catch
                     {
                     }
-                    
+
                     sw.Stop();
                     IonInstruments.RecordRequest("ws", endpoint, StatusCodes.Status499ClientClosedRequest);
                     IonInstruments.RecordRequestDuration("ws", endpoint, sw.Elapsed.TotalMilliseconds);
@@ -382,12 +381,13 @@ public static class RpcEndpoints
 
                     try
                     {
-                        await ws.CloseAsync(WebSocketCloseStatus.InternalServerError, "exception", CancellationToken.None);
+                        await ws.CloseAsync(WebSocketCloseStatus.InternalServerError, "exception",
+                            CancellationToken.None);
                     }
                     catch
                     {
                     }
-                    
+
                     sw.Stop();
                     IonInstruments.RecordRequest("ws", endpoint, StatusCodes.Status500InternalServerError);
                     IonInstruments.RecordRequestDuration("ws", endpoint, sw.Elapsed.TotalMilliseconds);
@@ -401,7 +401,8 @@ public static class RpcEndpoints
         });
 
 
-        app.MapPost("/ion/{interfaceName}/{methodName}.unary", async (string interfaceName, string methodName,
+        app.MapPost("/ion/{interfaceName}/{methodName}.unary", async (
+                string interfaceName, string methodName,
                 HttpRequest req, HttpResponse resp,
                 [FromServices] IonDescriptorStorage store,
                 [FromServices] IServiceProvider provider,
@@ -413,7 +414,7 @@ public static class RpcEndpoints
                 var sw = System.Diagnostics.Stopwatch.StartNew();
                 var log = lf.CreateLogger("RPC");
                 var endpoint = $"{interfaceName}/{methodName}";
-                
+
                 if (req.ContentType is null ||
                     !req.ContentType.StartsWith(IonContentType, StringComparison.OrdinalIgnoreCase))
                 {
@@ -493,7 +494,7 @@ public static class RpcEndpoints
                     }
 
                     await next(callCtx, ct).ConfigureAwait(false);
-                    
+
                     sw.Stop();
                     IonInstruments.RecordRequest("unary", endpoint, resp.StatusCode);
                     IonInstruments.RecordRequestDuration("unary", endpoint, sw.Elapsed.TotalMilliseconds);
@@ -713,5 +714,4 @@ public static class RpcEndpoints
             }
         }
     }
-
 }

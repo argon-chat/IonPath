@@ -14,12 +14,9 @@ public class CompileOptions : CommandSettings
 {
     [CommandOption("-n|--no-emit-csproj")] public bool NoEmitCsProj { get; set; }
 
-    [CommandOption("-o|--only")]
-    public string OnlyTarget { get; set; }
+    [CommandOption("-o|--only")] public string OnlyTarget { get; set; }
 
-    [CommandOption("--maybe")]
-    public bool UseMaybeWrapper { get; set; }
-
+    [CommandOption("--maybe")] public bool UseMaybeWrapper { get; set; }
 }
 
 public class CompileCommand : AsyncCommand<CompileOptions>
@@ -67,6 +64,8 @@ public class CompileCommand : AsyncCommand<CompileOptions>
         }
 
         var list = new List<IonFileSyntax>();
+        var parseErrors = new List<(FileInfo file, ParseException error)>();
+
         foreach (var file in files)
         {
             using var _ = IonFileProcessingScope.Begin(file);
@@ -78,25 +77,72 @@ public class CompileCommand : AsyncCommand<CompileOptions>
             }
             catch (ParseException e)
             {
-                IonDiagnosticRenderer.RenderParseError(e.Error, file);
+                parseErrors.Add((file, e));
+                AnsiConsole.MarkupLine($"[red]Error:[/] Failed to parse file [cyan]{file.Name}[/]: {e.Message.EscapeMarkup()}");
             }
-
         }
-        var ctx = CompilationContext.Create(project.Features.Select(x => x.ToString().ToLowerInvariant()).ToList(), list);
 
-        new VerifyInvalidStatementsStage(ctx).DoProcess();
-        Checks(ctx);
-        new DuplicateSymbolValidationStage(ctx).DoProcess();
-        Checks(ctx);
-        new TransformStage(ctx).DoProcess();
-        Checks(ctx);
-        new StreamParameterValidationStage(ctx).DoProcess();
-        Checks(ctx);
-        new RestoreUnresolvedTypeStage(ctx).DoProcess();
-        Checks(ctx);
-        var graph = new IonDependencyGraph(ctx.ProcessedModules.Concat(ctx.GlobalModules));
-        graph.Generate();
+        // If all files failed to parse, exit early
+        if (list.Count == 0)
+        {
+            IonDiagnosticRenderer.RenderDiagnostics([
+                new IonDiagnostic("ION", IonDiagnosticSeverity.Error,
+                    "No files were successfully parsed. Cannot proceed with compilation.", new IonSyntaxBase())
+            ]);
+            return Task.FromResult(-1);
+        }
+        
+        // If some files had parse errors, show warning
+        if (parseErrors.Count > 0)
+        {
+            AnsiConsole.MarkupLine($"[yellow]Warning:[/] {parseErrors.Count} file(s) failed to parse and will be skipped.\n");
+        }
 
+        var ctx = CompilationContext.Create(project.Features.Select(x => x.ToString().ToLowerInvariant()).ToList(),
+            list);
+
+        // Execute compilation pipeline with live progress bar
+        AnsiConsole.MarkupLine("[bold cyan]Compilation Pipeline[/]\n");
+
+        var pipelineSuccess = false;
+
+        AnsiConsole.Progress()
+            .AutoClear(false)
+            .Columns(
+                new TaskDescriptionColumn(),
+                new ProgressBarColumn(),
+                new PercentageColumn(),
+                new SpinnerColumn()
+            )
+            .Start(progressCtx =>
+            {
+                var progress = new SpectreCompilationProgressWithContext(progressCtx);
+                var pipeline = new CompilationPipeline(ctx, progress);
+                pipelineSuccess = pipeline.Execute();
+            });
+
+        AnsiConsole.WriteLine();
+
+        if (!pipelineSuccess)
+        {
+            // Render detailed diagnostics
+            IonDiagnosticRenderer.RenderDiagnostics(ctx.Diagnostics);
+            return Task.FromResult(-1);
+        }
+
+        // Build dependency graph
+        AnsiConsole.Status()
+            .Spinner(Spinner.Known.Dots)
+            .Start("[cyan]Building dependency graph...[/]", statusCtx =>
+            {
+                var graph = new IonDependencyGraph(ctx.ProcessedModules.Concat(ctx.GlobalModules));
+                graph.Generate();
+            });
+
+        AnsiConsole.MarkupLine("[green]✓[/] Dependency graph complete\n");
+
+        // Code generation
+        AnsiConsole.MarkupLine("[bold cyan]Code Generation[/]\n");
 
         foreach (var (key, value) in project.Generators)
         {
@@ -107,11 +153,12 @@ public class CompileCommand : AsyncCommand<CompileOptions>
             {
                 if (!options.OnlyTarget.Equals(key.ToString(), StringComparison.OrdinalIgnoreCase))
                 {
-                    AnsiConsole.MarkupLine($"Target [lime]{key}[/] skip because onlyTarget selected for [lime]'{options.OnlyTarget}'[/].");
+                    AnsiConsole.MarkupLine($"  [dim]Skipping {key} (--only={options.OnlyTarget})[/]");
                     continue;
                 }
             }
-            
+
+            AnsiConsole.MarkupLine($"  [lime]→[/] Generating [cyan]{key}[/] code...");
 
             if (key is IonGeneratorPlatform.Dotnet)
             {
@@ -121,14 +168,18 @@ public class CompileCommand : AsyncCommand<CompileOptions>
 
                 if (!options.NoEmitCsProj)
                     generator.GenerateProjectFile(project.Name, outputDirectoryForFiles.File($"{project.Name}.csproj"));
-                File.WriteAllText(outputDirectoryForFiles.File($"globals.cs").FullName, generator.GenerateGlobalTypes());
+                File.WriteAllText(outputDirectoryForFiles.File($"globals.cs").FullName,
+                    generator.GenerateGlobalTypes());
 
-                GenerateDotNetDefault(generator, currentDir, project, ctx, outputDirectoryForFiles.Directory("models"), cfg);
+                GenerateDotNetDefault(generator, currentDir, project, ctx, outputDirectoryForFiles.Directory("models"),
+                    cfg);
 
                 if (cfg.Features.Contains(DotnetFeature.Client))
                     GenerateClient(generator, outputDirectoryForFiles, ctx);
                 if (cfg.Features.Contains(DotnetFeature.Server))
                     GenerateServer(generator, outputDirectoryForFiles, ctx);
+
+                AnsiConsole.MarkupLine($"    [green]✓[/] Generated to [dim]{cfg.Outputs}[/]");
             }
 
             if (key is IonGeneratorPlatform.Browser)
@@ -136,6 +187,7 @@ public class CompileCommand : AsyncCommand<CompileOptions>
                 var cfg = value as BrowserGeneratorConfig;
                 var gen = new IonTypeScriptGenerator(project.Name);
                 GenerateBrowserClient(gen, currentDir, project, ctx, cfg);
+                AnsiConsole.MarkupLine($"    [green]✓[/] Generated to [dim]{cfg.OutputFile}[/]");
             }
 
             if (key is IonGeneratorPlatform.Go)
@@ -153,9 +205,6 @@ public class CompileCommand : AsyncCommand<CompileOptions>
                 foreach (var file in outputDirectoryForFiles.EnumerateFiles("*.go"))
                     file.Delete();
 
-                // Generate go.mod
-                //generator.GenerateProjectFile(project.Name, outputDirectoryForFiles.File("go.mod"));
-
                 // Generate single file with everything
                 var content = generator.GenerateSingleFile(
                     ctx,
@@ -163,15 +212,17 @@ public class CompileCommand : AsyncCommand<CompileOptions>
                     includeClient: cfg.Features.Contains(GoFeature.Client));
 
                 File.WriteAllText(outputDirectoryForFiles.File($"{packageName}_generated.go").FullName, content);
+                AnsiConsole.MarkupLine($"    [green]✓[/] Generated to [dim]{cfg.Outputs}[/]");
             }
         }
 
-        AnsiConsole.MarkupLine($"\n:sparkles: Done in [lime]{watch.Elapsed.TotalSeconds:00.000}s[/].");
+        AnsiConsole.MarkupLine($"\n[green]:sparkles: Done in {watch.Elapsed.TotalSeconds:0.000}s[/]");
 
         return Task.FromResult(0);
     }
 
-    private void GenerateBrowserClient(IonTypeScriptGenerator generator, DirectoryInfo currentDir, IonProjectConfig project,
+    private void GenerateBrowserClient(IonTypeScriptGenerator generator, DirectoryInfo currentDir,
+        IonProjectConfig project,
         CompilationContext context, BrowserGeneratorConfig cfg)
     {
         var outputFile = currentDir.File(cfg.OutputFile);
@@ -196,10 +247,10 @@ public class CompileCommand : AsyncCommand<CompileOptions>
               Guid, 
               
               IonFormatterStorage,
-            
+
               IonArray, 
               IonMaybe,
-            
+
               IIonService,
               IIonUnion,
               
@@ -209,42 +260,44 @@ public class CompileCommand : AsyncCommand<CompileOptions>
               IonWsClient,
               IonInterceptor
             } from "@argon-chat/ion.webcore";
-            
+
             type guid = Guid;
             type timeonly = TimeOnly;
             type duration = Duration;
             type datetime = DateTimeOffset;
             type dateonly = DateOnly;
-            
+
             declare type bool = boolean;
-            
+
             declare type i1 = number;
             declare type i2 = number;
             declare type i4 = number;
             declare type i8 = bigint;
             declare type i16 = bigint;
-            
-            
+
+
             declare type u1 = number;
             declare type u2 = number;
             declare type u4 = number;
             declare type u8 = bigint;
             declare type u16 = bigint;
-            
-            
+
+
             declare type f2 = number;
             declare type f4 = number;
             declare type f8 = number;
             """);
 
-        fileBuilder.AppendLine(generator.GenerateTypes(context.ProcessedModules.SelectMany(x => x.Definitions).DistinctBy(x => x.name.Identifier)));
+        fileBuilder.AppendLine(generator.GenerateTypes(context.ProcessedModules.SelectMany(x => x.Definitions)
+            .DistinctBy(x => x.name.Identifier)));
         fileBuilder.AppendLine(generator.GenerateAllFormatters(context.ProcessedModules.SelectMany(x => x.Definitions)
             .DistinctBy(x => x.name.Identifier)));
 
-        foreach (var module in context.ProcessedModules) 
+        foreach (var module in context.ProcessedModules)
             fileBuilder.AppendLine(generator.GenerateServices(module));
 
-        fileBuilder.AppendLine(generator.GenerateAllServiceClientImpl(context.ProcessedModules.SelectMany(x => x.Services).DistinctBy(x => x.name.Identifier)));
+        fileBuilder.AppendLine(generator.GenerateAllServiceClientImpl(context.ProcessedModules
+            .SelectMany(x => x.Services).DistinctBy(x => x.name.Identifier)));
 
         fileBuilder.AppendLine(generator.GenerateClientProxy(context.ProcessedModules.SelectMany(x => x.Services)
             .DistinctBy(x => x.name.Identifier).ToList()));
@@ -311,13 +364,5 @@ public class CompileCommand : AsyncCommand<CompileOptions>
         if (platform is IonGeneratorPlatform.Browser)
             return new IonTypeScriptGenerator(@namespace);
         throw new InvalidOperationException();
-    }
-
-    private static void Checks(CompilationContext ctx)
-    {
-        if (!ctx.HasErrors) return;
-        IonDiagnosticRenderer.RenderDiagnostics(ctx.Diagnostics);
-        Environment.Exit(-1);
-        return;
     }
 }

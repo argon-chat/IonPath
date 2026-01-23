@@ -2,6 +2,26 @@
 
 public static class IonAnalyticCodes
 {
+    private static readonly Dictionary<string, IonAnalyticCode> _codeMap = new();
+
+    static IonAnalyticCodes()
+    {
+        // Auto-register all codes via reflection
+        foreach (var field in typeof(IonAnalyticCodes).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
+        {
+            if (field.FieldType == typeof(IonAnalyticCode))
+            {
+                var code = (IonAnalyticCode)field.GetValue(null)!;
+                _codeMap[code.code] = code;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Resolve a diagnostic code string to its IonAnalyticCode definition.
+    /// </summary>
+    public static IonAnalyticCode? Resolve(string code) => _codeMap.GetValueOrDefault(code);
+
     public static readonly IonAnalyticCode ION0001_CycleImportDetected 
         = new("ION0001", "Cyclic module import detected: {0}");
     public static readonly IonAnalyticCode ION0002_DuplicateDefinition 
@@ -21,8 +41,6 @@ public static class IonAnalyticCodes
     public static readonly IonAnalyticCode ION0009_UnresolvedTypeReference
         = new("ION0009", "Unresolved reference to type '{0}'. The type may be missing, misspelled, or not imported.");
 
-    public static readonly IonAnalyticCode ION0010_InvalidStatement
-        = new("ION0010", "Invalid statement.");
     public static readonly IonAnalyticCode ION0011_EnumBitwiseOverlap
         = new("ION0011", "Enum item '{0}' in '{1}' has overlapping bits with '{2}', both resolve to value '{3}'");
 

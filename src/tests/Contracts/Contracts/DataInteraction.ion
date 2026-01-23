@@ -1,4 +1,6 @@
 service TestBlobs() {
     Do(data: bytes);
     DoIt(data: bytes): bytes;
+    DoIt2(data: bytes): bytes;
+    DoIt3(data: bytes): bytes;
 }
