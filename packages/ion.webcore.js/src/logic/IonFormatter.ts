@@ -91,6 +91,27 @@ export class IonFormatterStorage {
     IonFormatterStorage.get<T>(typeName).write(writer, ionMaybe as T);
   }
 
+  static readNullableArray<T>(reader: CborReader, typeName: string): IonArray<T> | null {
+    const state = reader.peekState();
+    if (state !== CborReaderState.Null) {
+      return IonFormatterStorage.readArray<T>(reader, typeName);
+    }
+    reader.readNull();
+    return null;
+  }
+
+  static writeNullableArray<T>(
+    writer: CborWriter,
+    array: IonArray<T> | null,
+    typeName: string
+  ): void {
+    if (array === undefined || array === null) {
+      writer.writeNull();
+      return;
+    }
+    IonFormatterStorage.writeArray<T>(writer, array, typeName);
+  }
+
   static readArray<T>(reader: CborReader, typeName: string): IonArray<T> {
     const size = reader.readStartArray();
     if (size === null)
