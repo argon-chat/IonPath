@@ -2,6 +2,7 @@
 
 using ion.compiler;
 using Spectre.Console;
+using System.Diagnostics;
 
 /// <summary>
 /// Spectre.Console implementation with live progress bars and status spinners.
@@ -9,6 +10,7 @@ using Spectre.Console;
 public sealed class SpectreCompilationProgressWithContext(ProgressContext progressContext) : ICompilationProgress
 {
     private readonly Dictionary<int, ProgressTask> _stageTasks = new();
+    private readonly Dictionary<int, Stopwatch> _stageTimers = new();
     private int _totalStages;
 
     public void OnPipelineStarted(int totalStages)
@@ -21,6 +23,7 @@ public sealed class SpectreCompilationProgressWithContext(ProgressContext progre
         var task = progressContext.AddTask($"[cyan]{stageName.EscapeMarkup()}[/]", maxValue: 100);
         task.Description = $"[dim]{description.EscapeMarkup()}[/]";
         _stageTasks[stageNumber] = task;
+        _stageTimers[stageNumber] = Stopwatch.StartNew();
     }
 
     public void OnStageCompleted(int stageNumber, int totalStages, string stageName, int newErrors, int newWarnings)
@@ -28,20 +31,24 @@ public sealed class SpectreCompilationProgressWithContext(ProgressContext progre
         if (_stageTasks.TryGetValue(stageNumber, out var task))
         {
             task.Value = 100;
-            
+
+            var elapsed = _stageTimers.TryGetValue(stageNumber, out var sw)
+                ? $" [dim]({sw.Elapsed.TotalMilliseconds:0}ms)[/]"
+                : "";
+
             if (newErrors > 0)
             {
                 var errorText = newErrors == 1 ? "error" : "errors";
-                task.Description = $"[red]✗ {newErrors} {errorText}[/]";
+                task.Description = $"[red]✗ {newErrors} {errorText}[/]{elapsed}";
             }
             else if (newWarnings > 0)
             {
                 var warningText = newWarnings == 1 ? "warning" : "warnings";
-                task.Description = $"[yellow]⚠ {newWarnings} {warningText}[/]";
+                task.Description = $"[yellow]⚠ {newWarnings} {warningText}[/]{elapsed}";
             }
             else
             {
-                task.Description = $"[green]✓ Passed[/]";
+                task.Description = $"[green]✓ Passed[/]{elapsed}";
             }
             
             task.StopTask();

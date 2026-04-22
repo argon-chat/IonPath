@@ -6,9 +6,11 @@ using Spectre.Console;
 using Spectre.Console.Cli;
 using syntax;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Numerics;
 using System.Text;
+using System.Text.Json;
 
 public class CompileOptions : CommandSettings
 {
@@ -17,11 +19,31 @@ public class CompileOptions : CommandSettings
     [CommandOption("-o|--only")] public string OnlyTarget { get; set; }
 
     [CommandOption("--maybe")] public bool UseMaybeWrapper { get; set; }
+
+    [CommandOption("--update-lock")]
+    [Description("Force-update the lock file, acknowledging breaking changes.")]
+    public bool UpdateLock { get; set; }
+
+    [CommandOption("--no-lock")]
+    [Description("Skip schema lock validation entirely.")]
+    public bool NoLock { get; set; }
+
+    [CommandOption("--check")]
+    [Description("Validate only — no code generation.")]
+    public bool CheckOnly { get; set; }
+
+    [CommandOption("-v|--verbose")]
+    [Description("Show detailed timing and stage information.")]
+    public bool Verbose { get; set; }
+
+    [CommandOption("--json")]
+    [Description("Output diagnostics as JSON for CI/CD.")]
+    public bool JsonOutput { get; set; }
 }
 
 public class CompileCommand : AsyncCommand<CompileOptions>
 {
-    public override async Task<int> ExecuteAsync(CommandContext context, CompileOptions options)
+    protected override async Task<int> ExecuteAsync(CommandContext context, CompileOptions options, CancellationToken cancellation)
     {
         try
         {
@@ -101,6 +123,15 @@ public class CompileCommand : AsyncCommand<CompileOptions>
         var ctx = CompilationContext.Create(project.Features.Select(x => x.ToString().ToLowerInvariant()).ToList(),
             list);
 
+        // Load existing lock file (if present and not disabled)
+        IonSchemaLock? existingLock = null;
+        if (!options.NoLock && !options.UpdateLock)
+        {
+            existingLock = IonSchemaLock.TryLoadFrom(currentDir.FullName);
+            if (existingLock is not null && options.Verbose)
+                AnsiConsole.MarkupLine("[dim]Loaded ion.lock.json for schema validation[/]");
+        }
+
         // Execute compilation pipeline with live progress bar
         AnsiConsole.MarkupLine("[bold cyan]Compilation Pipeline[/]\n");
 
@@ -117,7 +148,7 @@ public class CompileCommand : AsyncCommand<CompileOptions>
             .Start(progressCtx =>
             {
                 var progress = new SpectreCompilationProgressWithContext(progressCtx);
-                var pipeline = new CompilationPipeline(ctx, progress);
+                var pipeline = new CompilationPipeline(ctx, progress, existingLock);
                 pipelineSuccess = pipeline.Execute();
             });
 
@@ -126,8 +157,20 @@ public class CompileCommand : AsyncCommand<CompileOptions>
         if (!pipelineSuccess)
         {
             // Render detailed diagnostics
-            IonDiagnosticRenderer.RenderDiagnostics(ctx.Diagnostics);
+            if (options.JsonOutput)
+                RenderDiagnosticsAsJson(ctx.Diagnostics);
+            else
+                IonDiagnosticRenderer.RenderDiagnostics(ctx.Diagnostics);
             return Task.FromResult(-1);
+        }
+
+        // Check-only mode: validate, generate lock if needed, but no code gen
+        if (options.CheckOnly)
+        {
+            if (!options.NoLock)
+                WriteLockFile(currentDir, project.Name, ctx);
+            AnsiConsole.MarkupLine($"\n[green]:sparkles: Check passed in {watch.Elapsed.TotalSeconds:0.000}s[/]");
+            return Task.FromResult(0);
         }
 
         // Build dependency graph
@@ -216,9 +259,34 @@ public class CompileCommand : AsyncCommand<CompileOptions>
             }
         }
 
+        // Write lock file after successful code generation
+        if (!options.NoLock)
+            WriteLockFile(currentDir, project.Name, ctx);
+
         AnsiConsole.MarkupLine($"\n[green]:sparkles: Done in {watch.Elapsed.TotalSeconds:0.000}s[/]");
 
         return Task.FromResult(0);
+    }
+
+    private static void WriteLockFile(DirectoryInfo projectDir, string moduleName, CompilationContext ctx)
+    {
+        var lockFile = SchemaLockGenerator.Generate(moduleName, ctx.ProcessedModules);
+        lockFile.SaveTo(projectDir.FullName);
+        AnsiConsole.MarkupLine($"\n  [green]✓[/] Updated [dim]{IonSchemaLock.FileName}[/]");
+    }
+
+    private static void RenderDiagnosticsAsJson(List<IonDiagnostic> diagnostics)
+    {
+        var items = diagnostics.Select(d => new
+        {
+            code = d.Code,
+            severity = d.Severity.ToString().ToLowerInvariant(),
+            message = d.Message,
+            file = d.SourceFile?.FullName,
+            line = d.StartPosition.Line,
+            col = d.StartPosition.Col
+        });
+        Console.WriteLine(JsonSerializer.Serialize(items, new JsonSerializerOptions { WriteIndented = true }));
     }
 
     private void GenerateBrowserClient(IonTypeScriptGenerator generator, DirectoryInfo currentDir,

@@ -21,6 +21,15 @@ await Host.CreateDefaultBuilder(args)
         config.SetApplicationName("ionc");
 
         config.AddCommand<CompileCommand>("compile").WithAlias("build");
+        config.AddCommand<CheckCommand>("check");
+        config.AddCommand<InitCommand>("init");
+
+        config.AddBranch("lock", @lock => {
+            @lock.SetDescription("Manage the schema lock file (ion.lock.json)");
+            @lock.AddCommand<LockInitCommand>("init").WithDescription("Generate initial lock file");
+            @lock.AddCommand<LockCheckCommand>("check").WithDescription("Validate schema against lock");
+            @lock.AddCommand<LockUpdateCommand>("update").WithDescription("Force-update lock file");
+        });
     })
     .RunConsoleAsync();
 

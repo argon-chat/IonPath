@@ -11,11 +11,13 @@ public sealed class CompilationPipeline
     private readonly CompilationContext _context;
     private readonly List<CompilationStage> _stages = [];
     private readonly ICompilationProgress _progress;
+    private readonly IonSchemaLock? _existingLock;
 
-    public CompilationPipeline(CompilationContext context, ICompilationProgress? progress = null)
+    public CompilationPipeline(CompilationContext context, ICompilationProgress? progress = null, IonSchemaLock? existingLock = null)
     {
         _context = context;
         _progress = progress ?? NullCompilationProgress.Instance;
+        _existingLock = existingLock;
         ConfigurePipeline();
     }
 
@@ -26,6 +28,10 @@ public sealed class CompilationPipeline
         RegisterStage(new TransformStage(_context));
         RegisterStage(new StreamParameterValidationStage(_context));
         RegisterStage(new RestoreUnresolvedTypeStage(_context));
+
+        // Schema lock validation (needs fully resolved types)
+        if (_existingLock is not null)
+            RegisterStage(new SchemaLockValidationStage(_context, _existingLock));
     }
 
     public void RegisterStage(CompilationStage stage)

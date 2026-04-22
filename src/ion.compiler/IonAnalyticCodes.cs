@@ -49,6 +49,29 @@ public static class IonAnalyticCodes
 
     public static readonly IonAnalyticCode ION0013_MultipleStreamParameters
         = new("ION0013", "Method '{0}' declares multiple stream parameters; only one parameter may be marked as 'stream'.");
+
+    // ── Schema Lock validation codes (ION0020–ION0029) ──
+
+    public static readonly IonAnalyticCode ION0020_LockFieldRemoved
+        = new("ION0020", "Breaking change: field '{0}' (index {1}) was removed from '{2}'. Use 'reserved' or '--update-lock' to acknowledge.");
+    public static readonly IonAnalyticCode ION0021_LockFieldReordered
+        = new("ION0021", "Breaking change: field '{0}' in '{1}' changed index from {2} to {3}. Field order determines wire identity.");
+    public static readonly IonAnalyticCode ION0022_LockFieldTypeChanged
+        = new("ION0022", "Breaking change: field '{0}' in '{1}' changed type from '{2}' to '{3}'.");
+    public static readonly IonAnalyticCode ION0023_LockDefinitionRemoved
+        = new("ION0023", "Breaking change: definition '{0}' ({1}) was removed.");
+    public static readonly IonAnalyticCode ION0024_LockDefinitionKindChanged
+        = new("ION0024", "Breaking change: definition '{0}' changed kind from '{1}' to '{2}'.");
+    public static readonly IonAnalyticCode ION0025_LockMethodRemoved
+        = new("ION0025", "Service '{0}' removed method '{1}'. Existing clients will fail.");
+    public static readonly IonAnalyticCode ION0026_LockMethodSignatureChanged
+        = new("ION0026", "Breaking change: method '{0}.{1}' signature changed: {2}.");
+    public static readonly IonAnalyticCode ION0027_LockEnumValueChanged
+        = new("ION0027", "Breaking change: {0} '{1}' member '{2}' changed value from '{3}' to '{4}'.");
+    public static readonly IonAnalyticCode ION0028_LockUnionCaseReordered
+        = new("ION0028", "Breaking change: union '{0}' case '{1}' changed index from {2} to {3}. Index is the wire discriminator.");
+    public static readonly IonAnalyticCode ION0029_LockFieldAddedNonNullable
+        = new("ION0029", "Field '{0}' added to '{1}' is not nullable. Older readers will fail to deserialize. Consider using '{0}: {2}?'.");
 }
 
 public record IonAnalyticCode(string code, string template);
