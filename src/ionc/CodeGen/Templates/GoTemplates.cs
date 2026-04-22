@@ -14,9 +14,11 @@ public sealed class GoTemplateProvider : ITemplateProvider
         """
         	ionwebcore.RegisterFunc[{typeName}](
         		func(r *cbor.CborReader) ({typeName}, error) {
-        			if _, err := r.ReadStartArray(); err != nil {
+        			arraySize, err := r.ReadStartArray()
+        			if err != nil {
         				return {typeName}{}, err
         			}
+        			var _ = arraySize
         {readFields}
         			if err := r.ReadEndArray(); err != nil {
         				return {typeName}{}, err

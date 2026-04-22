@@ -19,9 +19,43 @@ public partial class IonParser
             Union.OfType<IonSyntaxMember>()
         ).Before(SkipWhitespaces);
 
+    /// <summary>
+    /// Keywords that start a definition. Used for error recovery to skip
+    /// past invalid input to the next recognizable definition.
+    /// </summary>
+    private static readonly string[] DefinitionKeywords =
+        ["msg", "service", "use", "feature", "flags", "enum", "typedef", "union", "attr"];
+
+    /// <summary>
+    /// Attempts to parse a Definition, and on failure skips to the next definition keyword
+    /// producing an <see cref="InvalidIonBlock"/>.
+    /// </summary>
+    public static Parser<char, IonSyntaxMember> DefinitionOrRecover =>
+        Try(Definition).Or(RecoverToNextDefinition);
+
+    /// <summary>
+    /// Consumes characters until a definition keyword is found at the start of a line (or at current position),
+    /// and returns the consumed text as an <see cref="InvalidIonBlock"/>.
+    /// </summary>
+    private static Parser<char, IonSyntaxMember> RecoverToNextDefinition =>
+        Any.AtLeastOnceUntil(
+            Try(Lookahead(OneOf(DefinitionKeywords.Select(kw => Try(String(kw))))))
+                .ThenReturn(Unit.Value)
+            .Or(End)
+        ).Select(chars => (IonSyntaxMember)new InvalidIonBlock(new string(chars.ToArray())));
+
     public static Parser<char, IEnumerable<IonSyntaxMember>> IonFile =>
         SkipWhitespaces
             .Then(Definition.Many(), (_, defs) => defs)
+            .Before(End);
+
+    /// <summary>
+    /// Recovery variant of <see cref="IonFile"/>. Skips over invalid blocks
+    /// between definitions, collecting them as <see cref="InvalidIonBlock"/>.
+    /// </summary>
+    public static Parser<char, IEnumerable<IonSyntaxMember>> IonFileRecovery =>
+        SkipWhitespaces
+            .Then(DefinitionOrRecover.Many(), (_, defs) => defs)
             .Before(End);
 
 
@@ -30,40 +64,47 @@ public partial class IonParser
         var result = IonFile.Parse(content);
 
         if (!result.Success)
+        {
+            // Try recovery: skip invalid blocks and continue parsing
+            var recovery = IonFileRecovery.Parse(content);
+            if (recovery.Success)
+                return BuildFileSyntax(name, new FileInfo($"{name}.ion"), recovery.Value);
             throw new ParseException(result.Error);
+        }
 
-        return new IonFileSyntax(name, new FileInfo($"{name}.ion"),
-            result.Value.OfType<IonUseSyntax>().ToList(),
-            result.Value.OfType<IonFeatureSyntax>().ToList(),
-            result.Value.OfType<IonAttributeDefSyntax>().ToList(),
-            result.Value.OfType<IonEnumSyntax>().ToList(),
-            result.Value.OfType<IonFlagsSyntax>().ToList(),
-            result.Value.OfType<IonMessageSyntax>().ToList(),
-            result.Value.OfType<IonTypedefSyntax>().ToList(),
-            result.Value.OfType<IonServiceSyntax>().ToList(),
-            result.Value.OfType<IonUnionSyntax>().ToList(),
-            result.Value.ToList()
-        );
+        return BuildFileSyntax(name, new FileInfo($"{name}.ion"), result.Value);
     }
 
     public static IonFileSyntax Parse(FileInfo file)
     {
-        var result = IonFile.Parse(File.ReadAllText(file.FullName));
+        var content = File.ReadAllText(file.FullName);
+        var result = IonFile.Parse(content);
 
         if (!result.Success)
+        {
+            var recovery = IonFileRecovery.Parse(content);
+            if (recovery.Success)
+                return BuildFileSyntax(file.Name, file, recovery.Value);
             throw new ParseException(result.Error);
+        }
 
-        return new IonFileSyntax(file.Name, file,
-            result.Value.OfType<IonUseSyntax>().ToList(),
-            result.Value.OfType<IonFeatureSyntax>().ToList(),
-            result.Value.OfType<IonAttributeDefSyntax>().ToList(),
-            result.Value.OfType<IonEnumSyntax>().ToList(),
-            result.Value.OfType<IonFlagsSyntax>().ToList(),
-            result.Value.OfType<IonMessageSyntax>().ToList(),
-            result.Value.OfType<IonTypedefSyntax>().ToList(),
-            result.Value.OfType<IonServiceSyntax>().ToList(),
-            result.Value.OfType<IonUnionSyntax>().ToList(),
-            result.Value.ToList()
+        return BuildFileSyntax(file.Name, file, result.Value);
+    }
+
+    private static IonFileSyntax BuildFileSyntax(string name, FileInfo fileInfo, IEnumerable<IonSyntaxMember> members)
+    {
+        var membersList = members.ToList();
+        return new IonFileSyntax(name, fileInfo,
+            membersList.OfType<IonUseSyntax>().ToList(),
+            membersList.OfType<IonFeatureSyntax>().ToList(),
+            membersList.OfType<IonAttributeDefSyntax>().ToList(),
+            membersList.OfType<IonEnumSyntax>().ToList(),
+            membersList.OfType<IonFlagsSyntax>().ToList(),
+            membersList.OfType<IonMessageSyntax>().ToList(),
+            membersList.OfType<IonTypedefSyntax>().ToList(),
+            membersList.OfType<IonServiceSyntax>().ToList(),
+            membersList.OfType<IonUnionSyntax>().ToList(),
+            membersList
         );
     }
 }

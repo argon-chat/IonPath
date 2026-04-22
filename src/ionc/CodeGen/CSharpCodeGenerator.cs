@@ -252,6 +252,7 @@ public sealed class CSharpCodeGenerator : CodeGeneratorBase
         // Branch
         var branchCtx = new TemplateContext()
             .Set("methodName", methodName)
+            .Set("methodNameLower", methodName.ToLowerInvariant())
             .Set("executorArgs", "writer, ct");
         branchBuilder.AppendLine(branchCtx.Apply(Templates.ServiceExecutorBranchTemplate));
     }
@@ -294,6 +295,7 @@ public sealed class CSharpCodeGenerator : CodeGeneratorBase
         // Branch
         var branchCtx = new TemplateContext()
             .Set("methodName", methodName)
+            .Set("methodNameLower", methodName.ToLowerInvariant())
             .Set("executorArgs", "inputStream, ct");
         branchBuilder.AppendLine(branchCtx.Apply(Templates.ServiceExecutorBranchTemplate));
     }
@@ -426,7 +428,7 @@ public sealed class CSharpCodeGenerator : CodeGeneratorBase
     protected override string GenerateMessageFormatter(IonType type, bool isUnionCase)
     {
         var readFields = string.Join($"\n{Emitter.Indent(2)}",
-            type.fields.Select(GenerateReadField));
+            type.fields.Select((f, i) => GenerateDefensiveReadField(f, i)));
         var writeFields = string.Join($"\n{Emitter.Indent(2)}",
             type.fields.Select(f => GenerateWriteField(f, "value.")));
         var ctorArgs = GenerateCaptureFields(type);
@@ -491,6 +493,35 @@ public sealed class CSharpCodeGenerator : CodeGeneratorBase
             { IsPartial: true } => "", // TODO
             _ => $"var {varName} = {TypeResolver.ResolveFormatterRef(field.type)}.Read(reader);"
         };
+    }
+
+    /// <summary>
+    /// Wraps a field read with an arraySize guard so that missing fields from
+    /// older senders get a safe default instead of throwing.
+    /// </summary>
+    private string GenerateDefensiveReadField(IonField field, int fieldIndex)
+    {
+        var varName = FormatLocalVariableName(field.name.Identifier);
+        var typeName = TypeResolver.Resolve(field.type);
+
+        var readExpr = field.type switch
+        {
+            { IsArray: true } when field.type is IonGenericType gt =>
+                $"IonFormatterStorage<{TypeResolver.Resolve(gt.TypeArguments[0])}>.ReadArray(reader)",
+            { IsMaybe: true } when field.type is IonGenericType { TypeArguments: [IonGenericType { IsArray: true } innerArray] } =>
+                $"IonFormatterStorage<{TypeResolver.Resolve(innerArray.TypeArguments[0])}>.ReadNullableArray(reader)",
+            { IsMaybe: true } when field.type is IonGenericType gt =>
+                UseMaybeWrapper
+                    ? $"IonFormatterStorage<{TypeResolver.Resolve(gt.TypeArguments[0])}>.ReadMaybe(reader)"
+                    : $"reader.ReadNullable<{TypeResolver.Resolve(gt.TypeArguments[0])}>()",
+            { IsPartial: true } => null,
+            _ => $"{TypeResolver.ResolveFormatterRef(field.type)}.Read(reader)"
+        };
+
+        if (readExpr is null)
+            return ""; // Partial — TODO
+
+        return $"var {varName} = arraySize > {fieldIndex} ? {readExpr} : default!;";
     }
 
     protected override string GenerateWriteField(IonField field, string valuePrefix)

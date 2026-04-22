@@ -40,6 +40,8 @@ public static class IonAnalyticCodes
         = new("ION0008", "Duplicate enum value '{0}' in enum '{1}', previously assigned to '{2}' at {3}");
     public static readonly IonAnalyticCode ION0009_UnresolvedTypeReference
         = new("ION0009", "Unresolved reference to type '{0}'. The type may be missing, misspelled, or not imported.");
+    public static readonly IonAnalyticCode ION0009_UnresolvedTypeReferenceWithSuggestion
+        = new("ION0009", "Unresolved reference to type '{0}'. Did you mean '{1}'?");
 
     public static readonly IonAnalyticCode ION0011_EnumBitwiseOverlap
         = new("ION0011", "Enum item '{0}' in '{1}' has overlapping bits with '{2}', both resolve to value '{3}'");
@@ -51,6 +53,9 @@ public static class IonAnalyticCodes
         = new("ION0013", "Method '{0}' declares multiple stream parameters; only one parameter may be marked as 'stream'.");
 
     // ── Schema Lock validation codes (ION0020–ION0029) ──
+
+    public static readonly IonAnalyticCode ION0030_CircularTypeReference
+        = new("ION0030", "Circular type reference detected: {0}. This would cause infinite recursion during serialization.");
 
     public static readonly IonAnalyticCode ION0020_LockFieldRemoved
         = new("ION0020", "Breaking change: field '{0}' (index {1}) was removed from '{2}'. Use 'reserved' or '--update-lock' to acknowledge.");

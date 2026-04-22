@@ -519,6 +519,7 @@ public sealed class GoCodeGenerator : CodeGeneratorBase
         var readFields = new StringBuilder();
         var writeFields = new StringBuilder();
         var ctorArgs = new List<string>();
+        var fieldIndex = 0;
 
         foreach (var field in type.fields)
         {
@@ -526,10 +527,13 @@ public sealed class GoCodeGenerator : CodeGeneratorBase
             var typeName = TypeResolver.Resolve(field.type);
             var fieldName = char.ToUpperInvariant(field.name.Identifier[0]) + field.name.Identifier[1..];
 
-            // 3 tabs for code inside the anonymous func
-            readFields.AppendLine($"\t\t\t{varName}, err := ionwebcore.Read[{typeName}](r)");
-            readFields.AppendLine("\t\t\tif err != nil {");
-            readFields.AppendLine($"\t\t\t\treturn {type.name.Identifier}{{}}, err");
+            // Defensive read: only attempt to read if array has this field
+            readFields.AppendLine($"\t\t\tvar {varName} {typeName}");
+            readFields.AppendLine($"\t\t\tif arraySize > {fieldIndex} {{");
+            readFields.AppendLine($"\t\t\t\t{varName}, err = ionwebcore.Read[{typeName}](r)");
+            readFields.AppendLine("\t\t\t\tif err != nil {");
+            readFields.AppendLine($"\t\t\t\t\treturn {type.name.Identifier}{{}}, err");
+            readFields.AppendLine("\t\t\t\t}");
             readFields.AppendLine("\t\t\t}");
 
             writeFields.AppendLine($"\t\t\tif err := ionwebcore.Write(w, v.{fieldName}); err != nil {{");
@@ -537,6 +541,7 @@ public sealed class GoCodeGenerator : CodeGeneratorBase
             writeFields.AppendLine("\t\t\t}");
 
             ctorArgs.Add($"{fieldName}: {varName}");
+            fieldIndex++;
         }
 
         var ctx = new TemplateContext()

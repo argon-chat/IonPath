@@ -9,9 +9,9 @@ public class SimpleDebugTests
     {
         const string input = "#use invalid without quotes\n";
 
-        // Should throw ParseException
-        var ex = Assert.Throws<syntax.ParseException>(() => IonParser.Parse("test", input));
-        Console.WriteLine($"Parse error: {ex?.Message}");
+        // Recovery: invalid input is captured as InvalidIonBlock
+        var syntax = IonParser.Parse("test", input);
+        Assert.That(syntax.allTokens!.OfType<InvalidIonBlock>().Any(), "Should recover with InvalidIonBlock");
     }
 
     [Test]
@@ -22,9 +22,10 @@ public class SimpleDebugTests
             #use invalid
             """;
 
-        // Should throw ParseException
-        var ex = Assert.Throws<syntax.ParseException>(() => IonParser.Parse("test", input));
-        Console.WriteLine($"Parse error: {ex?.Message}");
+        // Recovery: valid use is parsed, invalid one becomes InvalidIonBlock
+        var syntax = IonParser.Parse("test", input);
+        Assert.That(syntax.useSyntaxes.Count, Is.GreaterThanOrEqualTo(1));
+        Assert.That(syntax.allTokens!.OfType<InvalidIonBlock>().Any(), "Should recover with InvalidIonBlock");
     }
 
     [Test]
@@ -42,9 +43,10 @@ public class SimpleDebugTests
             }
             """;
 
-        // Should throw ParseException
-        var ex = Assert.Throws<syntax.ParseException>(() => IonParser.Parse("test", input));
-        Console.WriteLine($"Parse error: {ex?.Message}");
+        // Recovery: both messages parsed, invalid text captured as InvalidIonBlock
+        var syntax = IonParser.Parse("test", input);
+        Assert.That(syntax.messageSyntaxes.Count, Is.GreaterThanOrEqualTo(2));
+        Assert.That(syntax.allTokens!.OfType<InvalidIonBlock>().Any(), "Should recover with InvalidIonBlock");
     }
 
     [Test]
@@ -125,9 +127,10 @@ public class SimpleDebugTests
             }
             """;
 
-        // Should throw ParseException
-        var ex = Assert.Throws<syntax.ParseException>(() => IonParser.Parse("test", input));
-        Console.WriteLine($"Parse error: {ex?.Message}");
+        // Recovery: valid methods parsed, invalid one captured as InvalidIonBlock
+        var syntax = IonParser.Parse("test", input);
+        Assert.That(syntax.serviceSyntaxes.Count, Is.GreaterThanOrEqualTo(0));
+        Assert.That(syntax.allTokens!.OfType<InvalidIonBlock>().Any(), "Should recover with InvalidIonBlock");
     }
 
     [Test]

@@ -323,9 +323,11 @@ public sealed class CSharpTemplateProvider : ITemplateProvider
         """
             public Task RouteExecuteAsync(string methodName, CborReader reader, CborWriter writer, CancellationToken ct = default)
             {
-                {branches}
-                
-                throw new InvalidOperationException("no method defined");
+                return methodName.ToLowerInvariant() switch
+                {
+                    {branches}
+                    _ => throw new InvalidOperationException($"no method '{methodName}' defined")
+                };
             }
         """;
 
@@ -333,16 +335,17 @@ public sealed class CSharpTemplateProvider : ITemplateProvider
         """
             public IAsyncEnumerable<Memory<byte>> StreamRouteExecuteAsync(string methodName, CborReader reader, IAsyncEnumerable<ReadOnlyMemory<byte>>? inputStream, [EnumeratorCancellation] CancellationToken ct)
             {
-                {branches}
-                
-                throw new InvalidOperationException("no method defined");
+                return methodName.ToLowerInvariant() switch
+                {
+                    {branches}
+                    _ => throw new InvalidOperationException($"no method '{methodName}' defined")
+                };
             }
         """;
 
     public string ServiceExecutorBranchTemplate =>
         """
-                if (methodName.Equals("{methodName}", StringComparison.InvariantCultureIgnoreCase))
-                    return {methodName}_Execute(reader, {executorArgs});
+                    "{methodNameLower}" => {methodName}_Execute(reader, {executorArgs}),
         """;
 
     public string? InputStreamCastTemplate =>

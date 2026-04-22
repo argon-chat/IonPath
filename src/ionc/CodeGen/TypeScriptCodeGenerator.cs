@@ -198,7 +198,7 @@ public sealed class TypeScriptCodeGenerator : CodeGeneratorBase
     protected override string GenerateMessageFormatter(IonType type, bool isUnionCase)
     {
         var readFields = string.Join($"\n{Emitter.Indent(2)}",
-            type.fields.Select(GenerateReadField));
+            type.fields.Select((f, i) => GenerateDefensiveReadField(f, i)));
         var writeFields = string.Join($"\n{Emitter.Indent(2)}",
             type.fields.Select(f => GenerateWriteField(f, "value.")));
         var ctorArgs = string.Join(", ", type.fields.Select(f => f.name.Identifier));
@@ -261,6 +261,40 @@ public sealed class TypeScriptCodeGenerator : CodeGeneratorBase
             _ => $"const {varName} = {TypeResolver.ResolveFormatterRef(field.type)}.read(reader);"
         };
     }
+
+    private string GenerateDefensiveReadField(IonField field, int fieldIndex)
+    {
+        var varName = field.name.Identifier;
+        var defaultVal = GetTsDefaultValue(field.type);
+
+        var readExpr = field.type switch
+        {
+            { IsArray: true } when field.type is IonGenericType gt =>
+                $"IonFormatterStorage.readArray<{TypeResolver.Resolve(gt.TypeArguments[0])}>(reader, '{TypeResolver.Resolve(gt.TypeArguments[0])}')",
+            { IsMaybe: true } when field.type is IonGenericType { TypeArguments: [IonGenericType { IsArray: true } innerArray] } =>
+                $"IonFormatterStorage.readNullableArray<{TypeResolver.Resolve(innerArray.TypeArguments[0])}>(reader, '{TypeResolver.Resolve(innerArray.TypeArguments[0])}')",
+            { IsMaybe: true } when field.type is IonGenericType gt =>
+                UseMaybeWrapper
+                    ? $"IonFormatterStorage.readMaybe<{TypeResolver.Resolve(gt.TypeArguments[0])}>(reader, '{TypeResolver.Resolve(gt.TypeArguments[0])}')"
+                    : $"IonFormatterStorage.readNullable<{TypeResolver.Resolve(gt.TypeArguments[0])}>(reader, '{TypeResolver.Resolve(gt.TypeArguments[0])}')",
+            _ => $"{TypeResolver.ResolveFormatterRef(field.type)}.read(reader)"
+        };
+
+        return $"const {varName} = arraySize > {fieldIndex} ? {readExpr} : {defaultVal};";
+    }
+
+    private static string GetTsDefaultValue(IonType type) => type switch
+    {
+        { IsMaybe: true } => "null",
+        { IsArray: true } => "[]",
+        { IsScalar: true } => type.name.Identifier switch
+        {
+            "string" => "\"\"",
+            "bool" => "false",
+            _ => "0"
+        },
+        _ => "null!"
+    };
 
     protected override string GenerateWriteField(IonField field, string valuePrefix)
     {

@@ -28,6 +28,7 @@ public sealed class CompilationPipeline
         RegisterStage(new TransformStage(_context));
         RegisterStage(new StreamParameterValidationStage(_context));
         RegisterStage(new RestoreUnresolvedTypeStage(_context));
+        RegisterStage(new CircularTypeReferenceStage(_context));
 
         // Schema lock validation (needs fully resolved types)
         if (_existingLock is not null)

@@ -113,7 +113,16 @@ public class RestoreUnresolvedTypeStage(CompilationContext ctx) : CompilationSta
                 var resolvedBase = ctx.ResolveType(u);
                 if (resolvedBase is null)
                 {
-                    Error(IonAnalyticCodes.ION0009_UnresolvedTypeReference, u.name, u.name.Identifier);
+                    var knownTypes = ctx.GlobalModules
+                        .Concat(ctx.ProcessedModules)
+                        .SelectMany(m => m.Definitions)
+                        .Select(d => d.name.Identifier)
+                        .Distinct();
+                    var suggestion = LevenshteinDistance.FindClosest(u.name.Identifier, knownTypes);
+                    if (suggestion is not null)
+                        Error(IonAnalyticCodes.ION0009_UnresolvedTypeReferenceWithSuggestion, u.name, u.name.Identifier, suggestion);
+                    else
+                        Error(IonAnalyticCodes.ION0009_UnresolvedTypeReference, u.name, u.name.Identifier);
                     return type; 
                 }
 
