@@ -1,12 +1,16 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Library</OutputType>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>TestContracts</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\ion.runtime.client\ion.runtime.client.csproj" />
     <ProjectReference Include="..\..\ion.runtime.network\ion.runtime.network.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Update="GitVersion.MsBuild" Version="6.7.0" />
+    <PackageReference Update="Microsoft.SourceLink.GitHub" Version="10.0.203" />
   </ItemGroup>
 </Project>

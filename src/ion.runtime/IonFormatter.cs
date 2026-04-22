@@ -238,6 +238,25 @@ public static class IonFormatterStorage<T>
         return new IonArray<T>(span.Memory.Span[..size.Value]);
     }
 
+    public static IonArray<T>? ReadNullableArray(CborReader reader)
+    {
+        var state = reader.PeekState();
+        if (state != CborReaderState.Null)
+            return ReadArray(reader);
+        reader.ReadNull();
+        return null;
+    }
+
+    public static void WriteNullableArray(CborWriter writer, IonArray<T>? array)
+    {
+        if (array is null)
+        {
+            writer.WriteNull();
+            return;
+        }
+        WriteArray(writer, array.Value);
+    }
+
     public static void WriteArray(CborWriter writer, IonArray<T> array)
     {
         writer.WriteStartArray(array.Size);

@@ -380,10 +380,13 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 
     private static string GenerateReadMaybeField(ITypeWithName field)
     {
-        if (field.Type is not IonGenericType { IsMaybe: true } arrayType)
+        if (field.Type is not IonGenericType { IsMaybe: true } maybeType)
             throw new InvalidOperationException();
+        if (maybeType.TypeArguments[0] is IonGenericType { IsArray: true } innerArray)
+            return
+                $"const {field.Name.Identifier} = IonFormatterStorage.readNullableArray<{ResolveTypeName(innerArray.TypeArguments[0])}>(reader, '{ResolveTypeName(innerArray.TypeArguments[0])}');";
         return
-            $"const {field.Name.Identifier} = IonFormatterStorage.{(UseMaybeWrapper ? "readMaybe" : "readNullable")}<{ResolveTypeName(arrayType.TypeArguments[0])}>(reader, '{ResolveTypeName(arrayType.TypeArguments[0])}');";
+            $"const {field.Name.Identifier} = IonFormatterStorage.{(UseMaybeWrapper ? "readMaybe" : "readNullable")}<{ResolveTypeName(maybeType.TypeArguments[0])}>(reader, '{ResolveTypeName(maybeType.TypeArguments[0])}');";
     }
 
 
@@ -397,10 +400,13 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 
     private static string GenerateWriteMaybeField(ITypeWithName field)
     {
-        if (field.Type is not IonGenericType { IsMaybe: true } arrayType)
+        if (field.Type is not IonGenericType { IsMaybe: true } maybeType)
             throw new InvalidOperationException();
+        if (maybeType.TypeArguments[0] is IonGenericType { IsArray: true } innerArray)
+            return
+                $"IonFormatterStorage.writeNullableArray<{ResolveTypeName(innerArray.TypeArguments[0])}>(writer, {field.Name.Identifier}, '{ResolveTypeName(innerArray.TypeArguments[0])}');";
         return
-            $"IonFormatterStorage.{(UseMaybeWrapper ? "writeMaybe" : "writeNullable")}<{ResolveTypeName(arrayType.TypeArguments[0])}>(writer, {field.Name.Identifier}, '{ResolveTypeName(arrayType.TypeArguments[0])}');";
+            $"IonFormatterStorage.{(UseMaybeWrapper ? "writeMaybe" : "writeNullable")}<{ResolveTypeName(maybeType.TypeArguments[0])}>(writer, {field.Name.Identifier}, '{ResolveTypeName(maybeType.TypeArguments[0])}');";
     }
 
     private static string GenerateWriteReturnValue(IonType returnType) =>
@@ -423,6 +429,9 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
     {
         if (returnType is not IonGenericType { IsMaybe: true } maybeType)
             throw new InvalidOperationException();
+        if (maybeType.TypeArguments.First() is IonGenericType { IsArray: true } innerArray)
+            return
+                $"IonFormatterStorage.writeNullableArray<{ResolveTypeName(innerArray.TypeArguments[0])}>(writer, result, '{ResolveTypeName(innerArray.TypeArguments[0])}');";
         return
             $"{FormatterTemplateRef(maybeType.TypeArguments.First())}.{(UseMaybeWrapper ? "writeMaybe" : "writeNullable")}(writer, result, '{FormatterTemplateRef(maybeType.TypeArguments.First())}');";
     }
@@ -457,10 +466,13 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 
     private static string GenerateWriteMaybeField(IonField field)
     {
-        if (field.type is not IonGenericType { IsMaybe: true } arrayType)
+        if (field.type is not IonGenericType { IsMaybe: true } maybeType)
             throw new InvalidOperationException();
+        if (maybeType.TypeArguments[0] is IonGenericType { IsArray: true } innerArray)
+            return
+                $"IonFormatterStorage.writeNullableArray<{ResolveTypeName(innerArray.TypeArguments[0])}>(writer, value.{field.name.Identifier}, '{ResolveTypeName(innerArray.TypeArguments[0])}');";
         return
-            $"IonFormatterStorage.{(UseMaybeWrapper ? "writeMaybe" : "writeNullable")}<{ResolveTypeName(arrayType.TypeArguments[0])}>(writer, value.{field.name.Identifier}, '{ResolveTypeName(arrayType.TypeArguments[0])}');";
+            $"IonFormatterStorage.{(UseMaybeWrapper ? "writeMaybe" : "writeNullable")}<{ResolveTypeName(maybeType.TypeArguments[0])}>(writer, value.{field.name.Identifier}, '{ResolveTypeName(maybeType.TypeArguments[0])}');";
     }
 
     private static IReadOnlyList<IonType> TopoSortByDependencies(IReadOnlyList<IonType> types)

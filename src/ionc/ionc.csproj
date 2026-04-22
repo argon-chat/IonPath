@@ -2,27 +2,29 @@
 
 	<PropertyGroup>
 		<OutputType>Exe</OutputType>
-		<TargetFramework>net9.0</TargetFramework>
+		<TargetFramework>net10.0</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<RootNamespace>ion.compiler</RootNamespace>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<PackAsTool>True</PackAsTool>
-		<Version>1.2.9</Version>
+		<Version>1.3.0</Version>
 		<PackageId>ionpath.compiler</PackageId>
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Spectre.Console" Version="0.50.0" />
-		<PackageReference Include="Spectre.Console.Cli" Version="0.50.0" />
-		<PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.6" />
-		<PackageReference Include="System.Formats.Cbor" Version="9.0.8" />
+		<PackageReference Include="Spectre.Console" Version="0.55.2" />
+		<PackageReference Include="Spectre.Console.Cli" Version="0.55.0" />
+		<PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.7" />
 	</ItemGroup>
 
 	<ItemGroup>
 		<ProjectReference Include="..\ion.compiler.runtime\ion.compiler.runtime.csproj" />
 		<ProjectReference Include="..\ion.compiler\ion.compiler.csproj" />
-		<ProjectReference Include="..\ion.lock\ion.runtime.locking.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <PackageReference Update="Microsoft.SourceLink.GitHub" Version="10.0.203" />
 	</ItemGroup>
 
 </Project>

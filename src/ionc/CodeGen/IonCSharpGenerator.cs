@@ -1,13 +1,9 @@
 ﻿namespace ion.compiler.CodeGen;
 
 using ion.runtime;
-using Pidgin;
 using syntax;
-using System.Formats.Cbor;
 using System.Linq;
-using System.Reflection.PortableExecutable;
 using System.Text;
-using static ion.compiler.CodeGen.IonCSharpGenerator;
 
 public class IonProject
 {
@@ -342,11 +338,11 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     private static string UnwrapType(IonType type) =>
         (type, UseMaybeWrapper) switch
         {
-            (IonGenericType { IsMaybe: true } maybe, true) => $"IonMaybe<{ResolveTypeName(maybe.TypeArguments[0])}>",
-            (IonGenericType { IsMaybe: true } maybe, false) => $"{ResolveTypeName(maybe.TypeArguments[0])}?",
-            (IonGenericType { IsArray: true } array, _) => $"IonArray<{ResolveTypeName(array.TypeArguments[0])}>",
+            (IonGenericType { IsMaybe: true } maybe, true) => $"IonMaybe<{UnwrapType(maybe.TypeArguments[0])}>",
+            (IonGenericType { IsMaybe: true } maybe, false) => $"{UnwrapType(maybe.TypeArguments[0])}?",
+            (IonGenericType { IsArray: true } array, _) => $"IonArray<{UnwrapType(array.TypeArguments[0])}>",
             (IonGenericType { IsPartial: true } partial, _) =>
-                $"IonPartial<{ResolveTypeName(partial.TypeArguments[0])}>",
+                $"IonPartial<{UnwrapType(partial.TypeArguments[0])}>",
             (IonGenericType generic, _) => GenerateGenericTypeName(generic),
             _ => ResolveTypeName(type)
         };
@@ -588,13 +584,16 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
     private static string GenerateReadMaybeField(ITypeWithName field)
     {
-        if (field.Type is not IonGenericType { IsMaybe: true } arrayType)
+        if (field.Type is not IonGenericType { IsMaybe: true } maybeType)
             throw new InvalidOperationException();
+        if (maybeType.TypeArguments[0] is IonGenericType { IsArray: true } innerArray)
+            return
+                $"var __{field.Name.Identifier.ToLowerInvariant()} = IonFormatterStorage<{ResolveTypeName(innerArray.TypeArguments[0])}>.ReadNullableArray(reader);";
         if (UseMaybeWrapper)
             return
-                $"var __{field.Name.Identifier.ToLowerInvariant()} = IonFormatterStorage<{ResolveTypeName(arrayType.TypeArguments[0])}>.ReadMaybe(reader);";
+                $"var __{field.Name.Identifier.ToLowerInvariant()} = IonFormatterStorage<{ResolveTypeName(maybeType.TypeArguments[0])}>.ReadMaybe(reader);";
         return
-            $"var __{field.Name.Identifier.ToLowerInvariant()} = reader.ReadNullable<{ResolveTypeName(arrayType.TypeArguments[0])}>();";
+            $"var __{field.Name.Identifier.ToLowerInvariant()} = reader.ReadNullable<{ResolveTypeName(maybeType.TypeArguments[0])}>();";
     }
 
 
@@ -608,10 +607,13 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
     private static string GenerateWriteMaybeField(ITypeWithName field)
     {
-        if (field.Type is not IonGenericType { IsMaybe: true } arrayType)
+        if (field.Type is not IonGenericType { IsMaybe: true } maybeType)
             throw new InvalidOperationException();
+        if (maybeType.TypeArguments[0] is IonGenericType { IsArray: true } innerArray)
+            return
+                $"IonFormatterStorage<{ResolveTypeName(innerArray.TypeArguments[0])}>.WriteNullableArray(writer, __{field.Name.Identifier.ToLowerInvariant()});";
         return
-            $"IonFormatterStorage<{ResolveTypeName(arrayType.TypeArguments[0])}>.{(UseMaybeWrapper ? "WriteMaybe" : "WriteNullable")}(writer, __{field.Name.Identifier.ToLowerInvariant()});";
+            $"IonFormatterStorage<{ResolveTypeName(maybeType.TypeArguments[0])}>.{(UseMaybeWrapper ? "WriteMaybe" : "WriteNullable")}(writer, __{field.Name.Identifier.ToLowerInvariant()});";
     }
 
     private static string GenerateWriteReturnValue(IonType returnType) =>
@@ -639,6 +641,9 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     {
         if (returnType is not IonGenericType { IsMaybe: true } maybeType)
             throw new InvalidOperationException();
+        if (maybeType.TypeArguments.First() is IonGenericType { IsArray: true } innerArray)
+            return
+                $"IonFormatterStorage<{ResolveTypeName(innerArray.TypeArguments[0])}>.WriteNullableArray(writer, result);";
         return
             $"{FormatterTemplateRef(maybeType.TypeArguments.First())}.{(UseMaybeWrapper ? "WriteMaybe" : "WriteNullable")}(writer, result);";
     }
@@ -673,10 +678,13 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
     private static string GenerateWriteMaybeField(IonField field)
     {
-        if (field.type is not IonGenericType { IsMaybe: true } arrayType)
+        if (field.type is not IonGenericType { IsMaybe: true } maybeType)
             throw new InvalidOperationException();
+        if (maybeType.TypeArguments[0] is IonGenericType { IsArray: true } innerArray)
+            return
+                $"IonFormatterStorage<{ResolveTypeName(innerArray.TypeArguments[0])}>.WriteNullableArray(writer, value.{field.name.Identifier});";
         return
-            $"IonFormatterStorage<{ResolveTypeName(arrayType.TypeArguments[0])}>.{(UseMaybeWrapper ? "WriteMaybe" : "WriteNullable")}(writer, value.{field.name.Identifier});";
+            $"IonFormatterStorage<{ResolveTypeName(maybeType.TypeArguments[0])}>.{(UseMaybeWrapper ? "WriteMaybe" : "WriteNullable")}(writer, value.{field.name.Identifier});";
     }
 
     private static readonly string ServiceExecutorTemplate =

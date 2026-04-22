@@ -252,6 +252,8 @@ public sealed class TypeScriptCodeGenerator : CodeGeneratorBase
         {
             { IsArray: true } when field.type is IonGenericType gt =>
                 $"const {varName} = IonFormatterStorage.readArray<{TypeResolver.Resolve(gt.TypeArguments[0])}>(reader, '{TypeResolver.Resolve(gt.TypeArguments[0])}');",
+            { IsMaybe: true } when field.type is IonGenericType { TypeArguments: [IonGenericType { IsArray: true } innerArray] } =>
+                $"const {varName} = IonFormatterStorage.readNullableArray<{TypeResolver.Resolve(innerArray.TypeArguments[0])}>(reader, '{TypeResolver.Resolve(innerArray.TypeArguments[0])}');",
             { IsMaybe: true } when field.type is IonGenericType gt =>
                 UseMaybeWrapper
                     ? $"const {varName} = IonFormatterStorage.readMaybe<{TypeResolver.Resolve(gt.TypeArguments[0])}>(reader, '{TypeResolver.Resolve(gt.TypeArguments[0])}');"
@@ -268,6 +270,8 @@ public sealed class TypeScriptCodeGenerator : CodeGeneratorBase
         {
             { IsArray: true } when field.type is IonGenericType gt =>
                 $"IonFormatterStorage.writeArray<{TypeResolver.Resolve(gt.TypeArguments[0])}>(writer, {fieldAccess}, '{TypeResolver.Resolve(gt.TypeArguments[0])}');",
+            { IsMaybe: true } when field.type is IonGenericType { TypeArguments: [IonGenericType { IsArray: true } innerArray] } =>
+                $"IonFormatterStorage.writeNullableArray<{TypeResolver.Resolve(innerArray.TypeArguments[0])}>(writer, {fieldAccess}, '{TypeResolver.Resolve(innerArray.TypeArguments[0])}');",
             { IsMaybe: true } when field.type is IonGenericType gt =>
                 UseMaybeWrapper
                     ? $"IonFormatterStorage.writeMaybe<{TypeResolver.Resolve(gt.TypeArguments[0])}>(writer, {fieldAccess}, '{TypeResolver.Resolve(gt.TypeArguments[0])}');"
@@ -284,6 +288,8 @@ public sealed class TypeScriptCodeGenerator : CodeGeneratorBase
         {
             { IsArray: true } when arg.type is IonGenericType gt =>
                 $"const {varName} = IonFormatterStorage.readArray<{TypeResolver.Resolve(gt.TypeArguments[0])}>(reader, '{TypeResolver.Resolve(gt.TypeArguments[0])}');",
+            { IsMaybe: true } when arg.type is IonGenericType { TypeArguments: [IonGenericType { IsArray: true } innerArray] } =>
+                $"const {varName} = IonFormatterStorage.readNullableArray<{TypeResolver.Resolve(innerArray.TypeArguments[0])}>(reader, '{TypeResolver.Resolve(innerArray.TypeArguments[0])}');",
             { IsMaybe: true } when arg.type is IonGenericType gt =>
                 UseMaybeWrapper
                     ? $"const {varName} = IonFormatterStorage.readMaybe<{TypeResolver.Resolve(gt.TypeArguments[0])}>(reader, '{TypeResolver.Resolve(gt.TypeArguments[0])}');"
@@ -300,6 +306,8 @@ public sealed class TypeScriptCodeGenerator : CodeGeneratorBase
         {
             { IsArray: true } when arg.type is IonGenericType gt =>
                 $"IonFormatterStorage.writeArray<{TypeResolver.Resolve(gt.TypeArguments[0])}>(writer, {varName}, '{TypeResolver.Resolve(gt.TypeArguments[0])}');",
+            { IsMaybe: true } when arg.type is IonGenericType { TypeArguments: [IonGenericType { IsArray: true } innerArray] } =>
+                $"IonFormatterStorage.writeNullableArray<{TypeResolver.Resolve(innerArray.TypeArguments[0])}>(writer, {varName}, '{TypeResolver.Resolve(innerArray.TypeArguments[0])}');",
             { IsMaybe: true } when arg.type is IonGenericType gt =>
                 UseMaybeWrapper
                     ? $"IonFormatterStorage.writeMaybe<{TypeResolver.Resolve(gt.TypeArguments[0])}>(writer, {varName}, '{TypeResolver.Resolve(gt.TypeArguments[0])}');"
