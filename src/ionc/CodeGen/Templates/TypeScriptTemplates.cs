@@ -146,6 +146,25 @@ public sealed class TypeScriptTemplateProvider : ITemplateProvider
           }
         """;
 
+    public string? ServiceClientMethodArrayTemplate => null;
+
+    public string? ServiceClientMethodNullableTemplate =>
+        """
+          async {methodName}({args}): Promise<{returnType}> {
+            const req = new IonRequest(this.ctx, "I{serviceName}", "{methodName}");
+                  
+            const writer = new CborWriter();
+              
+            writer.writeStartArray({argsCount});
+                  
+            {writeArgs}
+              
+            writer.writeEndArray();
+                  
+            return await req.callAsyncNullableT<{returnTypeInner}>("{returnTypeInner}", writer.data, this.signal);
+          }
+        """;
+
     public string ServiceClientMethodVoidTemplate =>
         """
           async {methodName}({args}): Promise<void> {
@@ -179,9 +198,6 @@ public sealed class TypeScriptTemplateProvider : ITemplateProvider
             return {streamCall};
           }
         """;
-
-    public string? ServiceClientMethodArrayTemplate => null;
-    public string? ServiceClientMethodNullableTemplate => null;
 
     // ═══════════════════════════════════════════════════════════════════
     // SERVICE EXECUTOR TEMPLATES (Not used in TypeScript)

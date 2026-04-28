@@ -87,7 +87,11 @@ public sealed class TypeScriptCodeGenerator : CodeGeneratorBase
                 ? Templates.ServiceClientMethodStreamTemplate
                 : method.returnType.IsVoid
                     ? Templates.ServiceClientMethodVoidTemplate
-                    : Templates.ServiceClientMethodTemplate;
+                    : method.returnType.IsMaybe && Templates.ServiceClientMethodNullableTemplate != null
+                        ? Templates.ServiceClientMethodNullableTemplate
+                        : method.returnType.IsArray && Templates.ServiceClientMethodArrayTemplate != null
+                            ? Templates.ServiceClientMethodArrayTemplate
+                            : Templates.ServiceClientMethodTemplate;
 
             // Stream call
             var inputStreamArg = method.arguments.FirstOrDefault(a => a.mod == IonArgumentModifiers.Stream);
@@ -109,6 +113,16 @@ public sealed class TypeScriptCodeGenerator : CodeGeneratorBase
             {
                 ctx.Set("returnType", returnTypeName);
                 ctx.Set("returnTypeLookup", returnTypeLookup);
+                
+                // For nullable return types, set the inner type name for callAsyncNullableT
+                if (method.returnType is IonGenericType { IsMaybe: true } maybeRet)
+                {
+                    var innerType = maybeRet.TypeArguments[0];
+                    if (innerType is IonGenericType { IsArray: true } innerArr)
+                        ctx.Set("returnTypeInner", TypeResolver.Resolve(innerArr.TypeArguments[0]));
+                    else
+                        ctx.Set("returnTypeInner", TypeResolver.Resolve(innerType));
+                }
             }
 
             methodsBuilder.AppendLine(ctx.Apply(template));

@@ -545,6 +545,23 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
           }
         """;
 
+    private static readonly string ServiceClientMethodDeclNullable =
+        """
+          async {methodName}({args}): Promise<{methodReturnType}> {
+            const req = new IonRequest(this.ctx, "I{serviceTypename}", "{methodName}");
+                  
+            const writer = new CborWriter();
+              
+            writer.writeStartArray({argSize});
+                  
+            {argsWrite}
+              
+            writer.writeEndArray();
+                  
+            return await req.callAsyncNullableT<{methodReturnTypeInner}>("{methodReturnTypeInner}", writer.data, this.signal);
+          }
+        """;
+
     private static readonly string ServiceClientMethodDeclNoReturn =
         """
           async {methodName}({args}): Promise<void> {
@@ -605,7 +622,9 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
                     ? ServiceClientMethodDeclStream
                     : method.returnType.IsVoid
                         ? ServiceClientMethodDeclNoReturn
-                        : ServiceClientMethodDecl;
+                        : method.returnType.IsMaybe
+                            ? ServiceClientMethodDeclNullable
+                            : ServiceClientMethodDecl;
 
             if (inputStreamType is not null)
                 template = template.Replace("{streamReturnTemplate}",
@@ -623,9 +642,21 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
                     .Replace("{args}", methodArgs);
 
             if (!method.returnType.IsVoid)
+            {
                 templateMethod = templateMethod
                     .Replace("{methodReturnType}", UnwrapType(method.returnType))
                     .Replace("{methodReturnTypeLookup}", UnwrapTypeForLookup(method.returnType));
+
+                // For nullable return types, set inner type
+                if (method.returnType is IonGenericType { IsMaybe: true } maybeRet)
+                {
+                    var innerType = maybeRet.TypeArguments[0];
+                    var innerTypeName = innerType is IonGenericType { IsArray: true } innerArr
+                        ? UnwrapType(innerArr.TypeArguments[0])
+                        : UnwrapType(innerType);
+                    templateMethod = templateMethod.Replace("{methodReturnTypeInner}", innerTypeName);
+                }
+            }
 
 
             methodsBuilder.AppendLine(templateMethod);

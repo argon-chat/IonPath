@@ -1,4 +1,5 @@
 import { CborReader } from "../cbor";
+import { IonArray } from "../baseTypes";
 import { IonFormatterStorage } from "../logic/IonFormatter";
 import { safeFetchBuffer } from "../yetAnotherFetch";
 
@@ -59,31 +60,10 @@ export class IonRequest {
     signal?: AbortSignal
   ): Promise<TResponse> {
     const normalizedTypename = this.extractTypeName(responseTypename);
-    const ctx: IonCallContext = {
-      client: fetch,
-      interfaceName: this.interfaceName,
-      methodName: this.methodName,
-      requestPayload: payload,
-      expectedType: null as any as TResponse,
-      requestHeadets: { "Content-Type": IonContentType },
-    };
-
-    let next: (c: IonCallContext, s?: AbortSignal) => Promise<void> =
-      this.terminalAsync.bind(this);
-    for (let i = this.context.interceptors.length - 1; i >= 0; i--) {
-      const interceptor = this.context.interceptors[i];
-      const currentNext = next;
-      next = (c, s) => interceptor.invokeAsync(c, currentNext, s);
-    }
-
-    await next(ctx, signal);
-
-    if (!ctx.responsePayload) {
-      throw new Error("No response payload");
-    }
+    const ctx = await this.executeRequest(payload, signal);
 
     try {
-      const reader = new CborReader(ctx.responsePayload);
+      const reader = new CborReader(ctx.responsePayload!);
       if (normalizedTypename.isArray)
         return IonFormatterStorage.readArray<TResponse>(
           reader,
@@ -102,10 +82,77 @@ export class IonRequest {
       console.error(e);
       console.error(`Procedure: ${ctx.interfaceName}/${ctx.methodName}()`);
       console.error(`ResponseTypename: ${responseTypename}`);
-      console.error(`Payload: ${this.toBase64(ctx.responsePayload)}`);
+      console.error(`Payload: ${this.toBase64(ctx.responsePayload!)}`);
       console.error("===== ========================== =====");
       throw e;
     }
+  }
+
+  async callAsyncNullableT<TResponse>(
+    responseTypename: string,
+    payload: Uint8Array,
+    signal?: AbortSignal
+  ): Promise<TResponse | null> {
+    const ctx = await this.executeRequest(payload, signal);
+    try {
+      const reader = new CborReader(ctx.responsePayload!);
+      return IonFormatterStorage.readNullable<TResponse>(reader, responseTypename);
+    } catch (e) {
+      console.error("===== UNCATCH ION INTERNAL ERROR =====");
+      console.error(e);
+      console.error(`Procedure: ${ctx.interfaceName}/${ctx.methodName}()`);
+      console.error(`ResponseTypename: ${responseTypename}`);
+      console.error(`Payload: ${this.toBase64(ctx.responsePayload!)}`);
+      console.error("===== ========================== =====");
+      throw e;
+    }
+  }
+
+  async callAsyncNullableArrayT<TResponse>(
+    responseTypename: string,
+    payload: Uint8Array,
+    signal?: AbortSignal
+  ): Promise<IonArray<TResponse> | null> {
+    const ctx = await this.executeRequest(payload, signal);
+    try {
+      const reader = new CborReader(ctx.responsePayload!);
+      return IonFormatterStorage.readNullableArray<TResponse>(reader, responseTypename);
+    } catch (e) {
+      console.error("===== UNCATCH ION INTERNAL ERROR =====");
+      console.error(e);
+      console.error(`Procedure: ${ctx.interfaceName}/${ctx.methodName}()`);
+      console.error(`ResponseTypename: ${responseTypename}`);
+      console.error(`Payload: ${this.toBase64(ctx.responsePayload!)}`);
+      console.error("===== ========================== =====");
+      throw e;
+    }
+  }
+
+  private async executeRequest(payload: Uint8Array, signal?: AbortSignal): Promise<IonCallContext> {
+    const ctx: IonCallContext = {
+      client: fetch,
+      interfaceName: this.interfaceName,
+      methodName: this.methodName,
+      requestPayload: payload,
+      expectedType: undefined,
+      requestHeadets: { "Content-Type": IonContentType },
+    };
+
+    let next: (c: IonCallContext, s?: AbortSignal) => Promise<void> =
+      this.terminalAsync.bind(this);
+    for (let i = this.context.interceptors.length - 1; i >= 0; i--) {
+      const interceptor = this.context.interceptors[i];
+      const currentNext = next;
+      next = (c, s) => interceptor.invokeAsync(c, currentNext, s);
+    }
+
+    await next(ctx, signal);
+
+    if (!ctx.responsePayload) {
+      throw new Error("No response payload");
+    }
+
+    return ctx;
   }
 
   extractTypeName(typeName: string): {
