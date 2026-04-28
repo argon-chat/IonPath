@@ -92,9 +92,10 @@ public sealed class TypeScriptCodeGenerator : CodeGeneratorBase
             // Stream call
             var inputStreamArg = method.arguments.FirstOrDefault(a => a.mod == IonArgumentModifiers.Stream);
             var returnTypeName = TypeResolver.Resolve(method.returnType);
+            var returnTypeLookup = ((TypeScriptTypeNameResolver)TypeResolver).ResolveForLookup(method.returnType);
             var streamCall = inputStreamArg != null
-                ? $"ws.callServerStreamingFullDuplex<{returnTypeName}, {TypeResolver.Resolve(inputStreamArg.type)}>(\"{returnTypeName}\", writer.data, inputStream, \"{TypeResolver.Resolve(inputStreamArg.type)}\", this.signal)"
-                : $"ws.callServerStreaming<{returnTypeName}>(\"{returnTypeName}\", writer.data, this.signal)";
+                ? $"ws.callServerStreamingFullDuplex<{returnTypeName}, {TypeResolver.Resolve(inputStreamArg.type)}>(\"{returnTypeLookup}\", writer.data, inputStream, \"{TypeResolver.Resolve(inputStreamArg.type)}\", this.signal)"
+                : $"ws.callServerStreaming<{returnTypeName}>(\"{returnTypeLookup}\", writer.data, this.signal)";
 
             var ctx = new TemplateContext()
                 .Set("serviceName", serviceName)
@@ -105,7 +106,10 @@ public sealed class TypeScriptCodeGenerator : CodeGeneratorBase
                 .Set("streamCall", streamCall);
 
             if (!method.returnType.IsVoid)
+            {
                 ctx.Set("returnType", returnTypeName);
+                ctx.Set("returnTypeLookup", returnTypeLookup);
+            }
 
             methodsBuilder.AppendLine(ctx.Apply(template));
         }

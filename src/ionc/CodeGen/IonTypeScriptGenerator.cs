@@ -179,6 +179,15 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         _ => ResolveTypeName(type)
     };
 
+
+    private static string UnwrapTypeForLookup(IonType type) => type switch
+    {
+        IonGenericType { IsMaybe: true } maybe => $"IonMaybe<{UnwrapTypeForLookup(maybe.TypeArguments[0])}>",
+        IonGenericType { IsArray: true } array => $"IonArray<{UnwrapTypeForLookup(array.TypeArguments[0])}>",
+        IonGenericType generic => GenerateGenericTypeName(generic),
+        _ => ResolveTypeName(type)
+    };
+
     private static string GenerateGenericTypeName(IonGenericType generic)
         => $"{generic.name.Identifier}<{string.Join(',', generic.TypeArguments.Select(x => x.name.Identifier))}>";
 
@@ -532,7 +541,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
               
             writer.writeEndArray();
                   
-            return await req.callAsyncT<{methodReturnType}>("{methodReturnType}", writer.data, this.signal);
+            return await req.callAsyncT<{methodReturnType}>("{methodReturnTypeLookup}", writer.data, this.signal);
           }
         """;
 
@@ -600,10 +609,10 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 
             if (inputStreamType is not null)
                 template = template.Replace("{streamReturnTemplate}",
-                    $"ws.callServerStreamingFullDuplex<{{methodReturnType}}, {UnwrapType(inputStreamType.Type)}>(\"{{methodReturnType}}\", writer.data, inputStream, \"{UnwrapType(inputStreamType.Type)}\", this.signal)");
+                    $"ws.callServerStreamingFullDuplex<{{methodReturnType}}, {UnwrapType(inputStreamType.Type)}>(\"{{methodReturnTypeLookup}}\", writer.data, inputStream, \"{UnwrapType(inputStreamType.Type)}\", this.signal)");
             else
                 template = template.Replace("{streamReturnTemplate}",
-                    "ws.callServerStreaming<{methodReturnType}>(\"{methodReturnType}\", writer.data, this.signal)");
+                    "ws.callServerStreaming<{methodReturnType}>(\"{methodReturnTypeLookup}\", writer.data, this.signal)");
 
             var templateMethod =
                 template
@@ -615,7 +624,8 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 
             if (!method.returnType.IsVoid)
                 templateMethod = templateMethod
-                    .Replace("{methodReturnType}", UnwrapType(method.returnType));
+                    .Replace("{methodReturnType}", UnwrapType(method.returnType))
+                    .Replace("{methodReturnTypeLookup}", UnwrapTypeForLookup(method.returnType));
 
 
             methodsBuilder.AppendLine(templateMethod);

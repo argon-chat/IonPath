@@ -142,7 +142,7 @@ public sealed class TypeScriptTemplateProvider : ITemplateProvider
               
             writer.writeEndArray();
                   
-            return await req.callAsyncT<{returnType}>("{returnType}", writer.data, this.signal);
+            return await req.callAsyncT<{returnType}>("{returnTypeLookup}", writer.data, this.signal);
           }
         """;
 

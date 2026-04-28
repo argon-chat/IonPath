@@ -234,4 +234,17 @@ public sealed class TypeScriptTypeNameResolver : TypeNameResolverBase
         var inner = Resolve(maybe.TypeArguments[0]);
         return UseMaybeWrapper ? FormatGeneric(MaybeWrapperName, [inner]) : $"{inner} | null";
     }
+
+    
+    public string ResolveForLookup(IonType type)
+    {
+        return type switch
+        {
+            IonGenericType { IsMaybe: true } maybe => FormatGeneric(MaybeWrapperName, [ResolveForLookup(maybe.TypeArguments[0])]),
+            IonGenericType { IsArray: true } array => FormatGeneric(ArrayWrapperName, [ResolveForLookup(array.TypeArguments[0])]),
+            IonGenericType { IsPartial: true } partial => FormatGeneric(PartialWrapperName, [ResolveForLookup(partial.TypeArguments[0])]),
+            IonUnion union => ResolveUnionInterface(union),
+            _ => ResolvePrimitive(type.name.Identifier)
+        };
+    }
 }
