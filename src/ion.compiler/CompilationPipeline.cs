@@ -30,6 +30,9 @@ public sealed class CompilationPipeline
         RegisterStage(new RestoreUnresolvedTypeStage(_context));
         RegisterStage(new CircularTypeReferenceStage(_context));
 
+        // Unused symbol detection (hints, non-blocking)
+        RegisterStage(new UnusedSymbolDetectionStage(_context));
+
         // Schema lock validation (needs fully resolved types)
         if (_existingLock is not null)
             RegisterStage(new SchemaLockValidationStage(_context, _existingLock));

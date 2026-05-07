@@ -137,13 +137,3 @@ IonFormatterStorage.register("datetime", {
     writer.writeTextString(iso);
   },
 });
-
-
-IonFormatterStorage.register("bytes", {
-  read(reader: CborReader): bytes {
-    return reader.readByteString();
-  },
-  write(writer: CborWriter, value: bytes): void {
-    writer.writeByteString(value);
-  },
-});

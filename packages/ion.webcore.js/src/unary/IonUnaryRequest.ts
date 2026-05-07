@@ -23,7 +23,7 @@ export interface IonCallContext {
   responseStatusText?: string;
   response?: Response;
   expectedType?: any;
-  requestHeadets: HeadersInit | undefined;
+  requestHeaders: HeadersInit | undefined;
 }
 
 export class IonRequest {
@@ -34,24 +34,7 @@ export class IonRequest {
   ) {}
 
   async callAsync(payload: Uint8Array, signal?: AbortSignal): Promise<void> {
-    const ctx: IonCallContext = {
-      client: fetch,
-      interfaceName: this.interfaceName,
-      methodName: this.methodName,
-      requestPayload: payload,
-      expectedType: undefined,
-      requestHeadets: { "Content-Type": IonContentType },
-    };
-
-    let next: (c: IonCallContext, s?: AbortSignal) => Promise<void> =
-      this.terminalAsync.bind(this);
-    for (let i = this.context.interceptors.length - 1; i >= 0; i--) {
-      const interceptor = this.context.interceptors[i];
-      const currentNext = next;
-      next = (c, s) => interceptor.invokeAsync(c, currentNext, s);
-    }
-
-    await next(ctx, signal);
+    await this.executeRequest(payload, signal);
   }
 
   async callAsyncT<TResponse>(
@@ -78,7 +61,7 @@ export class IonRequest {
         normalizedTypename.typeName
       ).read(reader);
     } catch (e) {
-      console.error("===== UNCATCH ION INTERNAL ERROR =====");
+      console.error("===== UNCAUGHT ION INTERNAL ERROR =====");
       console.error(e);
       console.error(`Procedure: ${ctx.interfaceName}/${ctx.methodName}()`);
       console.error(`ResponseTypename: ${responseTypename}`);
@@ -98,7 +81,7 @@ export class IonRequest {
       const reader = new CborReader(ctx.responsePayload!);
       return IonFormatterStorage.readNullable<TResponse>(reader, responseTypename);
     } catch (e) {
-      console.error("===== UNCATCH ION INTERNAL ERROR =====");
+      console.error("===== UNCAUGHT ION INTERNAL ERROR =====");
       console.error(e);
       console.error(`Procedure: ${ctx.interfaceName}/${ctx.methodName}()`);
       console.error(`ResponseTypename: ${responseTypename}`);
@@ -118,7 +101,7 @@ export class IonRequest {
       const reader = new CborReader(ctx.responsePayload!);
       return IonFormatterStorage.readNullableArray<TResponse>(reader, responseTypename);
     } catch (e) {
-      console.error("===== UNCATCH ION INTERNAL ERROR =====");
+      console.error("===== UNCAUGHT ION INTERNAL ERROR =====");
       console.error(e);
       console.error(`Procedure: ${ctx.interfaceName}/${ctx.methodName}()`);
       console.error(`ResponseTypename: ${responseTypename}`);
@@ -135,7 +118,7 @@ export class IonRequest {
       methodName: this.methodName,
       requestPayload: payload,
       expectedType: undefined,
-      requestHeadets: { "Content-Type": IonContentType },
+      requestHeaders: { "Content-Type": IonContentType },
     };
 
     let next: (c: IonCallContext, s?: AbortSignal) => Promise<void> =
@@ -180,7 +163,9 @@ export class IonRequest {
   }
 
   toBase64(u8: Uint8Array): string {
+    // @ts-ignore
     if (typeof Buffer !== "undefined") {
+      // @ts-ignore
       return Buffer.from(u8).toString("base64");
     } else {
       let binary = "";
@@ -199,7 +184,7 @@ export class IonRequest {
   ): Promise<void> {
     const resp = await safeFetchBuffer(`${this.context.baseUrl}/ion/${c.interfaceName}/${c.methodName}.unary`, {
       body: c.requestPayload.buffer as any,
-      headers: c.requestHeadets,
+      headers: c.requestHeaders,
       signal: signal,
       method: "POST",
       credentials: "include"

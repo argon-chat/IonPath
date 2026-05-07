@@ -1,3 +1,8 @@
+const f32Scratch = new Float32Array(1);
+const f32Bytes = new Uint8Array(f32Scratch.buffer);
+const f64Scratch = new Float64Array(1);
+const f64Bytes = new Uint8Array(f64Scratch.buffer);
+
 export class BinaryWriter {
   private buffer: Uint8Array;
   private offset: number = 0;
@@ -102,25 +107,21 @@ export class BinaryWriter {
 
   writeFloat32(value: number, littleEndian = false) {
     this.ensure(4);
-    const f32 = new Float32Array(1);
-    const u8 = new Uint8Array(f32.buffer);
-    f32[0] = value;
+    f32Scratch[0] = value;
     if (littleEndian) {
-      for (let i = 0; i < 4; i++) this.buffer[this.offset++] = u8[i];
+      for (let i = 0; i < 4; i++) this.buffer[this.offset++] = f32Bytes[i];
     } else {
-      for (let i = 3; i >= 0; i--) this.buffer[this.offset++] = u8[i];
+      for (let i = 3; i >= 0; i--) this.buffer[this.offset++] = f32Bytes[i];
     }
   }
 
   writeFloat64(value: number, littleEndian = false) {
     this.ensure(8);
-    const f64 = new Float64Array(1);
-    const u8 = new Uint8Array(f64.buffer);
-    f64[0] = value;
+    f64Scratch[0] = value;
     if (littleEndian) {
-      for (let i = 0; i < 8; i++) this.buffer[this.offset++] = u8[i];
+      for (let i = 0; i < 8; i++) this.buffer[this.offset++] = f64Bytes[i];
     } else {
-      for (let i = 7; i >= 0; i--) this.buffer[this.offset++] = u8[i];
+      for (let i = 7; i >= 0; i--) this.buffer[this.offset++] = f64Bytes[i];
     }
   }
 
@@ -132,6 +133,10 @@ export class BinaryWriter {
     }
     if (!isFinite(value)) {
       this.writeUint16(value < 0 ? 0xfc00 : 0x7c00, littleEndian); 
+      return;
+    }
+    if (value === 0) {
+      this.writeUint16(Object.is(value, -0) ? 0x8000 : 0x0000, littleEndian);
       return;
     }
 

@@ -8,14 +8,16 @@
 		<RootNamespace>ion.compiler</RootNamespace>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<PackAsTool>True</PackAsTool>
-		<Version>1.3.2</Version>
+		<ToolCommandName>ionc</ToolCommandName>
 		<PackageId>ionpath.compiler</PackageId>
+		<Description>IonPath compiler and language server - schema-first RPC contract language</Description>
 	</PropertyGroup>
 
 	<ItemGroup>
 		<PackageReference Include="Spectre.Console" Version="0.55.2" />
 		<PackageReference Include="Spectre.Console.Cli" Version="0.55.0" />
 		<PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.7" />
+		<PackageReference Include="OmniSharp.Extensions.LanguageServer" Version="0.19.9" />
 	</ItemGroup>
 
 	<ItemGroup>

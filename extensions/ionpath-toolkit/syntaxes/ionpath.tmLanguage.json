@@ -1,0 +1,261 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "IonPath",
+  "scopeName": "source.ion",
+  "patterns": [
+    { "include": "#blockComments" },
+    { "include": "#comments" },
+    { "include": "#directives" },
+    { "include": "#keywords" },
+    { "include": "#modifiers" },
+    { "include": "#attributes" },
+    { "include": "#genericBuiltinTypes" },
+    { "include": "#builtinTypes" },
+    { "include": "#vectorTypes" },
+    { "include": "#strings" },
+    { "include": "#quotedStrings" },
+    { "include": "#numbers" },
+    { "include": "#entityNames" },
+    { "include": "#typeParameters" },
+    { "include": "#fieldNames" },
+    { "include": "#inheritanceType" },
+    { "include": "#functionNames" },
+    { "include": "#enumMembers" },
+    { "include": "#unionCases" },
+    { "include": "#typeReference" }
+  ],
+  "repository": {
+    "blockComments": {
+      "patterns": [
+        {
+          "name": "comment.block.ionpath",
+          "begin": "/\\*",
+          "end": "\\*/",
+          "captures": {
+            "0": { "name": "punctuation.definition.comment.ionpath" }
+          }
+        }
+      ]
+    },
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.ionpath",
+          "match": "//.*$"
+        }
+      ]
+    },
+    "directives": {
+      "patterns": [
+        {
+          "name": "meta.directive.ionpath",
+          "match": "(#(?:use|feature))\\s+(\"[^\"]*\")",
+          "captures": {
+            "1": { "name": "keyword.control.directive.ionpath" },
+            "2": { "name": "string.quoted.double.ionpath" }
+          }
+        },
+        {
+          "name": "keyword.control.directive.ionpath",
+          "match": "#(?:use|feature)\\b"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.ionpath",
+          "match": "\\b(msg|flags|enum|typedef|service|union|attribute)\\b"
+        }
+      ]
+    },
+    "modifiers": {
+      "patterns": [
+        {
+          "name": "storage.modifier.ionpath",
+          "match": "\\b(stream|unary|internal)\\b"
+        }
+      ]
+    },
+    "attributes": {
+      "patterns": [
+        {
+          "name": "meta.attribute.ionpath",
+          "match": "(@)([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "punctuation.definition.annotation.ionpath" },
+            "2": { "name": "support.function.decorator.ionpath" }
+          }
+        }
+      ]
+    },
+    "builtinTypes": {
+      "patterns": [
+        {
+          "name": "storage.type.primitive.ionpath",
+          "match": "\\b(i1|i2|i4|i8|i16|u1|u2|u4|u8|u16|f2|f4|f8|void|bool|string|bytes|guid|datetime|dateonly|timeonly|duration|uri|bigint)\\b"
+        }
+      ]
+    },
+    "genericBuiltinTypes": {
+      "patterns": [
+        {
+          "name": "support.type.ionpath",
+          "match": "\\b(Maybe|Array|Partial)\\b"
+        }
+      ]
+    },
+    "vectorTypes": {
+      "patterns": [
+        {
+          "name": "support.type.vector.ionpath",
+          "match": "\\b(vec2f|vec3f|vec4f|vec2d|vec3d|vec4d|vec2h|vec3h|vec4h)\\b"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.ionpath",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.ionpath",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "quotedStrings": {
+      "patterns": [
+        {
+          "name": "string.quoted.single.ionpath",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.ionpath",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.hex.ionpath",
+          "match": "\\b0[xX][0-9a-fA-F]+\\b"
+        },
+        {
+          "name": "constant.numeric.binary.ionpath",
+          "match": "\\b0[bB][01]+\\b"
+        },
+        {
+          "name": "constant.numeric.ionpath",
+          "match": "\\b\\d+(?:\\s*<<\\s*\\d+)?\\b"
+        }
+      ]
+    },
+    "entityNames": {
+      "patterns": [
+        {
+          "match": "\\b(msg|enum|flags|service|typedef|union)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "keyword.control.ionpath" },
+            "2": { "name": "entity.name.type.ionpath" }
+          }
+        }
+      ]
+    },
+    "typeParameters": {
+      "patterns": [
+        {
+          "name": "meta.type-parameters.ionpath",
+          "begin": "<",
+          "end": ">",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.typeparameters.begin.ionpath" }
+          },
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.typeparameters.end.ionpath" }
+          },
+          "patterns": [
+            { "include": "#builtinTypes" },
+            { "include": "#genericBuiltinTypes" },
+            { "include": "#vectorTypes" },
+            {
+              "name": "entity.name.type.parameter.ionpath",
+              "match": "\\b[A-Z][A-Za-z0-9_]*\\b"
+            },
+            {
+              "name": "punctuation.separator.comma.ionpath",
+              "match": ","
+            }
+          ]
+        }
+      ]
+    },
+    "fieldNames": {
+      "patterns": [
+        {
+          "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*(:)",
+          "captures": {
+            "1": { "name": "variable.other.readwrite.ionpath" },
+            "2": { "name": "punctuation.separator.colon.ionpath" }
+          }
+        }
+      ]
+    },
+    "inheritanceType": {
+      "patterns": [
+        {
+          "match": "(?<=:\\s*)\\b([A-Za-z_][A-Za-z0-9_]*)\\b",
+          "captures": {
+            "1": { "name": "storage.type.ionpath" }
+          }
+        }
+      ]
+    },
+    "functionNames": {
+      "patterns": [
+        {
+          "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()",
+          "captures": {
+            "1": { "name": "entity.name.function.ionpath" }
+          }
+        }
+      ]
+    },
+    "enumMembers": {
+      "patterns": [
+        {
+          "match": "^\\s*([A-Z][a-zA-Z0-9_]*)\\s*(?==|,|\\})",
+          "captures": {
+            "1": { "name": "constant.other.enum.ionpath" }
+          }
+        }
+      ]
+    },
+    "unionCases": {
+      "patterns": [
+        {
+          "match": "^\\s*([A-Z][a-zA-Z0-9_]*)\\s*(?=\\(|:)",
+          "captures": {
+            "1": { "name": "entity.name.tag.unioncase.ionpath" }
+          }
+        }
+      ]
+    },
+    "typeReference": {
+      "patterns": [
+        {
+          "name": "entity.name.type.reference.ionpath",
+          "match": "(?<=:\\s*(?:stream\\s+)?)\\b([A-Z][A-Za-z0-9_]*)\\b(?!\\s*[:(])"
+        }
+      ]
+    }
+  }
+}

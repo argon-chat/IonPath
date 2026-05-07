@@ -1,14 +1,4 @@
-﻿service VectorMathInteraction(leftOperand: Vector) {
-    Abs(): Vector;
-    Add(rightOperand: Vector): Vector;
-    AndNot(rightOperand: Vector): Vector;
-    Clamp(min: Vector, max: Vector): Vector;
-
-    Do(): VectorOfVectorOfVector;
-}
-
-
-msg Vector {
+﻿msg Vector {
     x: f4;
     y: f4;
     z: f4;
@@ -23,4 +13,13 @@ msg VectorOfVector {
 msg VectorOfVectorOfVector {
     z: VectorOfVector;
     w: VectorOfVector;
+}
+
+service VectorMathInteraction(leftOperand: Vector) {
+    Abs(): Vector;
+    Add(rightOperand: Vector): Vector;
+    AndNot(rightOperand: Vector): Vector;
+    Clamp(min: Vector, max: Vector): Vector;
+
+    Do(): VectorOfVectorOfVector;
 }

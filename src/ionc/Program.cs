@@ -4,8 +4,34 @@ using System.Runtime.InteropServices;
 using System.Text;
 using ion.compiler;
 using ion.compiler.Commands;
+using ion.compiler.Lsp;
 using Microsoft.Extensions.Logging;
 using Spectre.Console.Cli;
+
+
+// LSP serve mode: intercept before Spectre/Console setup
+if (args.Length > 0 && args[0] == "serve")
+{
+    // Parse --stdio flag
+    if (args.Contains("--stdio"))
+    {
+        var server = await IonLanguageServer.CreateAsync(
+            Console.OpenStandardInput(),
+            Console.OpenStandardOutput());
+        await server.WaitForShutdownAsync();
+    }
+    else
+    {
+        var port = 0;
+        var portIdx = Array.IndexOf(args, "--port");
+        if (portIdx >= 0 && portIdx + 1 < args.Length)
+            int.TryParse(args[portIdx + 1], out port);
+
+        var (server, _) = await IonLanguageServer.CreateTcpAsync(port);
+        await server.WaitForShutdownAsync();
+    }
+    return 0;
+}
 
 
 Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
@@ -23,6 +49,7 @@ await Host.CreateDefaultBuilder(args)
         config.AddCommand<CompileCommand>("compile").WithAlias("build");
         config.AddCommand<CheckCommand>("check");
         config.AddCommand<InitCommand>("init");
+        config.AddCommand<ServeCommand>("serve").WithDescription("Start Language Server Protocol server");
 
         config.AddBranch("lock", @lock => {
             @lock.SetDescription("Manage the schema lock file (ion.lock.json)");

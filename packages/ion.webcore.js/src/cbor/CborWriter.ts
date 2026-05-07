@@ -1,5 +1,7 @@
 import { BinaryWriter } from "../binary/BinaryWriter";
 
+const textEncoder = new TextEncoder();
+
 export class CborWriter {
   private w: BinaryWriter;
   private stack: Array<{ type: "array" | "map"; definite: boolean }> = [];
@@ -119,7 +121,7 @@ export class CborWriter {
 
   writeHalf(value: number) {
     this.w.writeUint8((7 << 5) | 25);
-    this.w.writeFloat32(value);
+    this.w.writeFloat16(value);
   }
 
   writeSingle(value: number) {
@@ -149,7 +151,7 @@ export class CborWriter {
   }
 
   writeTextString(str: string) {
-    const bytes = new TextEncoder().encode(str);
+    const bytes = textEncoder.encode(str);
     this.writeTypeAndLength(3, bytes.length);
     this.w.writeBytes(bytes);
   }
@@ -159,7 +161,7 @@ export class CborWriter {
   }
 
   writeTextStringChunk(str: string) {
-    const bytes = new TextEncoder().encode(str);
+    const bytes = textEncoder.encode(str);
     this.writeTypeAndLength(3, bytes.length);
     this.w.writeBytes(bytes);
   }

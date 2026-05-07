@@ -1,5 +1,7 @@
 import { BinaryReader } from "../binary/BinaryReader";
 
+const textDecoder = new TextDecoder("utf-8");
+
 export enum CborReaderState {
   UnsignedInteger,
   NegativeInteger,
@@ -326,13 +328,13 @@ export class CborReader {
         total.set(c, offset);
         offset += c.length;
       }
-      return new TextDecoder("utf-8").decode(total);
+      return textDecoder.decode(total);
     } else {
       this.r.readUint8();
       const len = this.readLength(ai);
       if (len == null) throw new Error("Invalid definite length");
       const bytes = this.r.readBytes(len);
-      return new TextDecoder("utf-8").decode(bytes);
+      return textDecoder.decode(bytes);
     }
   }
 
@@ -376,7 +378,7 @@ export class CborReader {
   }
 
   readEndArrayAndSkip(skipSize: number) {
-    for (var i = 0; i < Math.abs(skipSize); i++) this.skipValue();
+    for (let i = 0; i < Math.abs(skipSize); i++) this.skipValue();
     this.readEndArray();
   }
 
@@ -401,11 +403,11 @@ export class CborReader {
 
     switch (state) {
       case CborReaderState.UnsignedInteger:
-        this.readUInt32();
+        this.readUInt64();
         break;
 
       case CborReaderState.NegativeInteger:
-        this.readInt32();
+        this.readInt64();
         break;
 
       case CborReaderState.ByteString:

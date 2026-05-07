@@ -2,12 +2,18 @@
   "name": "ionpath-toolkit",
   "displayName": "IonPathToolKit",
   "description": "Toolkit for IonPath Language",
-  "version": "1.0.2",
+  "version": "1.2.0",
   "icon": "images/icon.png",
   "publisher": "ArgonChat",
+  "main": "./out/extension.js",
   "engines": {
     "vscode": "^1.102.0"
   },
+  "activationEvents": [
+    "onLanguage:ion",
+    "workspaceContains:**/*.ion",
+    "workspaceContains:ion.config.json"
+  ],
   "bugs": {
     "url": "https://github.com/argon-chat/IonPath/issues"
   },
@@ -19,6 +25,21 @@
   "categories": [
     "Programming Languages"
   ],
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "esbuild src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --minify",
+    "watch": "esbuild src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --watch",
+    "dev": "npm run compile && code --extensionDevelopmentPath=. ../../src/tests/Contracts"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.102.0",
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.0"
+  },
   "contributes": {
     "languages": [
       {
@@ -28,7 +49,7 @@
           "ion"
         ],
         "extensions": [
-          "ion"
+          ".ion"
         ],
         "configuration": "./language-configuration.json",
         "icon": {
@@ -41,7 +62,7 @@
       {
         "language": "ion",
         "scopeName": "source.ion",
-        "path": "./syntaxes/ionpath.tmLanguage"
+        "path": "./syntaxes/ionpath.tmLanguage.json"
       }
     ],
     "jsonValidation": [
@@ -52,6 +73,72 @@
           "*/ion.config.json"
         ],
         "url": "./schemas/ion-config.schema.json"
+      }
+    ],
+    "configuration": {
+      "title": "IonPath",
+      "properties": {
+        "ionpath.compilerPath": {
+          "type": "string",
+          "default": "ionc",
+          "description": "Path to the ionc compiler executable. Defaults to 'ionc' (looked up in PATH)."
+        },
+        "ionpath.trace.server": {
+          "type": "string",
+          "enum": ["off", "messages", "verbose"],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the IonPath language server."
+        },
+        "ionpath.codeLens.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable CodeLens showing reference counts and message sizes."
+        },
+        "ionpath.inlayHints.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable Inlay Hints showing field sizes at end of lines."
+        },
+        "ionpath.minimumVersion": {
+          "type": "string",
+          "default": "1.3.0",
+          "description": "Minimum required ionc version."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "ionpath.restartServer",
+        "title": "Restart Language Server",
+        "category": "IonPath"
+      },
+      {
+        "command": "ionpath.showOutput",
+        "title": "Show Output",
+        "category": "IonPath"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ionpath-explorer",
+          "title": "IonPath",
+          "icon": "images/icon.png"
+        }
+      ]
+    },
+    "views": {
+      "ionpath-explorer": [
+        {
+          "id": "ionpath.projectView",
+          "name": "Project Schema"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "ionpath.projectView",
+        "contents": "No .ion files found in workspace.\n[Open Folder](command:vscode.openFolder)"
       }
     ]
   }

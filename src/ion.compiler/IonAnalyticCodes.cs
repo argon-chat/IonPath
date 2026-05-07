@@ -77,6 +77,15 @@ public static class IonAnalyticCodes
         = new("ION0028", "Breaking change: union '{0}' case '{1}' changed index from {2} to {3}. Index is the wire discriminator.");
     public static readonly IonAnalyticCode ION0029_LockFieldAddedNonNullable
         = new("ION0029", "Field '{0}' added to '{1}' is not nullable. Older readers will fail to deserialize. Consider using '{0}: {2}?'.");
+
+    // ── Unused symbol detection codes (ION1001–ION1003) ──
+
+    public static readonly IonAnalyticCode ION1001_UnusedType
+        = new("ION1001", "Type '{0}' is defined but never referenced.");
+    public static readonly IonAnalyticCode ION1002_UnusedImport
+        = new("ION1002", "Import '{0}' is unused. No types from this file are referenced.");
+    public static readonly IonAnalyticCode ION1003_UnusedField
+        = new("ION1003", "Field '{0}' in '{1}' is never used by any service method.");
 }
 
 public record IonAnalyticCode(string code, string template);

@@ -117,10 +117,10 @@ export class IonFormatterStorage {
     if (size === null)
       throw new Error("Indefinite arrays are not supported here");
 
+    const formatter = IonFormatterStorage.get<T>(typeName);
     const values: T[] = [];
     for (let i = 0; i < size; i++) {
-      const val = IonFormatterStorage.get<T>(typeName).read(reader);
-      values.push(val);
+      values.push(formatter.read(reader));
     }
 
     reader.readEndArray();
@@ -138,8 +138,9 @@ export class IonFormatterStorage {
       return;
     }
 
+    const formatter = IonFormatterStorage.get<T>(typeName);
     for (let i = 0; i < array.length; i++) {
-      IonFormatterStorage.get<T>(typeName).write(writer, array[i]);
+      formatter.write(writer, array[i]);
     }
 
     writer.writeEndArray();
@@ -228,8 +229,4 @@ export class IonMaybe<T> {
   unwrapOrDefault(): T | null {
     return this.value as T | null;
   }
-}
-export interface IS extends IIonService {
-  asdasd: Int16Array;
-  aqweqwe: 12;
 }

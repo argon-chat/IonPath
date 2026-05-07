@@ -75,7 +75,7 @@ export class IonWsClient {
   ): Promise<void> {
     const resp = await safeFetchBuffer(`${this.context.baseUrl}/ion.att`, {
       body: c.requestPayload.buffer as any,
-      headers: c.requestHeadets,
+      headers: c.requestHeaders,
       signal: signal,
       method: "POST",
       credentials: "include"
@@ -113,7 +113,7 @@ export class IonWsClient {
       methodName: this.methodName,
       requestPayload: new Uint8Array(),
       expectedType: undefined,
-      requestHeadets: { "Content-Type": IonContentType },
+      requestHeaders: { "Content-Type": IonContentType },
     };
 
     let next: (c: IonCallContext, s?: AbortSignal) => Promise<void> =
@@ -139,7 +139,7 @@ export class IonWsClient {
 
       return this.toBase56(token);
     } catch (e) {
-      console.error("===== UNCATCH ION INTERNAL ERROR =====");
+      console.error("===== UNCAUGHT ION INTERNAL ERROR =====");
       console.error(e);
       console.error(`Procedure: ${ctx.interfaceName}/${ctx.methodName}()`);
       console.error("===== ========================== =====");
@@ -212,7 +212,7 @@ export class IonWsClient {
 
           const msg = new Uint8Array(value);
           const opcode = msg[0];
-          const body = msg.slice(1);
+          const body = msg.subarray(1);
           const cborReader = new CborReader(body);
 
           if (opcode === 0x00) {
@@ -344,7 +344,7 @@ export class IonWsClient {
 
           const msg = new Uint8Array(value);
           const opcode = msg[0];
-          const body = msg.slice(1);
+          const body = msg.subarray(1);
           const cborReader = new CborReader(body);
 
           if (opcode === 0x00) {

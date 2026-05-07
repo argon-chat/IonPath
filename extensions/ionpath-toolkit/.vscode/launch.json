@@ -1,17 +1,37 @@
-// A launch configuration that launches the extension inside a new window
-// Use IntelliSense to learn about possible attributes.
-// Hover to view descriptions of existing attributes.
-// For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+// Launch Extension Host with dev ionc compiler
 {
 	"version": "0.2.0",
 	"configurations": [
 		{
-			"name": "Extension",
+			"name": "Run Extension (Dev)",
+			"type": "extensionHost",
+			"request": "launch",
+			"args": [
+				"${workspaceFolder}/../../src/tests/Contracts",
+				"--extensionDevelopmentPath=${workspaceFolder}"
+			],
+			"outFiles": [
+				"${workspaceFolder}/out/**/*.js"
+			],
+			"preLaunchTask": "build-all",
+			"env": {
+				"IONPATH_DEV": "1"
+			}
+		},
+		{
+			"name": "Run Extension (Dev, empty workspace)",
 			"type": "extensionHost",
 			"request": "launch",
 			"args": [
 				"--extensionDevelopmentPath=${workspaceFolder}"
-			]
+			],
+			"outFiles": [
+				"${workspaceFolder}/out/**/*.js"
+			],
+			"preLaunchTask": "build-all",
+			"env": {
+				"IONPATH_DEV": "1"
+			}
 		}
 	]
 }
