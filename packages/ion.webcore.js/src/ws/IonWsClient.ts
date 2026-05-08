@@ -73,6 +73,11 @@ export class IonWsClient {
     c: IonCallContext,
     signal?: AbortSignal
   ): Promise<void> {
+    // Inject correlation ID header if set by interceptor or user code
+    if (c.correlationId) {
+      (c.requestHeaders as Record<string, string>)["X-Ion-Correlation-Id"] = c.correlationId;
+    }
+
     const resp = await safeFetchBuffer(`${this.context.baseUrl}/ion.att`, {
       body: c.requestPayload.buffer as any,
       headers: c.requestHeaders,
@@ -113,7 +118,10 @@ export class IonWsClient {
       methodName: this.methodName,
       requestPayload: new Uint8Array(),
       expectedType: undefined,
-      requestHeaders: { "Content-Type": IonContentType },
+      requestHeaders: {
+        "Content-Type": IonContentType,
+        "X-Ion-Session-Id": this.context.sessionId,
+      },
     };
 
     let next: (c: IonCallContext, s?: AbortSignal) => Promise<void> =
@@ -171,14 +179,22 @@ export class IonWsClient {
   async *callServerStreaming<TResponse>(
     responseTypename: string,
     requestPayload: Uint8Array,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    correlationId?: string
   ): AsyncGenerator<TResponse, void, unknown> {
     if (typeof WebSocketStream === "undefined")
       throw new Error("WebSocketStream is not supported in this browser");
 
-    const wsUrl = `${toWebSocketUrl(this.context.baseUrl)}/ion/${
+    let wsUrl = `${toWebSocketUrl(this.context.baseUrl)}/ion/${
       this.interfaceName
     }/${this.methodName}.ws`;
+
+    // Append correlation headers as query params (browsers don't support custom WS headers)
+    const params = new URLSearchParams();
+    if (this.context.sessionId) params.set("sid", this.context.sessionId);
+    if (correlationId) params.set("cid", correlationId);
+    const qs = params.toString();
+    if (qs) wsUrl += `?${qs}`;
 
     let attempt = 0;
     let wss: WebSocketStream | null = null;
@@ -273,14 +289,22 @@ export class IonWsClient {
     requestPayload: Uint8Array,
     inputStream: AsyncIterable<TRequest>,
     inputStreamTypeName: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    correlationId?: string
   ): AsyncGenerator<TResponse, void, unknown> {
     if (typeof WebSocketStream === "undefined")
       throw new Error("WebSocketStream is not supported in this browser");
 
-    const wsUrl = `${toWebSocketUrl(this.context.baseUrl)}/ion/${
+    let wsUrl = `${toWebSocketUrl(this.context.baseUrl)}/ion/${
       this.interfaceName
     }/${this.methodName}.ws`;
+
+    // Append correlation headers as query params (browsers don't support custom WS headers)
+    const params = new URLSearchParams();
+    if (this.context.sessionId) params.set("sid", this.context.sessionId);
+    if (correlationId) params.set("cid", correlationId);
+    const qs = params.toString();
+    if (qs) wsUrl += `?${qs}`;
 
     let attempt = 0;
     let wss: WebSocketStream | null = null;

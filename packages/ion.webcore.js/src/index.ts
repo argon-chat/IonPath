@@ -30,5 +30,6 @@ import { IIonService } from "./logic/IIonService";
 import { ServiceExecutor } from "./logic/ServiceExecutor";
 export type { IonArray } from "./baseTypes";
 
+export { IonCorrelation, createIonClientContext } from "./logic/IonCorrelation";
 
 export { IonCallContext, IonClientContext, IonInterceptor, IonProtocolError }

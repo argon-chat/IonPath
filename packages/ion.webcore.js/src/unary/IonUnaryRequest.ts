@@ -24,6 +24,7 @@ export interface IonCallContext {
   response?: Response;
   expectedType?: any;
   requestHeaders: HeadersInit | undefined;
+  correlationId?: string;
 }
 
 export class IonRequest {
@@ -118,7 +119,10 @@ export class IonRequest {
       methodName: this.methodName,
       requestPayload: payload,
       expectedType: undefined,
-      requestHeaders: { "Content-Type": IonContentType },
+      requestHeaders: {
+        "Content-Type": IonContentType,
+        "X-Ion-Session-Id": this.context.sessionId,
+      },
     };
 
     let next: (c: IonCallContext, s?: AbortSignal) => Promise<void> =
@@ -182,6 +186,11 @@ export class IonRequest {
     c: IonCallContext,
     signal?: AbortSignal
   ): Promise<void> {
+    // Inject correlation ID header if set by interceptor or user code
+    if (c.correlationId) {
+      (c.requestHeaders as Record<string, string>)["X-Ion-Correlation-Id"] = c.correlationId;
+    }
+
     const resp = await safeFetchBuffer(`${this.context.baseUrl}/ion/${c.interfaceName}/${c.methodName}.unary`, {
       body: c.requestPayload.buffer as any,
       headers: c.requestHeaders,
@@ -219,6 +228,8 @@ export class IonRequest {
 export interface IonClientContext {
   baseUrl: string;
   interceptors: IonInterceptor[];
+  /** Auto-generated session ID. Persists for the lifetime of this client context (tab/instance). */
+  sessionId: string;
 }
 
 export type IonProtocolError = { code: string; message: string };

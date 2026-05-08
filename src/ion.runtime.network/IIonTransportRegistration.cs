@@ -4,7 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 public interface IIonTransportRegistration
 {
-    IIonTransportRegistration AddService<TInterface, TImpl>()
+    IIonTransportRegistration AddService<TInterface, TImpl>(int? port = null)
         where TInterface : class, IIonService
         where TImpl : class, TInterface;
 
@@ -18,9 +18,13 @@ public interface IIonTransportRegistration
 
 internal readonly struct IonDescriptorRegistration(IServiceCollection col) : IIonTransportRegistration
 {
-    public IIonTransportRegistration AddService<TInterface, TImpl>() where TInterface : class, IIonService where TImpl : class, TInterface
+    internal List<int> BoundPorts { get; } = [];
+
+    public IIonTransportRegistration AddService<TInterface, TImpl>(int? port = null) where TInterface : class, IIonService where TImpl : class, TInterface
     {
-        col.AddIonService<TInterface, TImpl>();
+        col.AddIonService<TInterface, TImpl>(port);
+        if (port.HasValue)
+            BoundPorts.Add(port.Value);
         return this;
     }
 

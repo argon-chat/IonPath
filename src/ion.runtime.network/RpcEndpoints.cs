@@ -1,9 +1,11 @@
 ﻿namespace ion.runtime.network;
 
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -33,6 +35,15 @@ public static class RpcEndpoints
             services.AddSingleton<IonRequestTerminatorStorage>();
             var reg = new IonDescriptorRegistration(services);
             onRegistration(reg);
+
+            if (reg.BoundPorts.Count > 0)
+            {
+                var registry = new IonPortBindingRegistry();
+                foreach (var port in reg.BoundPorts)
+                    registry.Add(port);
+                services.AddSingleton(registry); // registered as instance for UseIonPorts() access
+            }
+
             return services;
         }
 
@@ -48,13 +59,17 @@ public static class RpcEndpoints
             return services;
         }
 
-        public IServiceCollection AddIonService<TInterface, TImplementation>()
+        public IServiceCollection AddIonService<TInterface, TImplementation>(int? port = null)
             where TInterface : class, IIonService
             where TImplementation : class, TInterface
         {
             services.AddScoped<TInterface, TImplementation>();
             services.Configure<IonTransportOptions>(options =>
-                options.Services.Add(typeof(TInterface), typeof(TImplementation)));
+            {
+                options.Services.Add(typeof(TInterface), typeof(TImplementation));
+                if (port.HasValue)
+                    options.PortBindings[typeof(TInterface)] = port.Value;
+            });
             return services;
         }
 
@@ -87,6 +102,35 @@ public static class RpcEndpoints
     private static readonly byte[] OpcodeDataFrame = [IonWs.OPCODE_DATA];
     private static readonly byte[] OpcodeEndFrame = [IonWs.OPCODE_END];
     private static readonly byte[] OpcodeErrorFrame = [IonWs.OPCODE_ERROR];
+
+    private static void ExtractCorrelation(HttpRequest req, HttpResponse resp, ServerSideCallContext callCtx, IonTransportOptions options)
+    {
+        var sessionId = req.Headers[IonCorrelationHeaders.SessionId].FirstOrDefault();
+        if (!string.IsNullOrEmpty(sessionId))
+            callCtx.SessionId = sessionId;
+
+        var correlationId = req.Headers[IonCorrelationHeaders.CorrelationId].FirstOrDefault();
+        if (string.IsNullOrEmpty(correlationId) && options.GenerateCorrelationIdIfMissing)
+            correlationId = Guid.NewGuid().ToString("N");
+
+        if (!string.IsNullOrEmpty(correlationId))
+        {
+            callCtx.CorrelationId = correlationId;
+            resp.Headers.Append(IonCorrelationHeaders.CorrelationId, correlationId);
+        }
+
+        if (!string.IsNullOrEmpty(sessionId))
+            resp.Headers.Append(IonCorrelationHeaders.SessionId, sessionId);
+    }
+
+    private static IDisposable? BeginCorrelationScope(ILogger logger, ServerSideCallContext callCtx)
+    {
+        return logger.BeginScope(new Dictionary<string, object?>
+        {
+            ["SessionId"] = callCtx.SessionId,
+            ["CorrelationId"] = callCtx.CorrelationId
+        });
+    }
 
     public static IEndpointRouteBuilder MapRpcEndpoints(this IEndpointRouteBuilder app)
     {
@@ -121,6 +165,9 @@ public static class RpcEndpoints
 
                 foreach (var header in req.Headers)
                     callCtx.RequestItems.Add(header.Key, header.Value.ToString());
+
+                ExtractCorrelation(req, resp, callCtx, transportOptions.Value);
+                using var logScope = BeginCorrelationScope(log, callCtx);
 
                 var writer = new CborWriter();
 
@@ -194,7 +241,8 @@ public static class RpcEndpoints
                 {
                     log.LogError(ex, "handler failed");
                     resp.StatusCode = StatusCodes.Status500InternalServerError;
-                    await WriteError(log, resp, "INTERNAL_ERROR", ex.ToString());
+                    var sanitized = IonErrorSanitizer.Sanitize(ex, transportOptions.Value.DetailedErrors);
+                    await WriteError(log, resp, sanitized.code, sanitized.msg);
                     sw.Stop();
                     IonInstruments.RecordRequest("att", "exchange", resp.StatusCode);
                     IonInstruments.RecordRequestDuration("att", "exchange", sw.Elapsed.TotalMilliseconds);
@@ -214,6 +262,7 @@ public static class RpcEndpoints
             string methodName,
             [FromServices] IonDescriptorStorage store,
             [FromServices] IServiceProvider provider,
+            [FromServices] IOptions<IonTransportOptions> transportOptions,
             [FromServices] ILoggerFactory lf,
             CancellationToken ct) =>
         {
@@ -225,6 +274,25 @@ public static class RpcEndpoints
 
             try
             {
+                // Extract correlation from HTTP upgrade request headers (with query param fallback for WebSocket)
+                var sessionId = http.Request.Headers[IonCorrelationHeaders.SessionId].FirstOrDefault()
+                    ?? http.Request.Query["sid"].FirstOrDefault();
+                var correlationId = http.Request.Headers[IonCorrelationHeaders.CorrelationId].FirstOrDefault()
+                    ?? http.Request.Query["cid"].FirstOrDefault();
+                if (string.IsNullOrEmpty(correlationId) && transportOptions.Value.GenerateCorrelationIdIfMissing)
+                    correlationId = Guid.NewGuid().ToString("N");
+
+                if (!string.IsNullOrEmpty(correlationId))
+                    http.Response.Headers.Append(IonCorrelationHeaders.CorrelationId, correlationId);
+                if (!string.IsNullOrEmpty(sessionId))
+                    http.Response.Headers.Append(IonCorrelationHeaders.SessionId, sessionId);
+
+                using var logScope = log.BeginScope(new Dictionary<string, object?>
+                {
+                    ["SessionId"] = sessionId,
+                    ["CorrelationId"] = correlationId
+                });
+
                 await using var scope = provider.CreateAsyncScope();
                 var router = store.GetStreamRouter(interfaceName, scope);
                 var ticketExchange = provider.GetService<IIonTicketExchange>();
@@ -238,6 +306,15 @@ public static class RpcEndpoints
                     IonInstruments.RecordRequest("ws", endpoint, http.Response.StatusCode);
                     IonInstruments.RecordRequestDuration("ws", endpoint, sw.Elapsed.TotalMilliseconds);
                     IonInstruments.RecordError("ws", endpoint, "UNSUPPORTED_TRANSPORT");
+                    return;
+                }
+
+                if (!store.IsServiceAllowedOnPort(interfaceName, http.Connection.LocalPort))
+                {
+                    http.Response.StatusCode = StatusCodes.Status404NotFound;
+                    sw.Stop();
+                    IonInstruments.RecordRequest("ws", endpoint, http.Response.StatusCode);
+                    IonInstruments.RecordRequestDuration("ws", endpoint, sw.Elapsed.TotalMilliseconds);
                     return;
                 }
 
@@ -366,10 +443,10 @@ public static class RpcEndpoints
                 }
                 catch (Exception ex)
                 {
-                    log.LogError(ex, "WS handler failed");
+                    log.LogError(ex, "WS handler failed for {Endpoint}", endpoint);
                     try
                     {
-                        var err = IonProtocolError.INTERNAL_ERROR(ex.ToString());
+                        var err = IonErrorSanitizer.Sanitize(ex, transportOptions.Value.DetailedErrors);
                         var writer = new CborWriter();
                         IonFormatterStorage<IonProtocolError>.Write(writer, err);
                         var bytes = writer.Encode();
@@ -384,8 +461,9 @@ public static class RpcEndpoints
                         await ws.CloseAsync(WebSocketCloseStatus.InternalServerError, "exception",
                             CancellationToken.None);
                     }
-                    catch
+                    catch (Exception closeEx)
                     {
+                        log.LogWarning(closeEx, "Failed to close WebSocket gracefully for {Endpoint}", endpoint);
                     }
 
                     sw.Stop();
@@ -407,6 +485,7 @@ public static class RpcEndpoints
                 [FromServices] IonDescriptorStorage store,
                 [FromServices] IServiceProvider provider,
                 [FromServices] IEnumerable<IIonInterceptor> interceptors,
+                [FromServices] IOptions<IonTransportOptions> transportOptions,
                 [FromServices] ILoggerFactory lf,
                 [FromServices] IonRequestTerminatorStorage terminatorStorage,
                 CancellationToken ct) =>
@@ -424,6 +503,15 @@ public static class RpcEndpoints
                     IonInstruments.RecordRequest("unary", endpoint, resp.StatusCode);
                     IonInstruments.RecordRequestDuration("unary", endpoint, sw.Elapsed.TotalMilliseconds);
                     IonInstruments.RecordError("unary", endpoint, "UNSUPPORTED_MEDIA");
+                    return;
+                }
+
+                if (!store.IsServiceAllowedOnPort(interfaceName, req.HttpContext.Connection.LocalPort))
+                {
+                    resp.StatusCode = StatusCodes.Status404NotFound;
+                    sw.Stop();
+                    IonInstruments.RecordRequest("unary", endpoint, resp.StatusCode);
+                    IonInstruments.RecordRequestDuration("unary", endpoint, sw.Elapsed.TotalMilliseconds);
                     return;
                 }
 
@@ -454,6 +542,9 @@ public static class RpcEndpoints
 
                 foreach (var header in req.Headers)
                     callCtx.RequestItems.Add(header.Key, header.Value.ToString());
+
+                ExtractCorrelation(req, resp, callCtx, transportOptions.Value);
+                using var logScope = BeginCorrelationScope(log, callCtx);
 
                 var reader = new CborReader(memory);
                 var writer = new CborWriter();
@@ -519,9 +610,10 @@ public static class RpcEndpoints
                 }
                 catch (Exception ex)
                 {
-                    log.LogError(ex, "handler failed");
+                    log.LogError(ex, "handler failed for {Endpoint}", endpoint);
                     resp.StatusCode = StatusCodes.Status500InternalServerError;
-                    await WriteError(log, resp, "INTERNAL_ERROR", ex.ToString());
+                    var sanitized = IonErrorSanitizer.Sanitize(ex, transportOptions.Value.DetailedErrors);
+                    await WriteError(log, resp, sanitized.code, sanitized.msg);
                     sw.Stop();
                     IonInstruments.RecordRequest("unary", endpoint, resp.StatusCode);
                     IonInstruments.RecordRequestDuration("unary", endpoint, sw.Elapsed.TotalMilliseconds);
@@ -713,5 +805,32 @@ public static class RpcEndpoints
                     throw new InvalidOperationException($"Unknown opcode {opcode}");
             }
         }
+    }
+
+    /// <summary>
+    /// Configures Kestrel to listen on all ports registered via <c>AddService&lt;T,I&gt;(port: ...)</c>.
+    /// Call this on the <see cref="WebApplicationBuilder"/> before <c>Build()</c>.
+    /// <example>
+    /// <code>
+    /// builder.UseIonPorts();
+    /// </code>
+    /// </example>
+    /// </summary>
+    public static WebApplicationBuilder UseIonPorts(this WebApplicationBuilder builder)
+    {
+        // Find the IonPortBindingRegistry that was registered as a singleton instance
+        var descriptor = builder.Services.FirstOrDefault(d =>
+            d.ServiceType == typeof(IonPortBindingRegistry));
+
+        if (descriptor?.ImplementationInstance is not IonPortBindingRegistry registry || registry.Ports.Count == 0)
+            return builder;
+
+        builder.WebHost.ConfigureKestrel((_, kestrel) =>
+        {
+            foreach (var port in registry.Ports)
+                kestrel.ListenAnyIP(port);
+        });
+
+        return builder;
     }
 }
