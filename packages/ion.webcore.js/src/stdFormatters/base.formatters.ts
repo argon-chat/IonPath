@@ -1,5 +1,4 @@
 import {
-  bytes,
   DateOnly,
   DateTimeOffset,
   Duration,

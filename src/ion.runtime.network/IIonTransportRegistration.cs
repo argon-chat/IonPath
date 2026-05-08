@@ -4,11 +4,11 @@ using Microsoft.Extensions.DependencyInjection;
 
 public interface IIonTransportRegistration
 {
-    IIonTransportRegistration AddService<TInterface, TImpl>(int? port = null)
+    IIonTransportRegistration AddService<TInterface, TImpl>(int? port = null, bool excludeGlobalInterceptors = false)
         where TInterface : class, IIonService
         where TImpl : class, TInterface;
 
-    IIonTransportRegistration AddInterceptor<TImpl>() 
+    IIonTransportRegistration AddInterceptor<TImpl>(int? port = null) 
         where TImpl : class, IIonInterceptor;
 
     IIonTransportRegistration IonWithSubProtocolTicketExchange<T>()
@@ -20,17 +20,17 @@ internal readonly struct IonDescriptorRegistration(IServiceCollection col) : IIo
 {
     internal List<int> BoundPorts { get; } = [];
 
-    public IIonTransportRegistration AddService<TInterface, TImpl>(int? port = null) where TInterface : class, IIonService where TImpl : class, TInterface
+    public IIonTransportRegistration AddService<TInterface, TImpl>(int? port = null, bool excludeGlobalInterceptors = false) where TInterface : class, IIonService where TImpl : class, TInterface
     {
-        col.AddIonService<TInterface, TImpl>(port);
+        col.AddIonService<TInterface, TImpl>(port, excludeGlobalInterceptors);
         if (port.HasValue)
             BoundPorts.Add(port.Value);
         return this;
     }
 
-    public IIonTransportRegistration AddInterceptor<TImpl>() where TImpl : class, IIonInterceptor
+    public IIonTransportRegistration AddInterceptor<TImpl>(int? port = null) where TImpl : class, IIonInterceptor
     {
-        col.AddIonInterceptor<TImpl>();
+        col.AddIonInterceptor<TImpl>(port);
         return this;
     }
 

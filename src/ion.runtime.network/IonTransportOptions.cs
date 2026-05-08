@@ -13,6 +13,16 @@ public record IonTransportOptions
     public Dictionary<Type, int> PortBindings { get; } = new();
 
     /// <summary>
+    /// Maps a port to a list of interceptor types that only apply on that port.
+    /// </summary>
+    public Dictionary<int, List<Type>> PortInterceptors { get; } = new();
+
+    /// <summary>
+    /// Ports where global interceptors are excluded. Only port-specific interceptors will run.
+    /// </summary>
+    public HashSet<int> ExcludeGlobalInterceptorPorts { get; } = [];
+
+    /// <summary>
     /// When true, unhandled exception details (stack trace, type, message) are included in error responses.
     /// Should be false in production.
     /// </summary>

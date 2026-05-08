@@ -59,7 +59,7 @@ public static class RpcEndpoints
             return services;
         }
 
-        public IServiceCollection AddIonService<TInterface, TImplementation>(int? port = null)
+        public IServiceCollection AddIonService<TInterface, TImplementation>(int? port = null, bool excludeGlobalInterceptors = false)
             where TInterface : class, IIonService
             where TImplementation : class, TInterface
         {
@@ -68,17 +68,37 @@ public static class RpcEndpoints
             {
                 options.Services.Add(typeof(TInterface), typeof(TImplementation));
                 if (port.HasValue)
+                {
                     options.PortBindings[typeof(TInterface)] = port.Value;
+                    if (excludeGlobalInterceptors)
+                        options.ExcludeGlobalInterceptorPorts.Add(port.Value);
+                }
             });
             return services;
         }
 
-        public IServiceCollection AddIonInterceptor<TImplementation>()
+        public IServiceCollection AddIonInterceptor<TImplementation>(int? port = null)
             where TImplementation : class, IIonInterceptor
         {
-            services.AddScoped<IIonInterceptor, TImplementation>();
-            services.Configure<IonTransportOptions>(options =>
-                options.Interceptors.Add(typeof(TImplementation)));
+            services.AddScoped<TImplementation>();
+            if (port.HasValue)
+            {
+                services.Configure<IonTransportOptions>(options =>
+                {
+                    if (!options.PortInterceptors.TryGetValue(port.Value, out var list))
+                    {
+                        list = [];
+                        options.PortInterceptors[port.Value] = list;
+                    }
+                    list.Add(typeof(TImplementation));
+                });
+            }
+            else
+            {
+                services.AddScoped<IIonInterceptor, TImplementation>();
+                services.Configure<IonTransportOptions>(options =>
+                    options.Interceptors.Add(typeof(TImplementation)));
+            }
             return services;
         }
     }
@@ -102,6 +122,33 @@ public static class RpcEndpoints
     private static readonly byte[] OpcodeDataFrame = [IonWs.OPCODE_DATA];
     private static readonly byte[] OpcodeEndFrame = [IonWs.OPCODE_END];
     private static readonly byte[] OpcodeErrorFrame = [IonWs.OPCODE_ERROR];
+
+    private static IIonInterceptor[] ResolveInterceptors(
+        IEnumerable<IIonInterceptor> globalInterceptors,
+        IonTransportOptions options,
+        IServiceProvider scopedProvider,
+        int localPort)
+    {
+        var excludeGlobals = options.ExcludeGlobalInterceptorPorts.Contains(localPort);
+        var hasPortInterceptors = options.PortInterceptors.TryGetValue(localPort, out var portTypes)
+            && portTypes.Count > 0;
+
+        if (!hasPortInterceptors && !excludeGlobals)
+            return globalInterceptors.ToArray();
+
+        var result = excludeGlobals ? new List<IIonInterceptor>() : new List<IIonInterceptor>(globalInterceptors);
+
+        if (hasPortInterceptors)
+        {
+            foreach (var type in portTypes!)
+            {
+                if (scopedProvider.GetService(type) is IIonInterceptor interceptor)
+                    result.Add(interceptor);
+            }
+        }
+
+        return result.ToArray();
+    }
 
     private static void ExtractCorrelation(HttpRequest req, HttpResponse resp, ServerSideCallContext callCtx, IonTransportOptions options)
     {
@@ -205,7 +252,7 @@ public static class RpcEndpoints
                 {
                     var next = TerminalAsync;
 
-                    var array = interceptors.ToArray();
+                    var array = ResolveInterceptors(interceptors, transportOptions.Value, scope.ServiceProvider, req.HttpContext.Connection.LocalPort);
                     for (var i = array.Length - 1; i >= 0; i--)
                     {
                         var interceptor = array[i];
@@ -576,7 +623,7 @@ public static class RpcEndpoints
                 {
                     var next = TerminalAsync;
 
-                    var array = interceptors.ToArray();
+                    var array = ResolveInterceptors(interceptors, transportOptions.Value, scope.ServiceProvider, req.HttpContext.Connection.LocalPort);
                     for (var i = array.Length - 1; i >= 0; i--)
                     {
                         var interceptor = array[i];
