@@ -11,6 +11,8 @@ public sealed record IonProjectConfig
 
     [JsonPropertyName("features")] public required HashSet<IonGeneratorFeature> Features { get; init; }
 
+    [JsonPropertyName("modules")] public Dictionary<string, string>? Modules { get; init; }
+
     [JsonPropertyName("generators")]
     public required Dictionary<IonGeneratorPlatform, IonPlatformConfig> Generators { get; init; }
 

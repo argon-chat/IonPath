@@ -26,6 +26,7 @@ public sealed class CompilationPipeline
         // Register stages in order of execution
         RegisterStage(new DuplicateSymbolValidationStage(_context));
         RegisterStage(new TransformStage(_context));
+        RegisterStage(new ImportValidationStage(_context));
         RegisterStage(new StreamParameterValidationStage(_context));
         RegisterStage(new RestoreUnresolvedTypeStage(_context));
         RegisterStage(new CircularTypeReferenceStage(_context));

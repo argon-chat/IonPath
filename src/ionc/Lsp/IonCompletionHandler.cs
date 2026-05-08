@@ -35,7 +35,21 @@ public class IonCompletionHandler(IonWorkspace workspace) : CompletionHandlerBas
                 var lineText = lines[line].TrimEnd('\r');
                 var prefix = lineText[..Math.Min(request.Position.Character, lineText.Length)].TrimStart();
 
-                if (prefix.StartsWith("#use"))
+                if (prefix.StartsWith("#import") && prefix.Contains("from"))
+                {
+                    // After "from" — suggest module names
+                    items = GetModuleNameCompletions();
+                }
+                else if (prefix.StartsWith("#import") && prefix.Contains('{'))
+                {
+                    // Inside { } — suggest type names from the module on this line
+                    var moduleName = ExtractModuleNameFromLine(lineText);
+                    if (moduleName is not null)
+                        items = GetModuleTypeCompletions(moduleName);
+                    else
+                        items = GetAllExternalTypeCompletions();
+                }
+                else if (prefix.StartsWith("#use"))
                 {
                     // Don't suggest types after #use
                     items = [new CompletionItem
@@ -44,7 +58,7 @@ public class IonCompletionHandler(IonWorkspace workspace) : CompletionHandlerBas
                         Kind = CompletionItemKind.Snippet,
                         InsertText = "#use \"$1\"",
                         InsertTextFormat = InsertTextFormat.Snippet,
-                        Detail = "Import module"
+                        Detail = "Import module (deprecated, use #import)"
                     }];
                 }
                 else if (prefix.StartsWith("#feature"))
@@ -62,11 +76,19 @@ public class IonCompletionHandler(IonWorkspace workspace) : CompletionHandlerBas
                     [
                         new CompletionItem
                         {
+                            Label = "#import",
+                            Kind = CompletionItemKind.Keyword,
+                            InsertText = "#import { $1 } from \"$2\"",
+                            InsertTextFormat = InsertTextFormat.Snippet,
+                            Detail = "Import types from module"
+                        },
+                        new CompletionItem
+                        {
                             Label = "#use",
                             Kind = CompletionItemKind.Keyword,
                             InsertText = "#use \"$1\"",
                             InsertTextFormat = InsertTextFormat.Snippet,
-                            Detail = "Import module"
+                            Detail = "Import module (deprecated)"
                         },
                         new CompletionItem
                         {
@@ -82,6 +104,64 @@ public class IonCompletionHandler(IonWorkspace workspace) : CompletionHandlerBas
         }
 
         return Task.FromResult(new CompletionList(items));
+    }
+
+    private List<CompletionItem> GetModuleNameCompletions()
+    {
+        return workspace.ExternalModules
+            .Where(m => m.SourceModule is not null)
+            .Select(m => m.SourceModule!)
+            .Distinct()
+            .Select(name => new CompletionItem
+            {
+                Label = name,
+                Kind = CompletionItemKind.Module,
+                Detail = "External module"
+            })
+            .ToList();
+    }
+
+    private List<CompletionItem> GetModuleTypeCompletions(string moduleName)
+    {
+        return workspace.ExternalModules
+            .Where(m => m.SourceModule == moduleName)
+            .SelectMany(m => m.Definitions)
+            .Select(d => new CompletionItem
+            {
+                Label = d.name.Identifier,
+                Kind = CompletionItemKind.Class,
+                Detail = $"from \"{moduleName}\""
+            })
+            .ToList();
+    }
+
+    private List<CompletionItem> GetAllExternalTypeCompletions()
+    {
+        return workspace.ExternalModules
+            .Where(m => m.SourceModule is not null)
+            .SelectMany(m => m.Definitions.Select(d => (Module: m.SourceModule!, Type: d)))
+            .Select(x => new CompletionItem
+            {
+                Label = x.Type.name.Identifier,
+                Kind = CompletionItemKind.Class,
+                Detail = $"from \"{x.Module}\""
+            })
+            .ToList();
+    }
+
+    private static string? ExtractModuleNameFromLine(string lineText)
+    {
+        // Try to find: from "moduleName"
+        var fromIdx = lineText.IndexOf("from", StringComparison.Ordinal);
+        if (fromIdx < 0) return null;
+
+        var afterFrom = lineText[(fromIdx + 4)..].Trim();
+        if (afterFrom.Length < 3 || afterFrom[0] != '"') return null;
+
+        var endQuote = afterFrom.IndexOf('"', 1);
+        if (endQuote < 0) return null;
+
+        return afterFrom[1..endQuote];
     }
 
     public override Task<CompletionItem> Handle(CompletionItem request, CancellationToken cancellationToken)

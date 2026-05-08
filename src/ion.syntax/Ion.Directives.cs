@@ -19,6 +19,37 @@ public partial class IonParser
             )
         );
 
+    private static Parser<char, IonSyntaxMember> ImportDirective =>
+        Map(IonSyntaxMember
+            (doc, pos, typeNames, moduleName) => new IonImportSyntax(typeNames.ToList(), moduleName).WithPos(pos).WithComments(doc),
+            DocComment.Optional(),
+            CurrentPos,
+            Try(
+                String("#import")
+                    .Before(SkipWhitespaces)
+                    .Then(ImportTypeList)
+                    .Before(SkipWhitespaces)
+            ),
+            String("from")
+                .Before(SkipWhitespaces)
+                .Then(StringLiteral)
+                .Before(SkipWhitespaces)
+        );
+
+    private static Parser<char, IEnumerable<string>> ImportTypeList =>
+        Char('{')
+            .Before(SkipWhitespaces)
+            .Then(
+                ImportIdentifier.Before(SkipWhitespaces)
+                    .SeparatedAtLeastOnce(Char(',').Before(SkipWhitespaces))
+            )
+            .Before(SkipWhitespaces)
+            .Before(Char('}'));
+
+    private static Parser<char, string> ImportIdentifier =>
+        Token(c => char.IsLetterOrDigit(c) || c == '_')
+            .AtLeastOnceString();
+
     private static Parser<char, string> StringLiteral =>
         Char('"').Then(AnyCharExcept('"').ManyString()).Before(Char('"'));
 

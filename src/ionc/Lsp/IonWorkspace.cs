@@ -18,8 +18,13 @@ public sealed class IonWorkspace
     private Dictionary<IonFileSyntax, string> _fileUriMap = new();
     private CompilationContext? _lastContext;
 
+    // External module state
+    private List<IonModule> _externalModules = [];
+    private ModuleResolver? _moduleResolver;
+
     public IReadOnlyList<IonFileSyntax> ParsedFiles => _lastParsed;
     public CompilationContext? LastContext => _lastContext;
+    public IReadOnlyList<IonModule> ExternalModules => _externalModules;
 
     /// <summary>
     /// Get the real file system path for a parsed IonFileSyntax.
@@ -53,11 +58,53 @@ public sealed class IonWorkspace
         {
             _projectConfig = IonProjectConfig.FromJson(File.ReadAllText(configPath));
             Console.WriteLine($"[ionc] Loaded ion.config.json, features: {string.Join(", ", GetFeatures())}");
+            ResolveExternalModules();
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[ionc] Failed to load ion.config.json: {ex.Message}");
             _projectConfig = null;
+        }
+    }
+
+    private void ResolveExternalModules()
+    {
+        _externalModules.Clear();
+
+        if (_rootPath is null || _projectConfig?.Modules is null || _projectConfig.Modules.Count == 0)
+            return;
+
+        _moduleResolver = new ModuleResolver();
+        var result = _moduleResolver.Resolve(_rootPath, _projectConfig.Modules);
+
+        foreach (var diag in result.Diagnostics)
+            Console.WriteLine($"[ionc] Module resolution: {diag.Code} {diag.Message}");
+
+        // Transform resolved modules into IonModules for the compilation context
+        foreach (var resolved in result.Modules)
+        {
+            var features = resolved.Features.ToList();
+            var ctx = CompilationContext.Create(features, resolved.Files);
+            var pipeline = new CompilationPipeline(ctx);
+            pipeline.Execute();
+
+            foreach (var mod in ctx.ProcessedModules)
+            {
+                _externalModules.Add(new IonModule
+                {
+                    Name = mod.Name,
+                    Path = mod.Path,
+                    Definitions = mod.Definitions,
+                    Services = mod.Services,
+                    Features = mod.Features,
+                    Attributes = mod.Attributes,
+                    Imports = mod.Imports,
+                    Syntax = mod.Syntax,
+                    SourceModule = resolved.Name
+                });
+            }
+
+            Console.WriteLine($"[ionc] Resolved module '{resolved.Name}': {ctx.ProcessedModules.Sum(m => m.Definitions.Count)} types");
         }
     }
 
@@ -153,7 +200,7 @@ public sealed class IonWorkspace
             return result;
         }
 
-        var ctx = CompilationContext.Create(GetFeatures(), parsed);
+        var ctx = CompilationContext.Create(GetFeatures(), parsed, _externalModules);
         var pipeline = new CompilationPipeline(ctx);
         pipeline.Execute();
 

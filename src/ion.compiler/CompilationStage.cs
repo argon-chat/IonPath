@@ -21,6 +21,18 @@ public class CompilationContext(IReadOnlyList<IonFileSyntax> files)
     public required IReadOnlyList<IonModule> GlobalModules { get; init; }
     public List<IonModule> ProcessedModules { get; } = [];
 
+    /// <summary>
+    /// Modules loaded from external dependencies (via #import directives).
+    /// These are available for type resolution when explicitly imported.
+    /// </summary>
+    public List<IonModule> ExternalModules { get; } = [];
+
+    /// <summary>
+    /// Map of import declarations: file → list of (moduleName, typeNames).
+    /// Populated during parsing, used during type resolution.
+    /// </summary>
+    public Dictionary<string, List<(string ModuleName, List<string> TypeNames)>> ImportDeclarations { get; } = new();
+
     public IonType? ResolveBuiltinType(IonUnderlyingTypeSyntax type) => GlobalModules
         .SelectMany(module => module.Definitions.Where(x => x.IsBuiltin))
         .FirstOrDefault(t => t.name.Identifier.Equals(type.Name.Identifier));
@@ -108,9 +120,30 @@ public class CompilationContext(IReadOnlyList<IonFileSyntax> files)
         if (builtin is not null)
             return builtin;
 
-        return ProcessedModules
+        // Search local processed modules
+        var local = ProcessedModules
             .SelectMany(module => module.Definitions)
             .FirstOrDefault(t => t.name.Identifier.Equals(unresolvedType.name.Identifier));
+
+        if (local is not null)
+            return local;
+
+        // Search external modules (types available via #import)
+        return ExternalModules
+            .SelectMany(module => module.Definitions)
+            .FirstOrDefault(t => t.name.Identifier.Equals(unresolvedType.name.Identifier));
+    }
+
+    /// <summary>
+    /// Returns all type names available from a specific external module.
+    /// </summary>
+    public IReadOnlyList<string> GetExternalModuleTypeNames(string moduleName)
+    {
+        return ExternalModules
+            .Where(m => m.SourceModule == moduleName)
+            .SelectMany(m => m.Definitions)
+            .Select(d => d.name.Identifier)
+            .ToList();
     }
 
 
@@ -127,6 +160,16 @@ public class CompilationContext(IReadOnlyList<IonFileSyntax> files)
         {
             GlobalModules = [..targetIncludes]
         };
+    }
+
+    public static CompilationContext Create(IReadOnlyList<string> features, IReadOnlyList<IonFileSyntax> files, IReadOnlyList<IonModule> externalModules)
+    {
+        var ctx = Create(features, files);
+
+        foreach (var mod in externalModules)
+            ctx.ExternalModules.Add(mod);
+
+        return ctx;
     }
 
     public void OnPrepare(IonModule module)

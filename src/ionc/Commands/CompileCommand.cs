@@ -123,6 +123,46 @@ public class CompileCommand : AsyncCommand<CompileOptions>
         var ctx = CompilationContext.Create(project.Features.Select(x => x.ToString().ToLowerInvariant()).ToList(),
             list);
 
+        // Resolve external module dependencies
+        List<IonModule> externalModules = [];
+        if (project.Modules is { Count: > 0 })
+        {
+            var resolver = new ModuleResolver();
+            var moduleResult = resolver.Resolve(currentDir.FullName, project.Modules);
+
+            foreach (var diag in moduleResult.Diagnostics)
+                ctx.Diagnostics.Add(diag);
+
+            foreach (var resolved in resolver.GetTopologicalOrder())
+            {
+                var modFeatures = resolved.Features.ToList();
+                var modCtx = CompilationContext.Create(modFeatures, resolved.Files);
+                var modPipeline = new CompilationPipeline(modCtx);
+                modPipeline.Execute();
+
+                foreach (var mod in modCtx.ProcessedModules)
+                {
+                    var extMod = new IonModule
+                    {
+                        Name = mod.Name,
+                        Path = mod.Path,
+                        Definitions = mod.Definitions,
+                        Services = mod.Services,
+                        Features = mod.Features,
+                        Attributes = mod.Attributes,
+                        Imports = mod.Imports,
+                        Syntax = mod.Syntax,
+                        SourceModule = resolved.Name
+                    };
+                    externalModules.Add(extMod);
+                    ctx.ExternalModules.Add(extMod);
+                }
+            }
+
+            if (externalModules.Count > 0 && options.Verbose)
+                AnsiConsole.MarkupLine($"[dim]Resolved {externalModules.Count} external module(s)[/]");
+        }
+
         // Load existing lock file (if present and not disabled)
         IonSchemaLock? existingLock = null;
         if (!options.NoLock && !options.UpdateLock)
@@ -211,6 +251,19 @@ public class CompileCommand : AsyncCommand<CompileOptions>
 
                 if (!options.NoEmitCsProj)
                     generator.GenerateProjectFile(project.Name, outputDirectoryForFiles.File($"{project.Name}.csproj"));
+
+                // Patch csproj with module ProjectReferences (edit, not overwrite)
+                if (project.Modules is { Count: > 0 })
+                {
+                    var csprojPath = outputDirectoryForFiles.File($"{project.Name}.csproj").FullName;
+                    if (File.Exists(csprojPath))
+                    {
+                        var moduleRefs = BuildModuleProjectReferences(project.Modules, outputDirectoryForFiles, cfg);
+                        if (CodeGen.CsprojModulePatcher.EnsureProjectReferences(csprojPath, moduleRefs))
+                            AnsiConsole.MarkupLine($"    [dim]Patched {project.Name}.csproj with module references[/]");
+                    }
+                }
+
                 File.WriteAllText(outputDirectoryForFiles.File($"globals.cs").FullName,
                     generator.GenerateGlobalTypes());
 
@@ -432,5 +485,55 @@ public class CompileCommand : AsyncCommand<CompileOptions>
         if (platform is IonGeneratorPlatform.Browser)
             return new IonTypeScriptGenerator(@namespace);
         throw new InvalidOperationException();
+    }
+
+    /// <summary>
+    /// Builds the list of ProjectReference entries for external modules.
+    /// Calculates relative paths from the output directory to each module's generated csproj.
+    /// </summary>
+    private static List<CodeGen.ModuleProjectReference> BuildModuleProjectReferences(
+        Dictionary<string, string> modules,
+        DirectoryInfo outputDir,
+        DotnetGeneratorConfig cfg)
+    {
+        var refs = new List<CodeGen.ModuleProjectReference>();
+
+        foreach (var (moduleName, modulePath) in modules)
+        {
+            // Each module generates its own csproj at its own outputs path.
+            // We need to find the module's ion.config.json to determine its output dir and project name.
+            var moduleRoot = Path.GetFullPath(Path.Combine(outputDir.FullName, "..", modulePath));
+            var moduleConfigPath = Path.Combine(moduleRoot, "ion.config.json");
+
+            if (!File.Exists(moduleConfigPath))
+                continue;
+
+            try
+            {
+                var moduleConfig = IonProjectConfig.FromJson(File.ReadAllText(moduleConfigPath));
+
+                // Find the module's dotnet output path
+                if (!moduleConfig.Generators.TryGetValue(IonGeneratorPlatform.Dotnet, out var modPlatformCfg))
+                    continue;
+
+                var modDotnetCfg = modPlatformCfg as DotnetGeneratorConfig;
+                if (modDotnetCfg is null)
+                    continue;
+
+                var moduleCsprojDir = Path.GetFullPath(Path.Combine(moduleRoot, modDotnetCfg.Outputs));
+                var moduleCsprojPath = Path.Combine(moduleCsprojDir, $"{moduleConfig.Name}.csproj");
+
+                // Calculate relative path from our output dir to the module's csproj
+                var relativePath = Path.GetRelativePath(outputDir.FullName, moduleCsprojPath);
+
+                refs.Add(new CodeGen.ModuleProjectReference(moduleName, relativePath));
+            }
+            catch
+            {
+                // Skip modules with invalid configs
+            }
+        }
+
+        return refs;
     }
 }

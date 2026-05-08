@@ -45,6 +45,8 @@ public record IonAttributeSyntax(IonIdentifier Name, List<string> Args) : IonSyn
 
 public record IonUseSyntax(string Path) : IonSyntaxMember;
 
+public record IonImportSyntax(List<string> TypeNames, string ModuleName) : IonSyntaxMember;
+
 public record IonTypedefSyntax(IonUnderlyingTypeSyntax TypeName, IonUnderlyingTypeSyntax? BaseType) : IonSyntaxMember;
 
 public record IonArgumentSyntax(IonIdentifier argName, IonUnderlyingTypeSyntax type, IonArgumentModifiers modifiers = IonArgumentModifiers.None) : IonSyntaxMember;
@@ -95,6 +97,7 @@ public record IonFileSyntax(
     string Name,
     FileInfo file,
     List<IonUseSyntax> useSyntaxes,
+    List<IonImportSyntax> importSyntaxes,
     List<IonFeatureSyntax> featureSyntaxes,
     List<IonAttributeDefSyntax> attributeDefSyntaxes,
     List<IonEnumSyntax> enumSyntaxes,

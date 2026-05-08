@@ -86,6 +86,25 @@ public static class IonAnalyticCodes
         = new("ION1002", "Import '{0}' is unused. No types from this file are referenced.");
     public static readonly IonAnalyticCode ION1003_UnusedField
         = new("ION1003", "Field '{0}' in '{1}' is never used by any service method.");
+
+    // ── Module system codes (ION0040–ION0049) ──
+
+    public static readonly IonAnalyticCode ION0040_ModuleCircularDependency
+        = new("ION0040", "Circular module dependency detected: {0}");
+    public static readonly IonAnalyticCode ION0041_ModuleConfigNotFound
+        = new("ION0041", "Module '{0}' config not found at path '{1}'. Ensure the path contains a valid ion.config.json.");
+    public static readonly IonAnalyticCode ION0042_ModuleUnknown
+        = new("ION0042", "Unknown module '{0}'. It is not declared in ion.config.json modules.");
+    public static readonly IonAnalyticCode ION0043_ModuleTypeNotFound
+        = new("ION0043", "Type '{0}' not found in module '{1}'.");
+    public static readonly IonAnalyticCode ION0044_ModuleTypeNotFoundWithSuggestion
+        = new("ION0044", "Type '{0}' not found in module '{1}'. Did you mean '{2}'?");
+    public static readonly IonAnalyticCode ION0045_ModuleUnusedImport
+        = new("ION0045", "Imported type '{0}' from module '{1}' is never used.");
+    public static readonly IonAnalyticCode ION0046_ModuleLockMismatch
+        = new("ION0046", "Module '{0}' content hash has changed since last lock. Run 'ionc modules lock' to update.");
+    public static readonly IonAnalyticCode ION0047_DeprecatedUseDirective
+        = new("ION0047", "#use is deprecated. Use '#import {{ TypeName }} from \"moduleName\"' instead.");
 }
 
 public record IonAnalyticCode(string code, string template);

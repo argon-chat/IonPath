@@ -14,6 +14,14 @@
       "type": "string",
       "minLength": 1
     },
+    "modules": {
+      "type": "object",
+      "description": "External module dependencies. Keys are module names, values are relative paths to the module's project root (containing ion.config.json).",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
     "features": {
       "type": "array",
       "items": {

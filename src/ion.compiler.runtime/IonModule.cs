@@ -13,6 +13,17 @@ public sealed class IonModule
     public required List<string> Imports { get; init; }
     public IonFileSyntax? Syntax { get; init; } = null;
 
+    /// <summary>
+    /// If this module was loaded as an external dependency, this is the module name from ion.config.json.
+    /// Null for the local project's own modules.
+    /// </summary>
+    public string? SourceModule { get; init; } = null;
+
+    /// <summary>
+    /// Whether this module comes from an external dependency.
+    /// </summary>
+    public bool IsExternal => SourceModule is not null;
+
 
     public static readonly Lazy<IonModule> GetStdModule = new(() => new IonModule
     {

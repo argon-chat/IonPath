@@ -10,6 +10,7 @@ public partial class IonParser
         OneOf(
             AttributeDef.OfType<IonSyntaxMember>(),
             Service.OfType<IonSyntaxMember>(),
+            ImportDirective.OfType<IonSyntaxMember>(),
             UseDirective.OfType<IonSyntaxMember>(),
             FeatureDirective.OfType<IonSyntaxMember>(),
             Message.OfType<IonSyntaxMember>(),
@@ -24,7 +25,7 @@ public partial class IonParser
     /// past invalid input to the next recognizable definition.
     /// </summary>
     private static readonly string[] DefinitionKeywords =
-        ["msg", "service", "use", "feature", "flags", "enum", "typedef", "union", "attr"];
+        ["msg", "service", "import", "use", "feature", "flags", "enum", "typedef", "union", "attr"];
 
     /// <summary>
     /// Attempts to parse a Definition, and on failure skips to the next definition keyword
@@ -96,6 +97,7 @@ public partial class IonParser
         var membersList = members.ToList();
         return new IonFileSyntax(name, fileInfo,
             membersList.OfType<IonUseSyntax>().ToList(),
+            membersList.OfType<IonImportSyntax>().ToList(),
             membersList.OfType<IonFeatureSyntax>().ToList(),
             membersList.OfType<IonAttributeDefSyntax>().ToList(),
             membersList.OfType<IonEnumSyntax>().ToList(),
