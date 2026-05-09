@@ -133,6 +133,7 @@ public sealed record DotnetGeneratorConfig : IonPlatformConfig
 public sealed record BrowserGeneratorConfig : IonPlatformConfig
 {
     [JsonPropertyName("outputFile")] public required string OutputFile { get; init; }
+    [JsonPropertyName("singleFileOutput")] public bool SingleFileOutput { get; init; }
 }
 
 public sealed record GoGeneratorConfig : IonPlatformConfig

@@ -282,7 +282,7 @@ public class CompileCommand : AsyncCommand<CompileOptions>
             {
                 var cfg = value as BrowserGeneratorConfig;
                 var gen = new IonTypeScriptGenerator(project.Name);
-                GenerateBrowserClient(gen, currentDir, project, ctx, cfg);
+                GenerateBrowserClient(gen, currentDir, project, ctx, cfg, externalModules);
                 AnsiConsole.MarkupLine($"    [green]✓[/] Generated to [dim]{cfg.OutputFile}[/]");
             }
 
@@ -344,7 +344,7 @@ public class CompileCommand : AsyncCommand<CompileOptions>
 
     private void GenerateBrowserClient(IonTypeScriptGenerator generator, DirectoryInfo currentDir,
         IonProjectConfig project,
-        CompilationContext context, BrowserGeneratorConfig cfg)
+        CompilationContext context, BrowserGeneratorConfig cfg, List<IonModule> externalModules)
     {
         var outputFile = currentDir.File(cfg.OutputFile);
 
@@ -409,19 +409,42 @@ public class CompileCommand : AsyncCommand<CompileOptions>
             declare type f8 = number;
             """);
 
-        fileBuilder.AppendLine(generator.GenerateTypes(context.ProcessedModules.SelectMany(x => x.Definitions)
-            .DistinctBy(x => x.name.Identifier)));
-        fileBuilder.AppendLine(generator.GenerateAllFormatters(context.ProcessedModules.SelectMany(x => x.Definitions)
-            .DistinctBy(x => x.name.Identifier)));
+        // Collect all definitions and services — local project first
+        var allDefinitions = context.ProcessedModules
+            .SelectMany(x => x.Definitions)
+            .ToList();
+        var allServices = context.ProcessedModules
+            .SelectMany(x => x.Services)
+            .ToList();
+
+        // When singleFileOutput is enabled, merge external module types into the same file
+        if (cfg.SingleFileOutput && externalModules.Count > 0)
+        {
+            allDefinitions.AddRange(externalModules.SelectMany(m => m.Definitions));
+            allServices.AddRange(externalModules.SelectMany(m => m.Services));
+        }
+
+        var distinctDefs = allDefinitions.DistinctBy(x => x.name.Identifier);
+        var distinctServices = allServices.DistinctBy(x => x.name.Identifier).ToList();
+
+        fileBuilder.AppendLine(generator.GenerateTypes(distinctDefs));
+        fileBuilder.AppendLine(generator.GenerateAllFormatters(distinctDefs));
 
         foreach (var module in context.ProcessedModules)
             fileBuilder.AppendLine(generator.GenerateServices(module));
 
-        fileBuilder.AppendLine(generator.GenerateAllServiceClientImpl(context.ProcessedModules
-            .SelectMany(x => x.Services).DistinctBy(x => x.name.Identifier)));
+        // When singleFileOutput, also generate services from external modules
+        if (cfg.SingleFileOutput && externalModules.Count > 0)
+        {
+            foreach (var extModule in externalModules)
+            {
+                if (extModule.Services.Count > 0)
+                    fileBuilder.AppendLine(generator.GenerateServices(extModule));
+            }
+        }
 
-        fileBuilder.AppendLine(generator.GenerateClientProxy(context.ProcessedModules.SelectMany(x => x.Services)
-            .DistinctBy(x => x.name.Identifier).ToList()));
+        fileBuilder.AppendLine(generator.GenerateAllServiceClientImpl(distinctServices));
+        fileBuilder.AppendLine(generator.GenerateClientProxy(distinctServices));
 
         File.WriteAllText(outputFile.FullName, fileBuilder.ToString());
     }
