@@ -1,0 +1,104 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title=".NET Client — IonPath" current="/guides/dotnet-client/">
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">.NET Client</h1>
+    <p class="text-text-secondary mb-8">Use the <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">IonClient</code> to make typed RPC calls from .NET applications — unary HTTP calls and WebSocket streaming.</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <section>
+      <h2 id="setup" class="text-xl font-bold mb-4">Setup</h2>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">using</span> ion.runtime.client;
+
+<span class="text-accent-3">var</span> client = <span class="text-accent-3">new</span> <span class="type-name">IonClient</span>(<span class="text-accent-2">"https://api.example.com"</span>);
+
+<span class="text-text-muted">// Create a typed service proxy</span>
+<span class="text-accent-3">var</span> userService = client.ForService&lt;<span class="type-name">IUserService</span>&gt;(spaceId: 1);</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ForService&lt;T&gt;</code> creates a typed proxy that passes base arguments to every call.</p>
+    </section>
+
+    <section>
+      <h2 id="unary" class="text-xl font-bold mb-4">Unary Calls</h2>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// Simple request-response</span>
+<span class="type-name">User</span> user = <span class="text-accent-3">await</span> userService.GetUser(userId: 42);
+Console.WriteLine(user.name);  <span class="text-text-muted">// fully typed</span>
+
+<span class="text-text-muted">// Fire-and-forget (void method)</span>
+<span class="text-accent-3">await</span> userService.SendNotification(userId: 42, text: <span class="text-accent-2">"Hello"</span>);</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">Under the hood, the proxy:</p>
+      <ol class="list-decimal list-inside space-y-1 text-sm text-text-secondary mt-2">
+        <li>Serializes <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">[spaceId, userId]</code> to CBOR</li>
+        <li>POSTs to <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">/ion/UserService/GetUser.unary</code></li>
+        <li>Deserializes the CBOR response body into <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">User</code></li>
+      </ol>
+    </section>
+
+    <section>
+      <h2 id="streaming" class="text-xl font-bold mb-4">Streaming Calls</h2>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// Server streaming via WebSocket</span>
+<span class="text-accent-3">await foreach</span> (<span class="text-accent-3">var</span> user <span class="text-accent-3">in</span> userService.WatchUpdates())
+{'{'}
+    Console.WriteLine($<span class="text-accent-2">"Updated: {'{'}user.name{'}'}"</span>);
+{'}'}
+
+<span class="text-text-muted">// Bidirectional streaming</span>
+<span class="text-accent-3">var</span> channel = Channel.CreateUnbounded&lt;<span class="type-keyword">float</span>&gt;();
+<span class="text-accent-3">await foreach</span> (<span class="text-accent-3">var</span> result <span class="text-accent-3">in</span> streamService.Floats(channel.Reader.ReadAllAsync()))
+{'{'}
+    Console.WriteLine(result);
+{'}'}</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="error-handling" class="text-xl font-bold mb-4">Error Handling</h2>
+      <p class="text-sm text-text-secondary mb-4">RPC errors are thrown as <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">IonProtocolError</code>:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">try</span>
+{'{'}
+    <span class="text-accent-3">var</span> user = <span class="text-accent-3">await</span> userService.GetUser(999);
+{'}'}
+<span class="text-accent-3">catch</span> (<span class="type-name">IonProtocolError</span> ex)
+{'{'}
+    Console.WriteLine($<span class="text-accent-2">"Error {'{'}ex.Code{'}'}: {'{'}ex.Message{'}'}"</span>);
+{'}'}</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="auth" class="text-xl font-bold mb-4">Authentication</h2>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">var</span> client = <span class="text-accent-3">new</span> <span class="type-name">IonClient</span>(<span class="text-accent-2">"https://api.example.com"</span>, options =>
+{'{'}
+    options.Ticket = <span class="text-accent-2">"eyJhbGciOiJIUzI1NiIs..."</span>;
+{'}'});</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">The ticket is sent via the subprotocol header for WebSocket connections and via a custom header for HTTP requests.</p>
+    </section>
+
+    <section>
+      <h2 id="deadlines" class="text-xl font-bold mb-4">Deadlines</h2>
+      <p class="text-sm text-text-secondary mb-4">Methods annotated with <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">{'@'}deadline(ms)</code> in the schema have automatic request timeouts:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// In the schema:</span>
+<span class="text-accent-3">{'@'}deadline</span>(5000)
+<span class="text-accent-3">service</span> <span class="type-name">SearchService</span>() {'{'}
+    Search(query: <span class="type-keyword">string</span>): <span class="type-name">SearchResult</span>;
+{'}'}
+
+<span class="text-text-muted">// C# client — auto-cancels after 5 seconds</span>
+<span class="text-accent-3">var</span> result = <span class="text-accent-3">await</span> searchService.Search(<span class="text-accent-2">"hello"</span>);</pre>
+      </div>
+    </section>
+
+  </div>
+</DocsLayout>

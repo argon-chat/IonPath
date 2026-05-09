@@ -1,0 +1,129 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title=".NET Wire Protocol — IonPath" current="/guides/dotnet-networking/">
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">.NET Wire Protocol</h1>
+    <p class="text-text-secondary mb-8">Details of the IonPath wire protocol — CBOR encoding, HTTP routing, WebSocket framing, and authentication.</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <section>
+      <h2 id="routing" class="text-xl font-bold mb-4">Routing</h2>
+      <p class="text-sm text-text-secondary mb-4">IonPath uses a fixed URL scheme for all RPC calls:</p>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Type</span>
+          <span>Route Pattern</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="text-[12px] type-property">Unary</span>
+          <span class="font-mono text-[12px] text-text-secondary">POST /ion/{'{'}service{'}'}/{'{'}method{'}'}.unary</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="text-[12px] type-property">Streaming</span>
+          <span class="font-mono text-[12px] text-text-secondary">WS /ion/{'{'}service{'}'}/{'{'}method{'}'}.ws</span>
+        </div>
+      </div>
+      <p class="text-sm text-text-secondary mt-4">Examples:</p>
+      <div class="code-block text-[13px]">
+        <pre>POST /ion/UserService/GetUser.unary     <span class="text-text-muted">→ unary call</span>
+WS   /ion/EventService/WatchAll.ws       <span class="text-text-muted">→ server streaming</span></pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="cbor-encoding" class="text-xl font-bold mb-4">CBOR Encoding</h2>
+      <p class="text-sm text-text-secondary mb-4">All payloads use CBOR (RFC 8949). The content type is <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">application/cbor</code>.</p>
+
+      <h3 class="text-lg font-semibold mt-6 mb-3">Request Format</h3>
+      <p class="text-sm text-text-secondary mb-3">Arguments are serialized as a flat CBOR array — base arguments first, then method arguments:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// service UserService(spaceId: u4) {'{'} GetUser(userId: u4): User; {'}'}</span>
+
+<span class="text-text-muted">// Request body:</span>
+CBOR Array(2): [
+    1,    <span class="text-text-muted">// spaceId (base arg)</span>
+    42    <span class="text-text-muted">// userId (method arg)</span>
+]</pre>
+      </div>
+
+      <h3 class="text-lg font-semibold mt-6 mb-3">Response Format</h3>
+      <p class="text-sm text-text-secondary mb-3">The response body is a CBOR-encoded message:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// msg User {'{'} id: u4; name: string; email: string; {'}'}</span>
+
+<span class="text-text-muted">// Response body:</span>
+CBOR Array(3): [
+    42,              <span class="text-text-muted">// id</span>
+    "Alice",         <span class="text-text-muted">// name</span>
+    "a{'@'}example.com"  <span class="text-text-muted">// email</span>
+]</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="websocket" class="text-xl font-bold mb-4">WebSocket Framing</h2>
+      <p class="text-sm text-text-secondary mb-4">Streaming connections use WebSocket binary frames. Each frame starts with a 1-byte opcode:</p>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Opcode</span>
+          <span>Name & Format</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">0x00</span>
+          <span class="text-[12px] text-text-secondary"><strong>Data</strong> — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">[0x00] [CBOR payload]</code></span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">0x01</span>
+          <span class="text-[12px] text-text-secondary"><strong>End</strong> — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">[0x01]</code> (graceful close, no payload)</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">0x02</span>
+          <span class="text-[12px] text-text-secondary"><strong>Error</strong> — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">[0x02] [error code u4] [message string]</code></span>
+        </div>
+      </div>
+
+      <h3 class="text-lg font-semibold mt-6 mb-3">Connection Lifecycle</h3>
+      <ol class="list-decimal list-inside space-y-1 text-sm text-text-secondary">
+        <li>Client opens WebSocket to <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">/ion/{'{'}service{'}'}/{'{'}method{'}'}.ws</code></li>
+        <li>Client sends initial frame with serialized arguments (opcode <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">0x00</code>)</li>
+        <li>Server streams data frames (opcode <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">0x00</code>)</li>
+        <li>Server sends end frame (opcode <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">0x01</code>) or error frame (opcode <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">0x02</code>)</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2 id="auth" class="text-xl font-bold mb-4">Ticket Authentication</h2>
+      <p class="text-sm text-text-secondary mb-4">IonPath uses a ticket-based auth model instead of standard bearer tokens:</p>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Transport</span>
+          <span>Ticket Delivery</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="text-[12px] type-property">HTTP (Unary)</span>
+          <span class="text-[12px] text-text-secondary">Custom header: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">X-Ion-Ticket: &lt;ticket&gt;</code></span>
+        </div>
+        <div class="type-grid-row">
+          <span class="text-[12px] type-property">WebSocket</span>
+          <span class="text-[12px] text-text-secondary">Subprotocol header: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Sec-WebSocket-Protocol: ion-ticket-&lt;ticket&gt;</code></span>
+        </div>
+      </div>
+      <p class="text-sm text-text-secondary mt-4">The <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">IIonTicketExchange</code> interface on the server validates tickets and associates them with a user identity. The <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">IonTicketExtractor</code> handles extraction from the appropriate header for each transport.</p>
+    </section>
+
+    <section>
+      <h2 id="protocol-errors" class="text-xl font-bold mb-4">Protocol Errors</h2>
+      <p class="text-sm text-text-secondary mb-4">Errors are signaled via <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">IonProtocolError</code> with an integer code and message string. The error frame in WebSocket uses opcode <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">0x02</code>. For unary HTTP calls, errors are returned with appropriate HTTP status codes.</p>
+    </section>
+
+    <section>
+      <h2 id="descriptor-storage" class="text-xl font-bold mb-4">IonDescriptorStorage</h2>
+      <p class="text-sm text-text-secondary mb-4"><code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">IonDescriptorStorage</code> holds the metadata for all registered services — including formatter references, executor factories, and route patterns. Generated code registers descriptors at module initialization.</p>
+    </section>
+
+  </div>
+</DocsLayout>

@@ -1,0 +1,362 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Diagnostics — IonPath" current="/guides/diagnostics/">
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">Diagnostics</h1>
+    <p class="text-text-secondary mb-8">Complete reference of all IonPath compiler diagnostic codes. Each code has a severity level, a message template, and guidance on how to fix the issue.</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <section>
+      <h2 id="general" class="text-xl font-bold mb-4">General Validation</h2>
+      <div class="space-y-4">
+        <div class="glass rounded-xl p-4" id="ION0001">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0001</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Cyclic module import detected: {'{'}0{'}'}</p>
+          <p class="text-xs text-text-secondary">Module A imports B and B imports A (directly or transitively). Break the cycle by extracting shared types into a third module that both can import.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0002">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0002</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Duplicate definition of '{'{'}0{'}'}' in module '{'{'}1{'}'}'</p>
+          <p class="text-xs text-text-secondary">Two types, messages, or services share the same name. Rename one of them.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0003">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0003</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Type '{'{'}0{'}'}' not found or is not a standard builtin type</p>
+          <p class="text-xs text-text-secondary">The base type for an enum or attribute argument is not a valid built-in type. Use a primitive like <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">u1</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">u4</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">string</code>, etc.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0004">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0004</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Type '{'{'}0{'}'}' is not allowed in attribute arguments</p>
+          <p class="text-xs text-text-secondary">Attribute arguments must be scalar types. You cannot use a message or union type as an attribute parameter.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0005">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0005</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Attribute '{'{'}0{'}'}' not found</p>
+          <p class="text-xs text-text-secondary">The referenced attribute is not declared. Either declare it with <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">attribute {'@'}name(...);</code> or import the module that defines it.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0009">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0009</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Unresolved reference to type '{'{'}0{'}'}'</p>
+          <p class="text-xs text-text-secondary">The type doesn't exist in any imported module. If it's a typo, the compiler will suggest the closest match: <em>"Did you mean '{'{'}1{'}'}'?"</em> (via Levenshtein distance).</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="enum-flags" class="text-xl font-bold mb-4">Enum & Flags Validation</h2>
+      <div class="space-y-4">
+        <div class="glass rounded-xl p-4" id="ION0006">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0006</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Duplicate enum item name '{'{'}0{'}'}' in enum '{'{'}1{'}'}'</p>
+          <p class="text-xs text-text-secondary">Two members in the same enum/flags share the same name.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0007">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0007</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Invalid value '{'{'}0{'}'}' for enum '{'{'}1{'}'}'</p>
+          <p class="text-xs text-text-secondary">Enum values must be constant integer expressions (literals or bit-shift expressions like <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">1 &lt;&lt; 3</code>).</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0008">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0008</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Duplicate enum value in enum '{'{'}1{'}'}'</p>
+          <p class="text-xs text-text-secondary">Two members resolve to the same numeric value.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0011">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0011</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Enum item '{'{'}0{'}'}' has overlapping bits with '{'{'}2{'}'}'</p>
+          <p class="text-xs text-text-secondary">Flags-specific: two members share overlapping bits, which would make them indistinguishable when combined.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="union-service" class="text-xl font-bold mb-4">Union & Service Validation</h2>
+      <div class="space-y-4">
+        <div class="glass rounded-xl p-4" id="ION0012">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0012</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Union '{'{'}0{'}'}' declares shared fields but contains type reference case</p>
+          <p class="text-xs text-text-secondary">Unions with type reference cases (e.g., <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">union R {'{'} UserData, ErrorInfo {'}'}</code>) cannot also have shared fields. Use inline cases instead.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0013">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0013</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Method '{'{'}0{'}'}' declares multiple stream parameters</p>
+          <p class="text-xs text-text-secondary">Only one parameter per service method can be marked as <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">stream</code>.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0030">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0030</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Circular type reference detected: {'{'}0{'}'}</p>
+          <p class="text-xs text-text-secondary">Types form a cycle (A → B → A). This would cause infinite recursion during serialization. Break the cycle by making one of the references optional (<code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T?</code>).</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="schema-lock" class="text-xl font-bold mb-4">Schema Lock Violations (ION0020–ION0029)</h2>
+      <p class="text-sm text-text-secondary mb-4">These diagnostics fire when the current schema differs from the locked schema in <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ion.lock.json</code>:</p>
+      <div class="space-y-4">
+        <div class="glass rounded-xl p-4" id="ION0020">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0020</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Breaking change: field '{'{'}0{'}'}' (index {'{'}1{'}'}) was removed from '{'{'}2{'}'}'</p>
+          <p class="text-xs text-text-secondary">A field that was locked has been removed. Use <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">--update-lock</code> to acknowledge.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0021">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0021</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Breaking change: field '{'{'}0{'}'}' changed index from {'{'}2{'}'} to {'{'}3{'}'}</p>
+          <p class="text-xs text-text-secondary">Field order determines wire identity. Reordering breaks all existing clients.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0022">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0022</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Breaking change: field '{'{'}0{'}'}' changed type from '{'{'}2{'}'}' to '{'{'}3{'}'}'</p>
+          <p class="text-xs text-text-secondary">Changing a field's type changes the wire encoding. Existing clients cannot deserialize.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0023">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0023</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Breaking change: definition '{'{'}0{'}'}' was removed</p>
+          <p class="text-xs text-text-secondary">A locked type/service was completely removed from the schema.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0024">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0024</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Breaking change: definition '{'{'}0{'}'}' changed kind from '{'{'}1{'}'}' to '{'{'}2{'}'}'</p>
+          <p class="text-xs text-text-secondary">E.g., changing a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg</code> to an <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">enum</code>.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0025">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-degraded">ION0025</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-degraded bg-status-degraded-subtle">Warning</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Service '{'{'}0{'}'}' removed method '{'{'}1{'}'}'</p>
+          <p class="text-xs text-text-secondary">Removing a service method will break existing clients that call it.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0026">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0026</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Breaking change: method '{'{'}0{'}'}.{'{'}1{'}'}' signature changed</p>
+          <p class="text-xs text-text-secondary">Method arguments or return type changed.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0027">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0027</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Breaking change: enum/flags '{'{'}1{'}'}' member '{'{'}2{'}'}' changed value</p>
+          <p class="text-xs text-text-secondary">Changing an enum or flags member's numeric value breaks wire compatibility.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0028">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0028</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Breaking change: union '{'{'}0{'}'}' case '{'{'}1{'}'}' changed index</p>
+          <p class="text-xs text-text-secondary">Union case index is the wire discriminator. Reordering changes the meaning of each case.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0029">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-degraded">ION0029</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-degraded bg-status-degraded-subtle">Warning</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Field '{'{'}0{'}'}' added to '{'{'}1{'}'}' is not nullable</p>
+          <p class="text-xs text-text-secondary">Adding a required field is safe for new clients but older clients reading the previous schema won't have this field. Consider making it optional (<code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T?</code>).</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="module-system" class="text-xl font-bold mb-4">Module System (ION0040–ION0048)</h2>
+      <p class="text-sm text-text-secondary mb-4">These diagnostics relate to external <a href="/guides/modules/" class="text-accent hover:underline">module dependencies</a> declared in <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ion.config.json</code>:</p>
+      <div class="space-y-4">
+        <div class="glass rounded-xl p-4" id="ION0040">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0040</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Circular module dependency detected: {'{'}0{'}'}</p>
+          <p class="text-xs text-text-secondary">Module A depends on B and B depends on A (directly or transitively). Break the cycle by extracting shared types into a third module.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0041">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0041</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Module '{'{'}0{'}'}' config not found at path '{'{'}1{'}'}'</p>
+          <p class="text-xs text-text-secondary">The module path in <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ion.config.json</code> doesn't point to a directory with a valid <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ion.config.json</code>. Check that the relative path is correct.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0042">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0042</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Unknown module '{'{'}0{'}'}'</p>
+          <p class="text-xs text-text-secondary">A <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#import</code> references a module that is not declared in the <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">modules</code> section of <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ion.config.json</code>.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0043">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0043</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Type '{'{'}0{'}'}' not found in module '{'{'}1{'}'}'</p>
+          <p class="text-xs text-text-secondary">The imported type does not exist in the target module. Verify the type name and ensure it is defined in one of the module's <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">.ion</code> files.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0044">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0044</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Type '{'{'}0{'}'}' not found in module '{'{'}1{'}'}'. Did you mean '{'{'}2{'}'}'?</p>
+          <p class="text-xs text-text-secondary">Similar to ION0043 but the compiler found a close match — check for typos.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0045">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-degraded">ION0045</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-degraded bg-status-degraded-subtle">Warning</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Imported type '{'{'}0{'}'}' from module '{'{'}1{'}'}' is never used</p>
+          <p class="text-xs text-text-secondary">Remove the unused import to keep your code clean.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0046">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0046</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Module '{'{'}0{'}'}' content hash has changed since last lock</p>
+          <p class="text-xs text-text-secondary">The module's source files changed since the lock file was generated. Run <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ionc lock update</code> to acknowledge.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0047">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-degraded">ION0047</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-degraded bg-status-degraded-subtle">Warning</span>
+          </div>
+          <p class="text-sm font-medium mb-1">#use is deprecated</p>
+          <p class="text-xs text-text-secondary">Migrate to the <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#import {'{'} Type {'}'} from "module"</code> syntax. See <a href="/guides/directives/#import" class="text-accent hover:underline">Directives</a>.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0048">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-degraded">ION0048</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-degraded bg-status-degraded-subtle">Warning</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Type '{'{'}0{'}'}' has the same name as a type from module '{'{'}1{'}'}'</p>
+          <p class="text-xs text-text-secondary">Cross-module name collision. Rename one of the types to avoid ambiguity.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="unused-symbols" class="text-xl font-bold mb-4">Unused Symbols (ION1001–ION1003)</h2>
+      <p class="text-sm text-text-secondary mb-4">Informational diagnostics reported when symbols are defined but never referenced:</p>
+      <div class="space-y-4">
+        <div class="glass rounded-xl p-4" id="ION1001">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-accent-2">ION1001</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-accent-2 bg-accent-subtle">Info</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Type '{'{'}0{'}'}' is defined but never referenced</p>
+          <p class="text-xs text-text-secondary">The type is not used by any service method, field, or union case. It may be safe to remove.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION1002">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-accent-2">ION1002</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-accent-2 bg-accent-subtle">Info</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Import '{'{'}0{'}'}' is unused</p>
+          <p class="text-xs text-text-secondary">No types from this imported file are referenced. Remove the import.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION1003">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-accent-2">ION1003</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-accent-2 bg-accent-subtle">Info</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Field '{'{'}0{'}'}' in '{'{'}1{'}'}' is never used</p>
+          <p class="text-xs text-text-secondary">The field is not referenced by any service method.</p>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</DocsLayout>

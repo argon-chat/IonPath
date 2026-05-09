@@ -1,0 +1,163 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Primitive Types — IonPath" current="/guides/primitive-types/">
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">Primitive Types</h1>
+    <p class="text-text-secondary mb-8">IonPath provides a rich set of built-in types covering integers, floats, strings, dates, and special types. Each type has a fixed wire encoding and mappings to C# and TypeScript.</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <!-- Integer Types -->
+    <section>
+      <h2 id="integers" class="text-xl font-bold mb-4">Integer Types</h2>
+      <p class="text-sm text-text-secondary mb-4">Signed and unsigned integers from 8-bit to 128-bit.</p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-oled-border-subtle">
+              <th class="text-left py-2 px-3 text-text-muted font-medium">Ion Type</th>
+              <th class="text-left py-2 px-3 text-text-muted font-medium">C#</th>
+              <th class="text-left py-2 px-3 text-text-muted font-medium">TypeScript</th>
+              <th class="text-center py-2 px-3 text-text-muted font-medium">Size</th>
+              <th class="text-left py-2 px-3 text-text-muted font-medium">Description</th>
+            </tr>
+          </thead>
+          <tbody class="text-text-secondary">
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono type-keyword">i1</td><td class="py-2 px-3 font-mono text-xs">sbyte</td><td class="py-2 px-3 font-mono text-xs">number</td><td class="py-2 px-3 text-center">8 bits</td><td class="py-2 px-3 text-xs">Signed byte (-128 to 127)</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono type-keyword">i2</td><td class="py-2 px-3 font-mono text-xs">short</td><td class="py-2 px-3 font-mono text-xs">number</td><td class="py-2 px-3 text-center">16 bits</td><td class="py-2 px-3 text-xs">Signed short</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono type-keyword">i4</td><td class="py-2 px-3 font-mono text-xs">int</td><td class="py-2 px-3 font-mono text-xs">number</td><td class="py-2 px-3 text-center">32 bits</td><td class="py-2 px-3 text-xs">Signed integer</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono type-keyword">i8</td><td class="py-2 px-3 font-mono text-xs">long</td><td class="py-2 px-3 font-mono text-xs">bigint</td><td class="py-2 px-3 text-center">64 bits</td><td class="py-2 px-3 text-xs">Signed long</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono type-keyword">i16</td><td class="py-2 px-3 font-mono text-xs">Int128</td><td class="py-2 px-3 font-mono text-xs">bigint</td><td class="py-2 px-3 text-center">128 bits</td><td class="py-2 px-3 text-xs">Signed 128-bit integer</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono type-keyword">u1</td><td class="py-2 px-3 font-mono text-xs">byte</td><td class="py-2 px-3 font-mono text-xs">number</td><td class="py-2 px-3 text-center">8 bits</td><td class="py-2 px-3 text-xs">Unsigned byte (0 to 255)</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono type-keyword">u2</td><td class="py-2 px-3 font-mono text-xs">ushort</td><td class="py-2 px-3 font-mono text-xs">number</td><td class="py-2 px-3 text-center">16 bits</td><td class="py-2 px-3 text-xs">Unsigned short</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono type-keyword">u4</td><td class="py-2 px-3 font-mono text-xs">uint</td><td class="py-2 px-3 font-mono text-xs">number</td><td class="py-2 px-3 text-center">32 bits</td><td class="py-2 px-3 text-xs">Unsigned integer</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono type-keyword">u8</td><td class="py-2 px-3 font-mono text-xs">ulong</td><td class="py-2 px-3 font-mono text-xs">bigint</td><td class="py-2 px-3 text-center">64 bits</td><td class="py-2 px-3 text-xs">Unsigned long</td></tr>
+            <tr><td class="py-2 px-3 font-mono type-keyword">u16</td><td class="py-2 px-3 font-mono text-xs">UInt128</td><td class="py-2 px-3 font-mono text-xs">bigint</td><td class="py-2 px-3 text-center">128 bits</td><td class="py-2 px-3 text-xs">Unsigned 128-bit integer</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="mt-4 flex items-start gap-3 rounded-xl border border-oled-border bg-oled-surface/50 p-4">
+        <span class="text-accent text-sm mt-0.5">ℹ</span>
+        <p class="text-sm text-text-secondary">The naming convention follows <strong>byte count</strong>: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">i4</code> = 4 bytes = 32 bits. <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">u</code> prefix means unsigned, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">i</code> means signed.</p>
+      </div>
+    </section>
+
+    <!-- Float Types -->
+    <section>
+      <h2 id="floats" class="text-xl font-bold mb-4">Floating-Point Types</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-oled-border-subtle">
+              <th class="text-left py-2 px-3 text-text-muted font-medium">Ion Type</th>
+              <th class="text-left py-2 px-3 text-text-muted font-medium">C#</th>
+              <th class="text-left py-2 px-3 text-text-muted font-medium">TypeScript</th>
+              <th class="text-center py-2 px-3 text-text-muted font-medium">Size</th>
+              <th class="text-left py-2 px-3 text-text-muted font-medium">Description</th>
+            </tr>
+          </thead>
+          <tbody class="text-text-secondary">
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono type-keyword">f2</td><td class="py-2 px-3 font-mono text-xs">Half</td><td class="py-2 px-3 font-mono text-xs">number</td><td class="py-2 px-3 text-center">16 bits</td><td class="py-2 px-3 text-xs">IEEE 754 half precision</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono type-keyword">f4</td><td class="py-2 px-3 font-mono text-xs">float</td><td class="py-2 px-3 font-mono text-xs">number</td><td class="py-2 px-3 text-center">32 bits</td><td class="py-2 px-3 text-xs">IEEE 754 single precision</td></tr>
+            <tr><td class="py-2 px-3 font-mono type-keyword">f8</td><td class="py-2 px-3 font-mono text-xs">double</td><td class="py-2 px-3 font-mono text-xs">number</td><td class="py-2 px-3 text-center">64 bits</td><td class="py-2 px-3 text-xs">IEEE 754 double precision</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Special Types -->
+    <section>
+      <h2 id="special" class="text-xl font-bold mb-4">Special Types</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-oled-border-subtle">
+              <th class="text-left py-2 px-3 text-text-muted font-medium">Ion Type</th>
+              <th class="text-left py-2 px-3 text-text-muted font-medium">C#</th>
+              <th class="text-left py-2 px-3 text-text-muted font-medium">TypeScript</th>
+              <th class="text-left py-2 px-3 text-text-muted font-medium">Description</th>
+            </tr>
+          </thead>
+          <tbody class="text-text-secondary">
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono type-keyword">void</td><td class="py-2 px-3 font-mono text-xs">void</td><td class="py-2 px-3 font-mono text-xs">void</td><td class="py-2 px-3 text-xs">No value — used for methods with no return</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono type-keyword">bool</td><td class="py-2 px-3 font-mono text-xs">bool</td><td class="py-2 px-3 font-mono text-xs">boolean</td><td class="py-2 px-3 text-xs">Boolean true/false</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono type-keyword">string</td><td class="py-2 px-3 font-mono text-xs">string</td><td class="py-2 px-3 font-mono text-xs">string</td><td class="py-2 px-3 text-xs">UTF-8 text</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono type-keyword">guid</td><td class="py-2 px-3 font-mono text-xs">Guid</td><td class="py-2 px-3 font-mono text-xs">string</td><td class="py-2 px-3 text-xs">128-bit UUID</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono type-keyword">bigint</td><td class="py-2 px-3 font-mono text-xs">BigInteger</td><td class="py-2 px-3 font-mono text-xs">bigint</td><td class="py-2 px-3 text-xs">Arbitrary-precision integer</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono type-keyword">bytes</td><td class="py-2 px-3 font-mono text-xs">byte[] / IonBytes</td><td class="py-2 px-3 font-mono text-xs">Uint8Array</td><td class="py-2 px-3 text-xs">Raw binary data</td></tr>
+            <tr><td class="py-2 px-3 font-mono type-keyword">uri</td><td class="py-2 px-3 font-mono text-xs">Uri</td><td class="py-2 px-3 font-mono text-xs">string</td><td class="py-2 px-3 text-xs">URI/URL</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Date/Time Types -->
+    <section>
+      <h2 id="datetime" class="text-xl font-bold mb-4">Date & Time Types</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-oled-border-subtle">
+              <th class="text-left py-2 px-3 text-text-muted font-medium">Ion Type</th>
+              <th class="text-left py-2 px-3 text-text-muted font-medium">C#</th>
+              <th class="text-left py-2 px-3 text-text-muted font-medium">TypeScript</th>
+              <th class="text-left py-2 px-3 text-text-muted font-medium">Description</th>
+            </tr>
+          </thead>
+          <tbody class="text-text-secondary">
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono type-keyword">datetime</td><td class="py-2 px-3 font-mono text-xs">DateTime</td><td class="py-2 px-3 font-mono text-xs">Date</td><td class="py-2 px-3 text-xs">UTC date and time</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono type-keyword">dateonly</td><td class="py-2 px-3 font-mono text-xs">DateOnly</td><td class="py-2 px-3 font-mono text-xs">string</td><td class="py-2 px-3 text-xs">Date without time component</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono type-keyword">timeonly</td><td class="py-2 px-3 font-mono text-xs">TimeOnly</td><td class="py-2 px-3 font-mono text-xs">string</td><td class="py-2 px-3 text-xs">Time without date component</td></tr>
+            <tr><td class="py-2 px-3 font-mono type-keyword">duration</td><td class="py-2 px-3 font-mono text-xs">TimeSpan</td><td class="py-2 px-3 font-mono text-xs">number</td><td class="py-2 px-3 text-xs">Time span / duration</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Generic Wrappers -->
+    <section>
+      <h2 id="wrappers" class="text-xl font-bold mb-4">Generic Wrappers</h2>
+      <p class="text-sm text-text-secondary mb-4">These built-in generic types wrap other types:</p>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Wrapper</span>
+          <span>Description</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]"><span class="type-name">Maybe</span>&lt;<span class="type-keyword">T</span>&gt;</span>
+          <span class="text-[12px] text-text-secondary">Optional value. Shorthand: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T?</code>. Null on the wire when absent.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]"><span class="type-name">Array</span>&lt;<span class="type-keyword">T</span>&gt;</span>
+          <span class="text-[12px] text-text-secondary">Variable-length sequence. Shorthand: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T[]</code>. CBOR array encoding.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]"><span class="type-name">Partial</span>&lt;<span class="type-keyword">T</span>&gt;</span>
+          <span class="text-[12px] text-text-secondary">Sparse update — only modified fields are serialized. Shorthand: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">~T</code>.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Usage Example -->
+    <section>
+      <h2 id="usage" class="text-xl font-bold mb-4">Usage Example</h2>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">msg</span> <span class="type-name">UserProfile</span> {'{'}
+    id: <span class="type-keyword">u4</span>;                  <span class="text-text-muted">// unsigned 32-bit integer</span>
+    name: <span class="type-keyword">string</span>;             <span class="text-text-muted">// UTF-8 text</span>
+    email: <span class="type-keyword">string</span>?;            <span class="text-text-muted">// optional string (Maybe&lt;string&gt;)</span>
+    avatar: <span class="type-keyword">bytes</span>?;            <span class="text-text-muted">// optional binary data</span>
+    score: <span class="type-keyword">f8</span>;                <span class="text-text-muted">// double-precision float</span>
+    createdAt: <span class="type-keyword">datetime</span>;       <span class="text-text-muted">// UTC timestamp</span>
+    tags: <span class="type-keyword">string</span>[];            <span class="text-text-muted">// array of strings</span>
+    largeId: <span class="type-keyword">u8</span>;              <span class="text-text-muted">// 64-bit unsigned (bigint in TS)</span>
+    uniqueRef: <span class="type-keyword">guid</span>;          <span class="text-text-muted">// 128-bit UUID</span>
+{'}'}</pre>
+      </div>
+    </section>
+
+  </div>
+</DocsLayout>

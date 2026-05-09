@@ -1,0 +1,127 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="JS SDK — Formatters — IonPath" current="/guides/js-sdk-formatters/">
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">JS SDK — Formatters</h1>
+    <p class="text-text-secondary mb-8">Formatters handle the serialization and deserialization of IonPath types to/from CBOR binary format.</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <section>
+      <h2 id="formatter-storage" class="text-xl font-bold mb-4">IonFormatterStorage</h2>
+      <p class="text-sm text-text-secondary mb-4"><code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">IonFormatterStorage</code> is a global registry that maps type identifiers to serialize/deserialize functions:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">import</span> {'{'} <span class="type-name">IonFormatterStorage</span> {'}'} <span class="text-accent-3">from</span> <span class="text-accent-2">'{'@'}nicurt/ion.webcore.js'</span>;
+
+<span class="text-text-muted">// Register a formatter for a custom type</span>
+<span class="type-name">IonFormatterStorage</span>.register(<span class="text-accent-2">"User"</span>, {'{'}
+    serialize(writer, value) {'{'}
+        writer.writeUInt32(value.id);
+        writer.writeString(value.name);
+        writer.writeString(value.email);
+    {'}'},
+    deserialize(reader) {'{'}
+        <span class="text-accent-3">return</span> {'{'}
+            id: reader.readUInt32(),
+            name: reader.readString(),
+            email: reader.readString()
+        {'}'};
+    {'}'}
+{'}'});</pre>
+      </div>
+      <div class="mt-4 flex items-start gap-3 rounded-xl border border-accent/20 bg-accent-subtle p-4">
+        <span class="text-accent text-sm mt-0.5">ℹ</span>
+        <p class="text-sm text-text-secondary">You don't normally write formatters manually. The compiler generates them from your <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">.ion</code> schema. This page documents the internals for debugging or extension purposes.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="primitive-formatters" class="text-xl font-bold mb-4">Primitive Formatters</h2>
+      <p class="text-sm text-text-secondary mb-4">Built-in formatters for all IonPath primitive types are registered automatically:</p>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Ion Type</span>
+          <span>JS Encoding</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">i1, i2, i4</span>
+          <span class="text-[12px] text-text-secondary">CBOR signed integer (number)</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">i8, i16</span>
+          <span class="text-[12px] text-text-secondary">CBOR signed integer (BigInt)</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">u1, u2, u4</span>
+          <span class="text-[12px] text-text-secondary">CBOR unsigned integer (number)</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">u8, u16</span>
+          <span class="text-[12px] text-text-secondary">CBOR unsigned integer (BigInt)</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">f2</span>
+          <span class="text-[12px] text-text-secondary">CBOR half-precision float (number)</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">f4</span>
+          <span class="text-[12px] text-text-secondary">CBOR single-precision float (number)</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">f8</span>
+          <span class="text-[12px] text-text-secondary">CBOR double-precision float (number)</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">bool</span>
+          <span class="text-[12px] text-text-secondary">CBOR simple value (boolean)</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">string</span>
+          <span class="text-[12px] text-text-secondary">CBOR text string (string)</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">bytes</span>
+          <span class="text-[12px] text-text-secondary">CBOR byte string (Uint8Array)</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">guid</span>
+          <span class="text-[12px] text-text-secondary">CBOR byte string (16 bytes → string UUID)</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">datetime</span>
+          <span class="text-[12px] text-text-secondary">CBOR tag 0 text string (ISO 8601 → Date)</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">uri</span>
+          <span class="text-[12px] text-text-secondary">CBOR text string (string)</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="generated-formatters" class="text-xl font-bold mb-4">Generated Formatters</h2>
+      <p class="text-sm text-text-secondary mb-4">For each message in your schema, the compiler generates a formatter that serializes fields in index order:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// Generated for: msg User {'{'} id: u4; name: string; {'}'}</span>
+<span class="type-name">IonFormatterStorage</span>.register(<span class="text-accent-2">"User"</span>, {'{'}
+    serialize(writer, value) {'{'}
+        writer.writeArrayHeader(2);
+        writer.writeUInt32(value.id);
+        writer.writeString(value.name);
+    {'}'},
+    deserialize(reader) {'{'}
+        reader.readArrayHeader();
+        <span class="text-accent-3">return</span> {'{'}
+            id: reader.readUInt32(),
+            name: reader.readString()
+        {'}'};
+    {'}'}
+{'}'});</pre>
+      </div>
+    </section>
+
+  </div>
+</DocsLayout>

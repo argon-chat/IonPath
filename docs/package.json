@@ -1,0 +1,25 @@
+{
+  "name": "land",
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "deploy": "astro build && wrangler pages deploy dist --branch=master",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.2.1",
+    "astro": "^5.17.1",
+    "lucide-astro": "^0.556.0",
+    "phosphor-astro": "latest",
+    "tailwindcss": "^4.2.1"
+  },
+  "devDependencies": {
+    "wrangler": "^4.69.0"
+  },
+  "trustedDependencies": [
+    "@sentry/cli"
+  ]
+}

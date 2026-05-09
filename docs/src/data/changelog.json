@@ -1,0 +1,15 @@
+[
+  {
+    "version": "1.3.0",
+    "date": "2026-04-22",
+    "title": "Documentation Launch",
+    "changes": [
+      { "type": "added", "description": "Comprehensive IonPath documentation site with language reference, compiler docs, and SDK guides" },
+      { "type": "added", "description": "Full primitive type reference with C# and TypeScript mappings" },
+      { "type": "added", "description": "Schema lock documentation with breaking change detection guide" },
+      { "type": "added", "description": "JavaScript SDK (ion.webcore.js) usage guide with CBOR encoding details" },
+      { "type": "added", "description": ".NET runtime documentation covering server setup, client usage, and wire protocol" },
+      { "type": "added", "description": "C# and TypeScript code generation reference" }
+    ]
+  }
+]

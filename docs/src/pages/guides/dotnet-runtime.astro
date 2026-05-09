@@ -1,0 +1,99 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title=".NET Runtime Overview — IonPath" current="/guides/dotnet-runtime/">
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">.NET Runtime Overview</h1>
+    <p class="text-text-secondary mb-8">The IonPath .NET runtime consists of four packages that provide serialization, client, server, and networking capabilities.</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <section>
+      <h2 id="packages" class="text-xl font-bold mb-4">Packages</h2>
+      <div class="space-y-4">
+        <div class="glass rounded-xl p-4">
+          <h3 class="font-semibold text-sm mb-1">ion.runtime</h3>
+          <p class="text-xs text-text-secondary mb-2">Core types, formatters, and serialization primitives</p>
+          <div class="flex flex-wrap gap-1">
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-accent-subtle text-accent">IonFormatter</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-accent-subtle text-accent">IonMaybe&lt;T&gt;</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-accent-subtle text-accent">IonPartial&lt;T&gt;</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-accent-subtle text-accent">IonBytes</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-accent-subtle text-accent">IIonUnion&lt;T&gt;</span>
+          </div>
+        </div>
+
+        <div class="glass rounded-xl p-4">
+          <h3 class="font-semibold text-sm mb-1">ion.runtime.client</h3>
+          <p class="text-xs text-text-secondary mb-2">Client-side calling primitives</p>
+          <div class="flex flex-wrap gap-1">
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-accent-subtle text-accent">IonClient</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-accent-subtle text-accent">IonRequest</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-accent-subtle text-accent">IonWsClient</span>
+          </div>
+        </div>
+
+        <div class="glass rounded-xl p-4">
+          <h3 class="font-semibold text-sm mb-1">ion.runtime.network</h3>
+          <p class="text-xs text-text-secondary mb-2">Server-side hosting infrastructure (ASP.NET Core integration)</p>
+          <div class="flex flex-wrap gap-1">
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-accent-subtle text-accent">AddIonProtocol()</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-accent-subtle text-accent">MapRpcEndpoints()</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-accent-subtle text-accent">Interceptors</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-accent-subtle text-accent">TicketAuth</span>
+          </div>
+        </div>
+
+        <div class="glass rounded-xl p-4">
+          <h3 class="font-semibold text-sm mb-1">ion.compiler.runtime</h3>
+          <p class="text-xs text-text-secondary mb-2">Metadata and diagnostic types used during compilation</p>
+          <div class="flex flex-wrap gap-1">
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-accent-subtle text-accent">IonModule</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-accent-subtle text-accent">IonDiagnostic</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-accent-subtle text-accent">IonSchemaLock</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="dependency-graph" class="text-xl font-bold mb-4">Dependency Graph</h2>
+      <div class="glass rounded-xl p-5">
+        <div class="font-mono text-[12px] space-y-2">
+          <p class="text-text-muted">Your App</p>
+          <p class="ml-4">├── <span class="type-name">ion.runtime.network</span> <span class="text-text-muted">(server hosting)</span></p>
+          <p class="ml-4">│   └── <span class="type-name">ion.runtime</span></p>
+          <p class="ml-4">├── <span class="type-name">ion.runtime.client</span> <span class="text-text-muted">(client calls)</span></p>
+          <p class="ml-4">│   └── <span class="type-name">ion.runtime</span></p>
+          <p class="ml-4">└── <span class="type-name">Generated Code</span></p>
+          <p class="ml-4">    └── <span class="type-name">ion.runtime</span></p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="whats-next" class="text-xl font-bold mb-4">What's Next</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+        <a href="/guides/dotnet-server/" class="glass rounded-xl p-4 hover:border-accent/30 transition-colors">
+          <h3 class="font-semibold text-sm mb-1">Server Setup</h3>
+          <p class="text-xs text-text-secondary">ASP.NET Core integration with DI and endpoints</p>
+        </a>
+        <a href="/guides/dotnet-client/" class="glass rounded-xl p-4 hover:border-accent/30 transition-colors">
+          <h3 class="font-semibold text-sm mb-1">Client Usage</h3>
+          <p class="text-xs text-text-secondary">IonClient and typed service calls</p>
+        </a>
+        <a href="/guides/dotnet-formatters/" class="glass rounded-xl p-4 hover:border-accent/30 transition-colors">
+          <h3 class="font-semibold text-sm mb-1">Formatters & Types</h3>
+          <p class="text-xs text-text-secondary">IonMaybe, IonBytes, IonPartial, IonFormatter</p>
+        </a>
+        <a href="/guides/dotnet-networking/" class="glass rounded-xl p-4 hover:border-accent/30 transition-colors">
+          <h3 class="font-semibold text-sm mb-1">Wire Protocol</h3>
+          <p class="text-xs text-text-secondary">CBOR, HTTP, WebSocket, auth, routes</p>
+        </a>
+      </div>
+    </section>
+
+  </div>
+</DocsLayout>

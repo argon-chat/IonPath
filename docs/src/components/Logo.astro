@@ -1,0 +1,11 @@
+---
+import { Boxes } from 'lucide-astro';
+
+interface Props {
+  class?: string;
+  size?: number;
+}
+const { class: className = '', size = 20 } = Astro.props;
+---
+
+<Boxes class={className} width={size} height={size} />

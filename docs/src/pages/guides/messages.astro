@@ -1,0 +1,137 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Messages — IonPath" current="/guides/messages/">
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">Messages</h1>
+    <p class="text-text-secondary mb-8">Messages are the primary data structures in IonPath. They define named, indexed field collections that are serialized to CBOR for wire transmission.</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <section>
+      <h2 id="basic-syntax" class="text-xl font-bold mb-4">Basic Syntax</h2>
+      <p class="text-sm text-text-secondary mb-4">Declare a message with the <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">msg</code> keyword:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">msg</span> <span class="type-name">User</span> {'{'}
+    id: <span class="type-keyword">u4</span>;
+    name: <span class="type-keyword">string</span>;
+    email: <span class="type-keyword">string</span>;
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">Each field has a <strong>name</strong> and a <strong>type</strong>, separated by a colon and terminated with a semicolon.</p>
+    </section>
+
+    <section>
+      <h2 id="field-indexing" class="text-xl font-bold mb-4">Field Indexing</h2>
+      <p class="text-sm text-text-secondary mb-4">Fields are automatically assigned sequential indices starting from 0. These indices determine the <strong>wire identity</strong> of each field — they are used as CBOR array positions during serialization.</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">msg</span> <span class="type-name">User</span> {'{'}
+    id: <span class="type-keyword">u4</span>;       <span class="text-text-muted">// index 0</span>
+    name: <span class="type-keyword">string</span>;   <span class="text-text-muted">// index 1</span>
+    email: <span class="type-keyword">string</span>;  <span class="text-text-muted">// index 2</span>
+{'}'}</pre>
+      </div>
+      <div class="mt-4 flex items-start gap-3 rounded-xl border border-status-degraded/20 bg-status-degraded-subtle p-4">
+        <span class="text-status-degraded text-sm mt-0.5">⚠</span>
+        <p class="text-sm text-text-secondary"><strong>Reordering fields is a breaking change.</strong> The field index determines its position in the CBOR array. If you reorder fields, existing clients that read index 0 as <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">id</code> would now read a different field. Use <a href="/guides/schema-lock/" class="text-accent hover:underline">schema lock</a> to detect this.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="optional-fields" class="text-xl font-bold mb-4">Optional Fields</h2>
+      <p class="text-sm text-text-secondary mb-4">Append <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">?</code> to make a field optional. It wraps the type in <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">Maybe&lt;T&gt;</code>:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">msg</span> <span class="type-name">UserProfile</span> {'{'}
+    id: <span class="type-keyword">u4</span>;
+    name: <span class="type-keyword">string</span>;
+    bio: <span class="type-keyword">string</span>?;       <span class="text-text-muted">// nullable — Maybe&lt;string&gt;</span>
+    avatarUrl: <span class="type-keyword">uri</span>?;   <span class="text-text-muted">// nullable — Maybe&lt;Uri&gt;</span>
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">In C# this generates <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">IonMaybe&lt;string&gt;</code>; in TypeScript, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">string | null</code>.</p>
+    </section>
+
+    <section>
+      <h2 id="array-fields" class="text-xl font-bold mb-4">Array Fields</h2>
+      <p class="text-sm text-text-secondary mb-4">Append <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">[]</code> for variable-length arrays:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">msg</span> <span class="type-name">SearchResult</span> {'{'}
+    query: <span class="type-keyword">string</span>;
+    results: <span class="type-name">User</span>[];     <span class="text-text-muted">// array of User messages</span>
+    scores: <span class="type-keyword">f4</span>[];         <span class="text-text-muted">// array of floats</span>
+{'}'}</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="partial-fields" class="text-xl font-bold mb-4">Partial Fields</h2>
+      <p class="text-sm text-text-secondary mb-4">The <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">~</code> modifier creates a partial/sparse version of a type where only modified fields are serialized:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">service</span> <span class="type-name">UserService</span>() {'{'}
+    UpdateUser(id: <span class="type-keyword">u4</span>, patch: ~<span class="type-name">User</span>): <span class="type-name">User</span>;
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">In C# this generates <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">IonPartial&lt;User&gt;</code> which tracks which fields have been set using expression trees.</p>
+    </section>
+
+    <section>
+      <h2 id="nested-types" class="text-xl font-bold mb-4">Referencing Other Messages</h2>
+      <p class="text-sm text-text-secondary mb-4">Messages can reference other messages as field types:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">msg</span> <span class="type-name">Address</span> {'{'}
+    street: <span class="type-keyword">string</span>;
+    city: <span class="type-keyword">string</span>;
+    zip: <span class="type-keyword">string</span>;
+{'}'}
+
+<span class="text-accent-3">msg</span> <span class="type-name">Company</span> {'{'}
+    name: <span class="type-keyword">string</span>;
+    address: <span class="type-name">Address</span>;           <span class="text-text-muted">// nested message</span>
+    branches: <span class="type-name">Address</span>[];         <span class="text-text-muted">// array of nested messages</span>
+    headquarters: <span class="type-name">Address</span>?;      <span class="text-text-muted">// optional nested message</span>
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">Forward references are supported — you can reference a message that is declared later in the file or in a different module (imported with <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#use</code>).</p>
+    </section>
+
+    <section>
+      <h2 id="wire-format" class="text-xl font-bold mb-4">Wire Format</h2>
+      <p class="text-sm text-text-secondary mb-4">Messages are encoded as <strong>CBOR arrays</strong> with a fixed length. Each element at index <em>i</em> corresponds to the field at index <em>i</em>:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// Ion</span>
+<span class="text-accent-3">msg</span> <span class="type-name">Point</span> {'{'} x: <span class="type-keyword">f4</span>; y: <span class="type-keyword">f4</span>; {'}'}
+
+<span class="text-text-muted">// CBOR wire representation (conceptual)</span>
+[1.5, 2.7]   <span class="text-text-muted">// index 0 = x, index 1 = y</span></pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="generated-code" class="text-xl font-bold mb-4">Generated Code</h2>
+      <p class="text-sm text-text-secondary mb-3">A message like:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">msg</span> <span class="type-name">Vector</span> {'{'} x: <span class="type-keyword">f4</span>; y: <span class="type-keyword">f4</span>; z: <span class="type-keyword">f4</span>; {'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3 mb-3">Generates in C#:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">public sealed class</span> <span class="type-name">Vector</span>
+{'{'}
+    <span class="text-accent-3">public</span> <span class="type-keyword">float</span> x {'{'} <span class="text-accent-3">get</span>; <span class="text-accent-3">set</span>; {'}'}
+    <span class="text-accent-3">public</span> <span class="type-keyword">float</span> y {'{'} <span class="text-accent-3">get</span>; <span class="text-accent-3">set</span>; {'}'}
+    <span class="text-accent-3">public</span> <span class="type-keyword">float</span> z {'{'} <span class="text-accent-3">get</span>; <span class="text-accent-3">set</span>; {'}'}
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3 mb-3">And in TypeScript:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">export interface</span> <span class="type-name">Vector</span> {'{'}
+    x: <span class="type-keyword">number</span>;
+    y: <span class="type-keyword">number</span>;
+    z: <span class="type-keyword">number</span>;
+{'}'}</pre>
+      </div>
+    </section>
+
+  </div>
+</DocsLayout>

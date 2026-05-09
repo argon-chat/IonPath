@@ -1,0 +1,307 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Navbar from '../components/Navbar.astro';
+import Footer from '../components/Footer.astro';
+import { Boxes, Zap, Code, Shield, Layers, Terminal, BookOpen, ArrowRight, Binary, FileCode, Lock, Cpu, Globe } from 'lucide-astro';
+
+const ionExample = `<span class="text-accent-3">msg</span> <span class="type-name">User</span> {
+  id: <span class="type-keyword">u4</span>;
+  name: <span class="type-keyword">string</span>;
+  email: <span class="type-keyword">string</span>?;
+  roles: <span class="type-keyword">u4</span>[];
+}
+
+<span class="text-accent-3">service</span> <span class="type-name">UserService</span>(spaceId: <span class="type-keyword">u4</span>) {
+  GetUser(userId: <span class="type-keyword">u4</span>): <span class="type-name">User</span>;
+  CreateUser(name: <span class="type-keyword">string</span>, email: <span class="type-keyword">string</span>?): <span class="type-name">User</span>;
+  <span class="text-text-muted">stream</span> WatchUpdates(): <span class="type-name">User</span>;
+}`;
+
+const quickStart = `<span class="text-text-muted">$</span> <span class="text-accent-hover">ionc</span> init
+<span class="text-text-muted">→ Created ion.config.json</span>
+
+<span class="text-text-muted">$</span> <span class="text-accent-hover">ionc</span> compile
+<span class="text-text-muted">→ Compiled 3 modules (C#, TypeScript)
+→ ion.lock.json updated</span>`;
+---
+
+<Layout>
+  <Navbar current="/" />
+
+  <!-- Hero -->
+  <section id="main-content" class="relative flex min-h-[85vh] flex-col items-center justify-center overflow-hidden px-4 sm:px-6 pt-16">
+    <div class="absolute inset-0 opacity-[0.03]" style="background-image: linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px); background-size: 40px 40px;"></div>
+    <div class="absolute left-1/2 top-1/4 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent/5 blur-[120px]"></div>
+    <div class="absolute right-1/4 top-1/2 h-80 w-80 rounded-full bg-accent-2/5 blur-[100px]"></div>
+
+    <div class="relative z-10 mx-auto max-w-4xl text-center">
+      <div class="animate-fade-in-up mb-8 inline-flex items-center gap-2 rounded-full border border-oled-border bg-oled-surface/50 px-3 sm:px-4 py-1.5 backdrop-blur-sm">
+        <span class="h-2 w-2 rounded-full bg-accent animate-pulse shrink-0"></span>
+        <span class="text-[10px] sm:text-xs font-medium text-text-secondary">IDL · CBOR · Multi-target Codegen · Schema Stability</span>
+      </div>
+
+      <h1 class="animate-fade-in-up-delay-1 text-3xl font-black leading-[1.1] tracking-tight sm:text-5xl md:text-7xl">
+        Define Once,<br />
+        <span class="bg-linear-to-r from-accent via-accent-3 to-accent-2 bg-clip-text text-transparent">Generate Everywhere</span>
+      </h1>
+
+      <p class="animate-fade-in-up-delay-2 mx-auto mt-5 sm:mt-6 max-w-2xl text-base sm:text-lg leading-relaxed text-text-secondary sm:text-xl">
+        IonPath is a contract language and binary protocol for distributed applications.
+        Write <code class="text-xs bg-oled-surface px-1.5 py-0.5 rounded font-mono">.ion</code> schemas, generate type-safe C# and TypeScript code, and enforce wire-format stability with schema locks.
+      </p>
+
+      <div class="animate-fade-in-up-delay-3 mt-8 sm:mt-10 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
+        <a href="/guides/getting-started/" class="w-full sm:w-auto inline-flex items-center justify-center gap-3 rounded-xl bg-linear-to-r from-accent to-accent-3 px-6 sm:px-8 py-3 sm:py-3.5 text-sm sm:text-base font-bold text-white transition-all hover:brightness-110">
+          <Terminal class="size-5" />
+          Get Started
+        </a>
+        <a href="/docs/" class="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl border border-oled-border bg-oled-surface/50 px-6 sm:px-8 py-3 sm:py-3.5 text-sm sm:text-base font-semibold text-text-primary backdrop-blur-sm transition-all hover:border-oled-border hover:bg-oled-hover">
+          <BookOpen class="size-4" />
+          Documentation
+        </a>
+      </div>
+    </div>
+
+    <!-- Code preview -->
+    <div class="animate-fade-in-up-delay-4 relative mx-auto mt-12 sm:mt-16 max-w-2xl w-full">
+      <div class="code-block">
+        <div class="flex items-center gap-2 mb-4 pb-3 border-b border-oled-border-subtle">
+          <div class="h-3 w-3 rounded-full bg-accent/40"></div>
+          <div class="h-3 w-3 rounded-full bg-accent-3/40"></div>
+          <div class="h-3 w-3 rounded-full bg-accent-2/40"></div>
+          <span class="ml-2 text-[11px] text-text-muted">example.ion</span>
+        </div>
+        <pre class="text-[13px] leading-relaxed" set:html={ionExample} />
+      </div>
+      <div class="absolute -inset-4 -z-10 rounded-3xl bg-linear-to-r from-accent/10 via-transparent to-accent-2/10 blur-2xl"></div>
+    </div>
+  </section>
+
+  <!-- Stats bar -->
+  <section class="py-12 px-4 sm:px-6 border-y border-oled-border-subtle">
+    <div class="mx-auto max-w-5xl grid grid-cols-2 sm:grid-cols-4 gap-8 text-center">
+      <div>
+        <div class="text-3xl font-black text-accent">27+</div>
+        <div class="text-sm text-text-muted mt-1">Primitive Types</div>
+      </div>
+      <div>
+        <div class="text-3xl font-black text-accent">CBOR</div>
+        <div class="text-sm text-text-muted mt-1">Binary Protocol</div>
+      </div>
+      <div>
+        <div class="text-3xl font-black text-accent">3</div>
+        <div class="text-sm text-text-muted mt-1">Target Languages</div>
+      </div>
+      <div>
+        <div class="text-3xl font-black text-accent">30+</div>
+        <div class="text-sm text-text-muted mt-1">Diagnostic Codes</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Capabilities grid -->
+  <section class="py-16 sm:py-24 px-4 sm:px-6">
+    <div class="mx-auto max-w-5xl">
+      <div class="text-center mb-10 sm:mb-16">
+        <span class="section-label">Capabilities</span>
+        <h2 class="mt-3 text-2xl sm:text-3xl font-bold tracking-tight sm:text-4xl">Everything you need for typed contracts</h2>
+        <p class="text-text-secondary mt-3 max-w-2xl mx-auto text-sm sm:text-base">From schema definitions to production-ready, type-safe code in C# and TypeScript.</p>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="glass rounded-2xl p-6">
+          <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-subtle mb-4">
+            <FileCode class="size-5 text-accent" />
+          </div>
+          <h3 class="font-semibold mb-2">Rich IDL Syntax</h3>
+          <p class="text-sm text-text-secondary">Messages, services, unions, enums, flags, generics, typedefs, and custom attributes. Everything to describe your domain precisely.</p>
+          <a href="/guides/syntax-overview/" class="text-xs text-accent hover:underline mt-3 inline-block">Syntax Overview →</a>
+        </div>
+
+        <div class="glass rounded-2xl p-6">
+          <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-subtle mb-4">
+            <Binary class="size-5 text-accent" />
+          </div>
+          <h3 class="font-semibold mb-2">CBOR Encoding</h3>
+          <p class="text-sm text-text-secondary">Compact binary serialization using CBOR. Index-based field encoding for maximum wire efficiency — like protobuf, but with richer type support.</p>
+          <a href="/guides/dotnet-networking/" class="text-xs text-accent hover:underline mt-3 inline-block">Wire Protocol →</a>
+        </div>
+
+        <div class="glass rounded-2xl p-6">
+          <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-subtle mb-4">
+            <Code class="size-5 text-accent" />
+          </div>
+          <h3 class="font-semibold mb-2">Multi-target Codegen</h3>
+          <p class="text-sm text-text-secondary">Generate type-safe code for C# (.NET) and TypeScript (browser) from a single <code class="text-[11px] bg-oled-elevated px-1 py-0.5 rounded font-mono">.ion</code> source.</p>
+          <a href="/guides/codegen-csharp/" class="text-xs text-accent hover:underline mt-3 inline-block">Code Generation →</a>
+        </div>
+
+        <div class="glass rounded-2xl p-6">
+          <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-subtle mb-4">
+            <Lock class="size-5 text-accent" />
+          </div>
+          <h3 class="font-semibold mb-2">Schema Locks</h3>
+          <p class="text-sm text-text-secondary">Pin field indices, method signatures, and enum values in <code class="text-[11px] bg-oled-elevated px-1 py-0.5 rounded font-mono">ion.lock.json</code>. Breaking changes are detected at compile time.</p>
+          <a href="/guides/schema-lock/" class="text-xs text-accent hover:underline mt-3 inline-block">Schema Lock →</a>
+        </div>
+
+        <div class="glass rounded-2xl p-6">
+          <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-subtle mb-4">
+            <Zap class="size-5 text-accent" />
+          </div>
+          <h3 class="font-semibold mb-2">Streaming RPC</h3>
+          <p class="text-sm text-text-secondary">Unary request-response and full-duplex streaming over WebSocket. Ticket-based authentication built in.</p>
+          <a href="/guides/services/" class="text-xs text-accent hover:underline mt-3 inline-block">Services →</a>
+        </div>
+
+        <div class="glass rounded-2xl p-6">
+          <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-subtle mb-4">
+            <Shield class="size-5 text-accent" />
+          </div>
+          <h3 class="font-semibold mb-2">Comprehensive Diagnostics</h3>
+          <p class="text-sm text-text-secondary">30+ error codes with cycle detection, typo suggestions via Levenshtein distance, and schema migration warnings.</p>
+          <a href="/guides/diagnostics/" class="text-xs text-accent hover:underline mt-3 inline-block">Diagnostics →</a>
+        </div>
+
+        <div class="glass rounded-2xl p-6">
+          <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-subtle mb-4">
+            <Globe class="size-5 text-accent" />
+          </div>
+          <h3 class="font-semibold mb-2">JavaScript SDK</h3>
+          <p class="text-sm text-text-secondary">Browser-ready TypeScript SDK with binary reader/writer, CBOR codec, and formatter system. Works with generated service clients.</p>
+          <a href="/guides/js-sdk-overview/" class="text-xs text-accent hover:underline mt-3 inline-block">JS SDK →</a>
+        </div>
+
+        <div class="glass rounded-2xl p-6">
+          <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-subtle mb-4">
+            <Cpu class="size-5 text-accent" />
+          </div>
+          <h3 class="font-semibold mb-2">.NET Runtime</h3>
+          <p class="text-sm text-text-secondary">Server and client libraries for ASP.NET Core. DI integration, interceptors, OpenTelemetry instrumentation, and deadline handling.</p>
+          <a href="/guides/dotnet-runtime/" class="text-xs text-accent hover:underline mt-3 inline-block">.NET Runtime →</a>
+        </div>
+
+        <div class="glass rounded-2xl p-6">
+          <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-subtle mb-4">
+            <Layers class="size-5 text-accent" />
+          </div>
+          <h3 class="font-semibold mb-2">VS Code Extension</h3>
+          <p class="text-sm text-text-secondary">Syntax highlighting for <code class="text-[11px] bg-oled-elevated px-1 py-0.5 rounded font-mono">.ion</code> files, JSON schema validation for <code class="text-[11px] bg-oled-elevated px-1 py-0.5 rounded font-mono">ion.config.json</code>, and TextMate grammar.</p>
+          <a href="/guides/getting-started/" class="text-xs text-accent hover:underline mt-3 inline-block">Getting Started →</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Quick Start -->
+  <section id="quickstart" class="py-16 sm:py-24 px-4 sm:px-6 bg-oled-surface/30 scroll-mt-16">
+    <div class="mx-auto max-w-3xl">
+      <div class="text-center mb-8 sm:mb-12">
+        <span class="section-label">Get Started</span>
+        <h2 class="mt-3 text-2xl sm:text-3xl font-bold tracking-tight sm:text-4xl">Three steps to your first contract</h2>
+      </div>
+
+      <div class="space-y-8">
+        <div class="flex gap-4">
+          <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-subtle border border-accent/20 text-sm font-bold text-accent">1</div>
+          <div class="flex-1 min-w-0">
+            <h3 class="font-semibold mb-2">Install the CLI</h3>
+            <p class="text-sm text-text-secondary mb-3">Install <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ionc</code> as a .NET global tool:</p>
+            <div class="code-block text-[12px]">
+              <pre>dotnet tool install -g ionc</pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex gap-4">
+          <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-subtle border border-accent/20 text-sm font-bold text-accent">2</div>
+          <div class="flex-1 min-w-0">
+            <h3 class="font-semibold mb-2">Write your schema</h3>
+            <p class="text-sm text-text-secondary mb-3">Create a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">.ion</code> file with your types and services:</p>
+            <div class="code-block text-[12px]">
+              <pre set:html={ionExample} />
+            </div>
+          </div>
+        </div>
+
+        <div class="flex gap-4">
+          <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-subtle border border-accent/20 text-sm font-bold text-accent">3</div>
+          <div class="flex-1 min-w-0">
+            <h3 class="font-semibold mb-2">Compile</h3>
+            <p class="text-sm text-text-secondary mb-3">Run the compiler to generate code and lock the schema:</p>
+            <div class="code-block text-[12px]">
+              <pre set:html={quickStart} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-12 flex flex-wrap justify-center gap-4">
+        <a href="/guides/getting-started/" class="inline-flex items-center gap-2 rounded-xl bg-linear-to-r from-accent to-accent-3 px-8 py-3 text-sm font-bold text-white transition-all hover:brightness-110">
+          Full Getting Started Guide <ArrowRight class="size-3.5" />
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Guides grid -->
+  <section class="py-16 sm:py-24 px-4 sm:px-6">
+    <div class="mx-auto max-w-5xl">
+      <div class="text-center mb-8 sm:mb-12">
+        <span class="section-label">Learn</span>
+        <h2 class="mt-3 text-2xl sm:text-3xl font-bold tracking-tight sm:text-4xl">Documentation</h2>
+        <p class="text-text-secondary mt-3 text-sm sm:text-base">Comprehensive guides for every aspect of IonPath.</p>
+      </div>
+
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <a href="/guides/getting-started/" class="glass rounded-2xl p-5 group hover:border-accent/20 transition-all">
+          <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-subtle mb-3"><Terminal class="size-4 text-accent" /></div>
+          <h3 class="font-semibold text-sm group-hover:text-accent transition-colors">Getting Started</h3>
+          <p class="text-xs text-text-muted mt-1">Install ionc, write your first .ion file, compile.</p>
+        </a>
+        <a href="/guides/syntax-overview/" class="glass rounded-2xl p-5 group hover:border-accent/20 transition-all">
+          <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-subtle mb-3"><FileCode class="size-4 text-accent" /></div>
+          <h3 class="font-semibold text-sm group-hover:text-accent transition-colors">Language Reference</h3>
+          <p class="text-xs text-text-muted mt-1">Messages, services, unions, enums, generics, and more.</p>
+        </a>
+        <a href="/guides/primitive-types/" class="glass rounded-2xl p-5 group hover:border-accent/20 transition-all">
+          <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-subtle mb-3"><Binary class="size-4 text-accent" /></div>
+          <h3 class="font-semibold text-sm group-hover:text-accent transition-colors">Primitive Types</h3>
+          <p class="text-xs text-text-muted mt-1">27+ types with C# and TypeScript mappings.</p>
+        </a>
+        <a href="/guides/compiler/" class="glass rounded-2xl p-5 group hover:border-accent/20 transition-all">
+          <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-subtle mb-3"><Cpu class="size-4 text-accent" /></div>
+          <h3 class="font-semibold text-sm group-hover:text-accent transition-colors">Compiler</h3>
+          <p class="text-xs text-text-muted mt-1">CLI commands, flags, pipeline stages.</p>
+        </a>
+        <a href="/guides/schema-lock/" class="glass rounded-2xl p-5 group hover:border-accent/20 transition-all">
+          <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-subtle mb-3"><Lock class="size-4 text-accent" /></div>
+          <h3 class="font-semibold text-sm group-hover:text-accent transition-colors">Schema Lock</h3>
+          <p class="text-xs text-text-muted mt-1">Prevent breaking changes with ion.lock.json.</p>
+        </a>
+        <a href="/guides/js-sdk-overview/" class="glass rounded-2xl p-5 group hover:border-accent/20 transition-all">
+          <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-subtle mb-3"><Globe class="size-4 text-accent" /></div>
+          <h3 class="font-semibold text-sm group-hover:text-accent transition-colors">JavaScript SDK</h3>
+          <p class="text-xs text-text-muted mt-1">Browser-ready SDK with CBOR and formatters.</p>
+        </a>
+        <a href="/guides/dotnet-runtime/" class="glass rounded-2xl p-5 group hover:border-accent/20 transition-all">
+          <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-subtle mb-3"><Cpu class="size-4 text-accent" /></div>
+          <h3 class="font-semibold text-sm group-hover:text-accent transition-colors">.NET Runtime</h3>
+          <p class="text-xs text-text-muted mt-1">Server and client libraries for ASP.NET Core.</p>
+        </a>
+        <a href="/guides/codegen-csharp/" class="glass rounded-2xl p-5 group hover:border-accent/20 transition-all">
+          <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-subtle mb-3"><Code class="size-4 text-accent" /></div>
+          <h3 class="font-semibold text-sm group-hover:text-accent transition-colors">Code Generation</h3>
+          <p class="text-xs text-text-muted mt-1">What ionc generates for C# and TypeScript.</p>
+        </a>
+        <a href="/guides/diagnostics/" class="glass rounded-2xl p-5 group hover:border-accent/20 transition-all">
+          <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-subtle mb-3"><Shield class="size-4 text-accent" /></div>
+          <h3 class="font-semibold text-sm group-hover:text-accent transition-colors">Diagnostics</h3>
+          <p class="text-xs text-text-muted mt-1">All ION error codes with causes and fixes.</p>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <Footer />
+</Layout>

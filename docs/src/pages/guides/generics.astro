@@ -1,0 +1,91 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Generics — IonPath" current="/guides/generics/">
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">Generics</h1>
+    <p class="text-text-secondary mb-8">IonPath supports parameterized types for reusable data structures. Built-in generics include <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">Maybe&lt;T&gt;</code>, <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">Array&lt;T&gt;</code>, and <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">Partial&lt;T&gt;</code>.</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <section>
+      <h2 id="syntax" class="text-xl font-bold mb-4">Syntax</h2>
+      <p class="text-sm text-text-secondary mb-4">Generic types are declared with angle-bracket type parameters:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">msg</span> <span class="type-name">Response</span>&lt;<span class="type-keyword">T</span>&gt; {'{'}
+    data: <span class="type-keyword">T</span>;
+    timestamp: <span class="type-keyword">datetime</span>;
+    success: <span class="type-keyword">bool</span>;
+{'}'}
+
+<span class="text-accent-3">msg</span> <span class="type-name">Page</span>&lt;<span class="type-keyword">T</span>&gt; {'{'}
+    items: <span class="type-keyword">T</span>[];
+    total: <span class="type-keyword">u4</span>;
+    page: <span class="type-keyword">u4</span>;
+{'}'}</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="instantiation" class="text-xl font-bold mb-4">Instantiation</h2>
+      <p class="text-sm text-text-secondary mb-4">Use generic types by providing concrete type arguments:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">msg</span> <span class="type-name">User</span> {'{'} id: <span class="type-keyword">u4</span>; name: <span class="type-keyword">string</span>; {'}'}
+
+<span class="text-accent-3">service</span> <span class="type-name">UserService</span>() {'{'}
+    GetUser(id: <span class="type-keyword">u4</span>): <span class="type-name">Response</span>&lt;<span class="type-name">User</span>&gt;;
+    ListUsers(page: <span class="type-keyword">u4</span>): <span class="type-name">Page</span>&lt;<span class="type-name">User</span>&gt;;
+{'}'}</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="builtin-generics" class="text-xl font-bold mb-4">Built-in Generics</h2>
+      <p class="text-sm text-text-secondary mb-4">The standard library (<code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">std</code> feature) provides these built-in generic types:</p>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Type</span>
+          <span>Description</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]"><span class="type-name">Maybe</span>&lt;<span class="type-keyword">T</span>&gt;</span>
+          <span class="text-[12px] text-text-secondary">Optional wrapper. Shorthand: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T?</code>. C#: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">IonMaybe&lt;T&gt;</code></span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]"><span class="type-name">Array</span>&lt;<span class="type-keyword">T</span>&gt;</span>
+          <span class="text-[12px] text-text-secondary">Dynamic array. Shorthand: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T[]</code>. C#: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">IonArray&lt;T&gt;</code></span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]"><span class="type-name">Partial</span>&lt;<span class="type-keyword">T</span>&gt;</span>
+          <span class="text-[12px] text-text-secondary">Sparse update tracker. Shorthand: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">~T</code>. C#: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">IonPartial&lt;T&gt;</code></span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="maybe" class="text-xl font-bold mb-4">Maybe&lt;T&gt; (Optional)</h2>
+      <p class="text-sm text-text-secondary mb-4"><code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">Maybe&lt;T&gt;</code> represents a value that may or may not be present. In C# it generates <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">IonMaybe&lt;T&gt;</code> — a Rust-style Option monad with implicit conversions:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// C# generated code</span>
+<span class="type-name">IonMaybe</span>&lt;<span class="type-keyword">string</span>&gt; email = <span class="text-accent-2">"user{'@'}example.com"</span>;  <span class="text-text-muted">// implicit wrap</span>
+<span class="type-name">IonMaybe</span>&lt;<span class="type-keyword">string</span>&gt; empty = <span class="text-accent-3">default</span>;               <span class="text-text-muted">// no value</span>
+
+<span class="text-accent-3">if</span> (email.HasValue)
+    Console.WriteLine(email.Value);             <span class="text-text-muted">// "user{'@'}example.com"</span></pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="partial" class="text-xl font-bold mb-4">Partial&lt;T&gt; (Sparse Update)</h2>
+      <p class="text-sm text-text-secondary mb-4"><code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">Partial&lt;T&gt;</code> tracks which fields have been modified. Only modified fields are serialized on the wire — ideal for PATCH-like updates:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// C# usage</span>
+<span class="text-accent-3">var</span> patch = <span class="text-accent-3">new</span> <span class="type-name">IonPartial</span>&lt;<span class="type-name">User</span>&gt;();
+patch.Set(u =&gt; u.name, <span class="text-accent-2">"New Name"</span>);  <span class="text-text-muted">// only 'name' will be sent on the wire</span></pre>
+      </div>
+    </section>
+
+  </div>
+</DocsLayout>

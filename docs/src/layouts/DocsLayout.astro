@@ -1,0 +1,222 @@
+---
+import Layout from './Layout.astro';
+import Navbar from '../components/Navbar.astro';
+import Footer from '../components/Footer.astro';
+
+interface TocEntry {
+  id: string;
+  title: string;
+  depth?: number;
+}
+
+interface Props {
+  title?: string;
+  current?: string;
+  toc?: TocEntry[];
+}
+
+const { title = 'Docs — IonPath', current = '/docs/', toc = [] } = Astro.props;
+
+const guideSections = [
+  {
+    label: 'Getting Started',
+    items: [
+      { href: '/guides/getting-started/', label: 'Getting Started' },
+      { href: '/guides/ion-config/', label: 'Project Configuration' },
+    ],
+  },
+  {
+    label: 'Language Reference',
+    items: [
+      { href: '/guides/syntax-overview/', label: 'Syntax Overview' },
+      { href: '/guides/primitive-types/', label: 'Primitive Types' },
+      { href: '/guides/messages/', label: 'Messages' },
+      { href: '/guides/services/', label: 'Services' },
+      { href: '/guides/unions/', label: 'Unions' },
+      { href: '/guides/enums-flags/', label: 'Enums & Flags' },
+      { href: '/guides/typedefs/', label: 'Typedefs' },
+      { href: '/guides/generics/', label: 'Generics' },
+      { href: '/guides/attributes/', label: 'Attributes' },
+      { href: '/guides/directives/', label: 'Directives' },
+      { href: '/guides/comments/', label: 'Comments' },
+    ],
+  },
+  {
+    label: 'Compiler',
+    items: [
+      { href: '/guides/compiler/', label: 'CLI Reference' },
+      { href: '/guides/compilation-pipeline/', label: 'Compilation Pipeline' },
+      { href: '/guides/diagnostics/', label: 'Diagnostics' },
+      { href: '/guides/schema-lock/', label: 'Schema Lock' },
+    ],
+  },
+  {
+    label: 'JavaScript SDK',
+    items: [
+      { href: '/guides/js-sdk-overview/', label: 'Overview' },
+      { href: '/guides/js-sdk-usage/', label: 'Usage' },
+      { href: '/guides/js-sdk-formatters/', label: 'Formatters' },
+    ],
+  },
+  {
+    label: '.NET Runtime',
+    items: [
+      { href: '/guides/dotnet-runtime/', label: 'Overview' },
+      { href: '/guides/dotnet-server/', label: 'Server Setup' },
+      { href: '/guides/dotnet-client/', label: 'Client' },
+      { href: '/guides/dotnet-formatters/', label: 'Formatters' },
+      { href: '/guides/dotnet-networking/', label: 'Wire Protocol' },
+    ],
+  },
+  {
+    label: 'Code Generation',
+    items: [
+      { href: '/guides/codegen-csharp/', label: 'C# Code Generation' },
+      { href: '/guides/codegen-typescript/', label: 'TypeScript Code Generation' },
+    ],
+  },
+];
+
+const pageOrder = guideSections.flatMap(s => s.items.map(i => ({ href: i.href, label: i.label })));
+const currentIdx = pageOrder.findIndex(p => p.href === current);
+const prevPage = currentIdx > 0 ? pageOrder[currentIdx - 1] : null;
+const nextPage = currentIdx >= 0 && currentIdx < pageOrder.length - 1 ? pageOrder[currentIdx + 1] : null;
+---
+
+<Layout title={title}>
+  <Navbar current={current} />
+  <div class="flex pt-14 min-h-screen">
+    <!-- Sidebar -->
+    <aside class="hidden lg:flex w-64 flex-col fixed top-14 bottom-0 border-r border-oled-border-subtle bg-oled-bg/50 overflow-y-auto">
+      <nav class="flex flex-col gap-1 p-4">
+        {guideSections.map(section => (
+          <>
+            <div class="mt-3 first:mt-0 mb-1">
+              <span class="section-label px-3">{section.label}</span>
+            </div>
+            {section.items.map(item => (
+              <a
+                href={item.href}
+                class:list={["px-3 py-1.5 rounded-lg text-sm transition-colors",
+                  current === item.href ? 'text-accent bg-accent-subtle' : 'text-text-secondary hover:text-text-primary hover:bg-oled-hover']}
+              >
+                {item.label}
+              </a>
+            ))}
+          </>
+        ))}
+      </nav>
+    </aside>
+
+    <!-- Main content -->
+    <main id="main-content" class="flex-1 lg:ml-64 2xl:mr-56 pb-16 min-w-0 overflow-x-hidden">
+      <article class="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-10 min-w-0">
+        <slot />
+
+        <!-- Prev / Next navigation -->
+        {(prevPage || nextPage) && (
+          <nav class="mt-16 pt-8 border-t border-oled-border-subtle flex items-stretch justify-between gap-4">
+            {prevPage ? (
+              <a href={prevPage.href} class="group flex-1 flex flex-col items-start gap-1 px-4 py-3 rounded-xl border border-oled-border-subtle hover:border-accent/30 hover:bg-oled-hover/50 transition-all">
+                <span class="text-[11px] text-text-muted uppercase tracking-wider">Previous</span>
+                <span class="text-sm font-medium text-text-secondary group-hover:text-accent transition-colors">← {prevPage.label}</span>
+              </a>
+            ) : <div class="flex-1" />}
+            {nextPage ? (
+              <a href={nextPage.href} class="group flex-1 flex flex-col items-end gap-1 px-4 py-3 rounded-xl border border-oled-border-subtle hover:border-accent/30 hover:bg-oled-hover/50 transition-all text-right">
+                <span class="text-[11px] text-text-muted uppercase tracking-wider">Next</span>
+                <span class="text-sm font-medium text-text-secondary group-hover:text-accent transition-colors">{nextPage.label} →</span>
+              </a>
+            ) : <div class="flex-1" />}
+          </nav>
+        )}
+      </article>
+    </main>
+
+    {toc.length > 0 && (
+      <aside class="hidden 2xl:flex w-56 flex-col fixed top-14 right-0 bottom-0 overflow-y-auto py-8 px-4">
+        <div class="text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-3">On this page</div>
+        <nav class="flex flex-col gap-0.5 border-l border-oled-border-subtle">
+          {toc.map((entry) => (
+            <a
+              href={`#${entry.id}`}
+              class="toc-link text-[13px] leading-snug py-1 pl-3 -ml-px border-l border-transparent text-text-muted hover:text-text-primary hover:border-accent/40 transition-colors"
+              data-toc-id={entry.id}
+              style={entry.depth && entry.depth > 0 ? `padding-left: ${0.75 + entry.depth * 0.75}rem` : undefined}
+            >
+              {entry.title}
+            </a>
+          ))}
+        </nav>
+      </aside>
+    )}
+  </div>
+  <div class="lg:ml-64">
+    <Footer />
+  </div>
+</Layout>
+
+<script>
+  function initScrollSpy() {
+    const links = document.querySelectorAll<HTMLAnchorElement>('.toc-link');
+    if (!links.length) return;
+
+    const ids = Array.from(links).map(l => l.dataset.tocId!);
+    const sections = ids.map(id => document.getElementById(id)).filter(Boolean) as HTMLElement[];
+    if (!sections.length) return;
+
+    const OFFSET = 80;
+    let active = '';
+
+    function update() {
+      let current = ids[0];
+      for (let i = 0; i < sections.length; i++) {
+        if (sections[i].getBoundingClientRect().top <= OFFSET) {
+          current = ids[i];
+        }
+      }
+      if (current !== active) {
+        active = current;
+        links.forEach(l => {
+          const isActive = l.dataset.tocId === active;
+          l.classList.toggle('text-accent', isActive);
+          l.classList.toggle('!border-accent', isActive);
+          l.classList.toggle('text-text-muted', !isActive);
+        });
+      }
+    }
+
+    window.addEventListener('scroll', update, { passive: true });
+    update();
+  }
+  document.addEventListener('astro:page-load', initScrollSpy);
+  initScrollSpy();
+</script>
+
+<script>
+  function initReadingTime() {
+    const article = document.querySelector('article');
+    if (!article) return;
+    if (article.querySelector('.reading-time')) return;
+
+    const text = article.textContent || '';
+    const words = text.trim().split(/\s+/).filter(w => w.length > 0).length;
+    const minutes = Math.max(1, Math.round(words / 220));
+
+    const h1 = article.querySelector('h1');
+    if (!h1) return;
+
+    // Find the subtitle paragraph right after h1
+    const subtitle = h1.nextElementSibling;
+    const target = subtitle && subtitle.tagName === 'P' ? subtitle : h1;
+
+    const el = document.createElement('div');
+    el.className = 'reading-time flex items-center gap-2 mt-3 text-[13px] text-text-muted';
+    el.innerHTML = `<svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>${minutes} min read`;
+
+    target.insertAdjacentElement('afterend', el);
+  }
+
+  document.addEventListener('astro:page-load', initReadingTime);
+  initReadingTime();
+</script>

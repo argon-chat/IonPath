@@ -1,0 +1,285 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import fullManifest from '../../data/api-manifest.json';
+import { Lock, Hash, Shield, ShieldAlert } from 'lucide-astro';
+
+const manifest = fullManifest.interfaces;
+
+export function getStaticPaths() {
+  return fullManifest.interfaces.map((iface: any) => ({
+    params: { interface: iface.name },
+    props: { iface },
+  }));
+}
+
+const { iface } = Astro.props;
+const statusClass = iface.isDeprecated ? 'badge-deprecated' : iface.isStable ? 'badge-stable' : 'badge-draft';
+const statusText = iface.isDeprecated ? 'deprecated' : iface.isStable ? 'stable' : 'draft';
+const basePath = `/${iface.name}/v${iface.version}`;
+const versionLabel = iface.version > 1000
+  ? `${iface.version.toString().slice(0, 4)}-${iface.version.toString().slice(4, 6)}-${iface.version.toString().slice(6, 8)}`
+  : `v${iface.version}`;
+
+interface TypeProperty {
+  name: string;
+  type: string;
+  isArray: boolean;
+  isNullable: boolean;
+  isCircular: boolean;
+  properties?: TypeProperty[] | null;
+  enumValues?: string[] | null;
+}
+
+interface TypeField {
+  name: string;
+  type: string;
+  isArray: boolean;
+  isNullable: boolean;
+  isCircular: boolean;
+  enumValues?: string[] | null;
+  depth: number;
+  isNested: boolean;
+}
+
+function flattenProperties(props: TypeProperty[] | null | undefined, depth = 0): TypeField[] {
+  if (!props) return [];
+  const result: TypeField[] = [];
+  for (const prop of props) {
+    result.push({
+      name: prop.name,
+      type: prop.type,
+      isArray: prop.isArray,
+      isNullable: prop.isNullable,
+      isCircular: prop.isCircular,
+      enumValues: prop.enumValues,
+      depth,
+      isNested: depth > 0,
+    });
+    if (prop.properties) {
+      result.push(...flattenProperties(prop.properties, depth + 1));
+    }
+  }
+  return result;
+}
+
+function formatType(field: TypeField): string {
+  let t = field.type;
+  // Enum → show as union of literal values
+  if (field.enumValues?.length) {
+    t = field.enumValues
+      .map(v => `<span class="type-enum">&quot;${v}&quot;</span>`)
+      .join(' <span class="type-punct">|</span> ');
+  } else {
+    // Highlight primitives and custom type names
+    const bigintTypes = ['int64', 'uint64'];
+    const allPrimitives = /\b(string|boolean|any|int32|uint32|int64|uint64|int16|uint8|float|double|decimal)\b/g;
+    t = t.replace(allPrimitives, (m: string) => {
+      return `<span class="type-keyword">${m}</span>`;
+    });
+    t = t.replace(/\b([A-Z]\w+)/g, '<span class="type-name">$1</span>');
+  }
+  if (field.isArray) t += '<span class="type-punct">[]</span>';
+  if (field.isNullable) t += ' <span class="type-punct">|</span> <span class="type-keyword">null</span>';
+  if (field.isCircular) t += ' <span class="text-text-faint">(circular)</span>';
+  return t;
+}
+
+function buildCurlExample(route: any, fullPath: string): string {
+  const parts = [`<span class="text-text-muted">$</span> <span class="text-accent-hover">curl</span> -X ${route.method}`];
+  parts.push(`     -H <span class="text-accent-2">"Authorization: Bot YOUR_TOKEN"</span>`);
+  if (route.requestTypeName) {
+    parts.push(`     -H <span class="text-text-secondary">"Content-Type: application/json"</span>`);
+    const body = buildExampleJson(route.requestTypeShape);
+    parts.push(`     -d <span class="text-accent-2">'${body}'</span>`);
+  }
+  parts.push(`     <span class="text-text-secondary">https://gateway.argon.zone${fullPath}</span>`);
+  return parts.join(' \\\n');
+}
+
+function buildExampleJson(shape: TypeProperty[] | null | undefined): string {
+  if (!shape) return '{}';
+  const obj: Record<string, any> = {};
+  for (const f of shape) {
+    obj[f.name] = exampleValue(f);
+  }
+  return JSON.stringify(obj);
+}
+
+function exampleValue(prop: TypeProperty): any {
+  if (prop.isNullable) return null;
+  if (prop.isArray) return [];
+  if (prop.type === 'string') return '...';
+  if (['int32', 'uint32', 'int16', 'uint8', 'float', 'double', 'decimal'].includes(prop.type)) return 0;
+  if (['int64', 'uint64'].includes(prop.type)) return '0';
+  if (prop.type === 'boolean') return true;
+  return '...';
+}
+---
+
+<DocsLayout title={`${iface.name} — Argon Bot API`} current={`/docs/${iface.name}/`}>
+  <div class="animate-fade-in-up">
+    <!-- Header -->
+    <div class="mb-2">
+      <div class="flex flex-wrap items-center gap-2 sm:gap-3 mb-1">
+        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">{iface.name}</h1>
+        <span class="text-sm font-mono text-text-muted">{versionLabel}</span>
+        <span class:list={["text-[10px] px-2 py-0.5 rounded-full font-medium", statusClass]}>
+          {statusText}
+        </span>
+      </div>
+      <p class="text-xs sm:text-sm text-text-muted font-mono break-all">{basePath}/</p>
+    </div>
+
+    <!-- Description -->
+    {iface.description && (
+      <p class="mt-3 text-text-secondary">{iface.description}</p>
+    )}
+
+    <!-- Contract info -->
+    {iface.isStable && iface.computedHash && (
+      <div class="mt-4 flex items-center gap-2 text-xs text-text-muted">
+        <Hash class="size-3" />
+        <span class="font-mono">{iface.computedHash.slice(0, 16)}…</span>
+        <span class="text-text-faint">SHA-256 contract hash — guaranteed stable</span>
+      </div>
+    )}
+
+    <!-- Auth callout -->
+    <div class="mt-6 flex items-start gap-3 rounded-xl border border-oled-border bg-oled-surface/50 p-4">
+      <Lock class="size-4 text-accent mt-0.5 shrink-0" />
+      <div>
+        <p class="text-sm font-medium">Authentication required</p>
+        <p class="text-xs text-text-secondary mt-1">
+          All endpoints require <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Authorization: Bot &lt;token&gt;</code> header.
+          <a href="/guides/getting-started/" class="text-accent hover:underline ml-1">Get a token →</a>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Routes -->
+  <div class="mt-10 space-y-8 animate-fade-in-up-delay-1">
+    {iface.routes.map((route: any) => {
+      const methodClass = `method-${route.method.toLowerCase()}`;
+      const fullPath = `${basePath}${route.path}`;
+
+      return (
+        <section class="glass rounded-2xl overflow-hidden" id={route.path.replace('/', '')}>
+          <!-- Route header -->
+          <div class="flex flex-wrap items-center gap-2 sm:gap-3 px-4 sm:px-5 py-3 border-b border-oled-border-subtle">
+            <span class:list={["text-xs px-2.5 py-1 rounded-md border font-mono font-bold shrink-0", methodClass]}>
+              {route.method}
+            </span>
+            <code class="text-xs sm:text-sm font-mono text-text-secondary break-all">{fullPath}</code>
+            {route.isPrivileged && (
+              <span class="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium bg-red-500/10 text-red-400 border border-red-500/20 sm:ml-auto">
+                <ShieldAlert class="size-3" />
+                Privileged
+              </span>
+            )}
+            {route.permission && !route.isPrivileged && (
+              <span class="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 sm:ml-auto">
+                <Shield class="size-3" />
+                {route.permission}
+              </span>
+            )}
+            {route.permission && route.isPrivileged && (
+              <span class="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                <Shield class="size-3" />
+                {route.permission}
+              </span>
+            )}
+          </div>
+
+          <div class="p-4 sm:p-5 space-y-5">
+            {/* Route description */}
+            {route.description && (
+              <p class="text-sm text-text-secondary">{route.description}</p>
+            )}
+
+            {/* Request type */}
+            {route.requestTypeName && (
+              <div>
+                <h4 class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">
+                  Request Body
+                  <span class="text-[10px] font-mono font-normal text-text-faint ml-2">{route.requestTypeName}</span>
+                </h4>
+                <div class="type-grid">
+                  <div class="type-grid-header">
+                    <span>Field</span>
+                    <span>Type</span>
+                  </div>
+                  {flattenProperties(route.requestTypeShape).map((field: TypeField) => (
+                    <div class:list={["type-grid-row", field.isNested && "type-grid-nested"]} style={field.depth > 0 ? `padding-left: ${field.depth * 20 + 12}px` : undefined}>
+                      <span class="type-property font-mono text-[12px]">
+                        {field.depth > 0 && <span class="text-text-faint mr-1">↳</span>}
+                        {field.name}
+                      </span>
+                      <span class="font-mono text-[12px]" set:html={formatType(field)} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Response type */}
+            {route.responseTypeName && (
+              <div>
+                <h4 class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">
+                  Response
+                  <span class="text-[10px] font-mono font-normal text-text-faint ml-2">{route.responseTypeName}</span>
+                </h4>
+                <div class="type-grid">
+                  <div class="type-grid-header">
+                    <span>Field</span>
+                    <span>Type</span>
+                  </div>
+                  {flattenProperties(route.responseTypeShape).map((field: TypeField) => (
+                    <div class:list={["type-grid-row", field.isNested && "type-grid-nested"]} style={field.depth > 0 ? `padding-left: ${field.depth * 20 + 12}px` : undefined}>
+                      <span class="type-property font-mono text-[12px]">
+                        {field.depth > 0 && <span class="text-text-faint mr-1">↳</span>}
+                        {field.name}
+                      </span>
+                      <span class="font-mono text-[12px]" set:html={formatType(field)} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Errors */}
+            {route.errors?.length > 0 && (
+              <div>
+                <h4 class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Errors</h4>
+                <div class="type-grid">
+                  <div class="type-grid-header" style="grid-template-columns: 60px 1fr 2fr">
+                    <span>Status</span>
+                    <span>Code</span>
+                    <span>Description</span>
+                  </div>
+                  {route.errors.map((err: any) => (
+                    <div class="type-grid-row error-grid-row">
+                      <span class:list={["font-mono text-[12px] font-semibold",
+                        err.status >= 500 ? "text-red-400" : err.status >= 400 ? "text-amber-400" : "text-text-secondary"
+                      ]}>{err.status}</span>
+                      <span class="font-mono text-[12px] text-red-300">{err.code}</span>
+                      <span class="text-[12px] text-text-secondary">{err.description}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Example curl */}
+            <div>
+              <h4 class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Example</h4>
+              <div class="code-block text-[12px]">
+                <pre set:html={buildCurlExample(route, fullPath)} />
+              </div>
+            </div>
+          </div>
+        </section>
+      );
+    })}
+  </div>
+</DocsLayout>

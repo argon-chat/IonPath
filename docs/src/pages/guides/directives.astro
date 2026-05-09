@@ -1,0 +1,89 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Directives — IonPath" current="/guides/directives/">
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">Directives</h1>
+    <p class="text-text-secondary mb-8">Directives are file-level instructions that control imports and feature flags. They appear at the top of <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">.ion</code> files before any type declarations.</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <section>
+      <h2 id="import" class="text-xl font-bold mb-4">#import — Import Types</h2>
+      <p class="text-sm text-text-secondary mb-4">Import specific types from another module or file:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">#import</span> {'{'} <span class="type-name">User</span>, <span class="type-name">Role</span> {'}'} <span class="type-keyword">from</span> <span class="text-accent-2">"auth"</span>
+<span class="text-accent-3">#import</span> {'{'} <span class="type-name">OrderItem</span> {'}'} <span class="text-accent-2">from</span> <span class="text-accent-2">"shop"</span>
+
+<span class="text-accent-3">service</span> <span class="type-name">UserService</span>() {'{'}
+    GetUser(id: <span class="type-keyword">u4</span>): <span class="type-name">User</span>;  <span class="text-text-muted">// User is imported from "auth" module</span>
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">Module names reference external modules declared in <a href="/guides/ion-config/" class="text-accent hover:underline">ion.config.json</a>. Only the listed types become available in the current scope. See <a href="/guides/modules/" class="text-accent hover:underline">Modules</a> for more details on how the module system works.</p>
+
+      <div class="mt-4 flex items-start gap-3 rounded-xl border border-status-down/20 bg-status-down-subtle p-4">
+        <span class="text-status-down text-sm mt-0.5">✕</span>
+        <p class="text-sm text-text-secondary"><strong>Circular imports are forbidden.</strong> If module A imports from B and B imports from A, the compiler reports <a href="/guides/diagnostics/#ION0040" class="text-accent hover:underline">ION0040</a>.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="use" class="text-xl font-bold mb-4">#use — Import File (Deprecated)</h2>
+      <div class="flex items-start gap-3 rounded-xl border border-status-degraded/20 bg-status-degraded-subtle p-4 mb-4">
+        <span class="text-status-degraded text-sm mt-0.5">⚠</span>
+        <p class="text-sm text-text-secondary"><strong>Deprecated.</strong> The <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#use</code> directive is deprecated (<a href="/guides/diagnostics/#ION0047" class="text-accent hover:underline">ION0047</a>). Use <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#import {'{'} Type {'}'} from "module"</code> instead.</p>
+      </div>
+      <p class="text-sm text-text-secondary mb-4">Legacy syntax for importing all types from a local file:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">#use</span> <span class="text-accent-2">"common.ion"</span>
+<span class="text-accent-3">#use</span> <span class="text-accent-2">"models/user.ion"</span></pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">Paths are relative to the current file's directory. All type declarations from the imported file become available in the current scope.</p>
+    </section>
+
+    <section>
+      <h2 id="feature" class="text-xl font-bold mb-4">#feature — Feature Flags</h2>
+      <p class="text-sm text-text-secondary mb-4">Enable a feature module in the current file:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">#feature</span> <span class="text-accent-2">"std"</span>
+<span class="text-accent-3">#feature</span> <span class="text-accent-2">"vector"</span></pre>
+      </div>
+
+      <div class="type-grid mt-4">
+        <div class="type-grid-header">
+          <span>Feature</span>
+          <span>Provides</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">std</span>
+          <span class="text-[12px] text-text-secondary">All primitive types, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Maybe&lt;T&gt;</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Array&lt;T&gt;</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Partial&lt;T&gt;</code>, standard attributes</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">vector</span>
+          <span class="text-[12px] text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Vector2</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Vector3</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Vector4</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Quaternion</code></span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">orleans</span>
+          <span class="text-[12px] text-text-secondary">Microsoft Orleans grain-aware code generation</span>
+        </div>
+      </div>
+
+      <p class="text-sm text-text-secondary mt-4">Features are also declared in <a href="/guides/ion-config/" class="text-accent hover:underline">ion.config.json</a>. The <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#feature</code> directive enables them at the file level.</p>
+    </section>
+
+    <section>
+      <h2 id="module-system" class="text-xl font-bold mb-4">Module System</h2>
+      <p class="text-sm text-text-secondary mb-4">Each <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">.ion</code> file is a module. The compiler processes all <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">.ion</code> files in the project directory and resolves imports across files. For external module dependencies, see the <a href="/guides/modules/" class="text-accent hover:underline">Modules</a> guide.</p>
+      <ol class="list-decimal list-inside space-y-2 text-sm text-text-secondary">
+        <li>Parse all <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">.ion</code> files</li>
+        <li>Resolve external module dependencies from <a href="/guides/ion-config/" class="text-accent hover:underline">ion.config.json</a></li>
+        <li>Detect import cycles (<a href="/guides/diagnostics/#ION0001" class="text-accent hover:underline">ION0001</a>, <a href="/guides/diagnostics/#ION0040" class="text-accent hover:underline">ION0040</a>)</li>
+        <li>Resolve type references across modules</li>
+        <li>Validate and generate code</li>
+      </ol>
+    </section>
+
+  </div>
+</DocsLayout>

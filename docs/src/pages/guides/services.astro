@@ -1,0 +1,136 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Services — IonPath" current="/guides/services/">
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">Services</h1>
+    <p class="text-text-secondary mb-8">Services define RPC interfaces with typed methods. They generate client proxies, server executors, and CBOR formatters for each method's arguments and return type.</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <section>
+      <h2 id="basic-syntax" class="text-xl font-bold mb-4">Basic Syntax</h2>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">service</span> <span class="type-name">MathInteraction</span>(leftOperand: <span class="type-keyword">i4</span>) {'{'}
+    Add(rightOperand: <span class="type-keyword">i4</span>): <span class="type-keyword">i4</span>;
+    Mul(rightOperand: <span class="type-keyword">i4</span>): <span class="type-keyword">i4</span>;
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">A service has:</p>
+      <ul class="list-disc list-inside space-y-1 text-sm text-text-secondary mt-2">
+        <li><strong>Name</strong> — identifier for the service interface</li>
+        <li><strong>Base arguments</strong> — shared parameters for all methods (in parentheses after the name)</li>
+        <li><strong>Methods</strong> — named RPC operations with typed parameters and return type</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 id="base-arguments" class="text-xl font-bold mb-4">Base Arguments</h2>
+      <p class="text-sm text-text-secondary mb-4">Base arguments are declared in the service header and are automatically prepended to every method call. They act like a constructor or context that applies to all methods:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">service</span> <span class="type-name">UserService</span>(spaceId: <span class="type-keyword">u4</span>, auth: <span class="type-keyword">string</span>) {'{'}
+    GetUser(userId: <span class="type-keyword">u4</span>): <span class="type-name">User</span>;
+    <span class="text-text-muted">// On the wire, GetUser actually sends: [spaceId, auth, userId]</span>
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">In C#, base arguments become constructor parameters. In TypeScript, they are passed when creating the service client.</p>
+    </section>
+
+    <section>
+      <h2 id="method-types" class="text-xl font-bold mb-4">Method Types</h2>
+
+      <h3 class="text-lg font-semibold mt-6 mb-3">Unary (default)</h3>
+      <p class="text-sm text-text-secondary mb-3">Standard request-response. One request, one response over HTTP POST:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">service</span> <span class="type-name">DataService</span>() {'{'}
+    Do(data: <span class="type-keyword">bytes</span>);           <span class="text-text-muted">// void return</span>
+    DoIt(data: <span class="type-keyword">bytes</span>): <span class="type-keyword">bytes</span>;  <span class="text-text-muted">// returns bytes</span>
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">Route: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">POST /ion/DataService/DoIt.unary</code></p>
+
+      <h3 class="text-lg font-semibold mt-8 mb-3">Server Streaming</h3>
+      <p class="text-sm text-text-secondary mb-3">The <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">stream</code> modifier on the return type creates a server-streaming method over WebSocket:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">service</span> <span class="type-name">EventService</span>(seed: <span class="type-keyword">i4</span>) {'{'}
+    <span class="text-accent-3">stream</span> Integer(i: <span class="type-keyword">i4</span>): <span class="type-keyword">i4</span>;
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">In C#, the return type becomes <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">IAsyncEnumerable&lt;i4&gt;</code>. Route: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">/ion/EventService/Integer.ws</code></p>
+
+      <h3 class="text-lg font-semibold mt-8 mb-3">Bidirectional Streaming</h3>
+      <p class="text-sm text-text-secondary mb-3">Add the <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">stream</code> modifier to a parameter for bidirectional streaming:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">service</span> <span class="type-name">StreamService</span>(seed: <span class="type-keyword">i4</span>) {'{'}
+    <span class="text-accent-3">stream</span> Floats(<span class="text-accent-3">stream</span> i: <span class="type-keyword">f4</span>): <span class="type-keyword">f4</span>;
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">Both the input parameter and the return are streams. Only <strong>one</strong> parameter per method can be marked as <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">stream</code> (violation: <a href="/guides/diagnostics/" class="text-accent hover:underline">ION0013</a>).</p>
+
+      <h3 class="text-lg font-semibold mt-8 mb-3">Internal Methods</h3>
+      <p class="text-sm text-text-secondary mb-3">Methods marked <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">internal</code> are not exposed in public interfaces:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">service</span> <span class="type-name">AdminService</span>() {'{'}
+    <span class="text-accent-3">internal</span> Migrate(): <span class="type-keyword">void</span>;
+{'}'}</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="void-methods" class="text-xl font-bold mb-4">Void Methods</h2>
+      <p class="text-sm text-text-secondary mb-4">Methods that don't return a value omit the return type or use <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">void</code>:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">service</span> <span class="type-name">NotificationService</span>() {'{'}
+    SendNotification(userId: <span class="type-keyword">u4</span>, text: <span class="type-keyword">string</span>);  <span class="text-text-muted">// void — no return type</span>
+{'}'}</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="generated-code" class="text-xl font-bold mb-4">Generated Code</h2>
+      <p class="text-sm text-text-secondary mb-4">A service generates multiple artifacts:</p>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Artifact</span>
+          <span>Description</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-name">IServiceName</span>
+          <span class="text-[12px] text-text-secondary">C# interface extending <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">IIonService</code></span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-name">Ion_ServiceName_ClientImpl</span>
+          <span class="text-[12px] text-text-secondary">Client proxy — serializes args, calls remote, deserializes result</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-name">Ion_ServiceName_ServiceExecutor</span>
+          <span class="text-[12px] text-text-secondary">Server-side router — deserializes request, invokes impl, serializes response</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]">formatters</span>
+          <span class="text-[12px] text-text-secondary">CBOR read/write methods for each method's argument tuple</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="real-world" class="text-xl font-bold mb-4">Real-World Example</h2>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">msg</span> <span class="type-name">Vector</span> {'{'}
+    x: <span class="type-keyword">f4</span>;
+    y: <span class="type-keyword">f4</span>;
+    z: <span class="type-keyword">f4</span>;
+{'}'}
+
+<span class="text-accent-3">service</span> <span class="type-name">VectorMathInteraction</span>(leftOperand: <span class="type-name">Vector</span>) {'{'}
+    Abs(): <span class="type-name">Vector</span>;
+    Add(rightOperand: <span class="type-name">Vector</span>): <span class="type-name">Vector</span>;
+    Clamp(min: <span class="type-name">Vector</span>, max: <span class="type-name">Vector</span>): <span class="type-name">Vector</span>;
+{'}'}</pre>
+      </div>
+    </section>
+
+  </div>
+</DocsLayout>

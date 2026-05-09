@@ -1,0 +1,98 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Attributes — IonPath" current="/guides/attributes/">
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">Attributes</h1>
+    <p class="text-text-secondary mb-8">Attributes are annotations that attach metadata to types, fields, and methods. IonPath supports both built-in and custom attributes.</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <section>
+      <h2 id="declaring" class="text-xl font-bold mb-4">Declaring Custom Attributes</h2>
+      <p class="text-sm text-text-secondary mb-4">Declare a custom attribute with the <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">attribute</code> keyword:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">attribute</span> <span class="type-name">{'@'}deprecated</span>(version: <span class="type-keyword">string</span>, reason: <span class="type-keyword">string</span>);
+<span class="text-accent-3">attribute</span> <span class="type-name">{'@'}description</span>(text: <span class="type-keyword">string</span>);
+<span class="text-accent-3">attribute</span> <span class="type-name">{'@'}maxLength</span>(n: <span class="type-keyword">i4</span>);</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">Attribute arguments can only be <strong>scalar types</strong> — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">string</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">i4</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">bool</code>, etc. Using a non-scalar type triggers <a href="/guides/diagnostics/" class="text-accent hover:underline">ION0004</a>.</p>
+    </section>
+
+    <section>
+      <h2 id="applying" class="text-xl font-bold mb-4">Applying Attributes</h2>
+      <p class="text-sm text-text-secondary mb-4">Apply attributes with the <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">@</code> prefix before a declaration:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">{'@'}deprecated</span>(<span class="text-accent-2">"2.0"</span>, <span class="text-accent-2">"Use UserV2 instead"</span>)
+<span class="text-accent-3">msg</span> <span class="type-name">User</span> {'{'}
+    <span class="text-accent-3">{'@'}description</span>(<span class="text-accent-2">"The unique user identifier"</span>)
+    id: <span class="type-keyword">u4</span>;
+    name: <span class="type-keyword">string</span>;
+{'}'}
+
+<span class="text-accent-3">{'@'}deprecated</span>(<span class="text-accent-2">"3.0"</span>, <span class="text-accent-2">"Use NewService"</span>)
+<span class="text-accent-3">service</span> <span class="type-name">OldService</span>() {'{'}
+    DoThing(): <span class="type-keyword">void</span>;
+{'}'}</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="builtin" class="text-xl font-bold mb-4">Built-in Attributes</h2>
+      <p class="text-sm text-text-secondary mb-4">These attributes are provided by the standard library and used internally by the compiler:</p>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Attribute</span>
+          <span>Description</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">{'@'}builtin</span>
+          <span class="text-[12px] text-text-secondary">Marks a type as part of the standard library. Internal use only.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">{'@'}scalar</span>
+          <span class="text-[12px] text-text-secondary">Marks a type as scalar (no indirection). Used for primitives.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">{'@'}tag(n)</span>
+          <span class="text-[12px] text-text-secondary">CBOR tag annotation — wraps the encoded value with a CBOR tag number.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">{'@'}deadline(ms)</span>
+          <span class="text-[12px] text-text-secondary">Request timeout in milliseconds. Applied to service methods.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">{'@'}deprecated</span>
+          <span class="text-[12px] text-text-secondary">Marks a type, field, or method as deprecated.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">{'@'}internal</span>
+          <span class="text-[12px] text-text-secondary">Marks a declaration as internal/hidden.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">{'@'}bits(n)</span>
+          <span class="text-[12px] text-text-secondary">Specifies the bit count for numeric types.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">{'@'}union</span>
+          <span class="text-[12px] text-text-secondary">Automatically applied to union types.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">{'@'}unionCase</span>
+          <span class="text-[12px] text-text-secondary">Automatically applied to union case types.</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="validation" class="text-xl font-bold mb-4">Validation</h2>
+      <ul class="list-disc list-inside space-y-2 text-sm text-text-secondary">
+        <li><strong>ION0004</strong> — Using a non-scalar type in attribute arguments (e.g., a message type)</li>
+        <li><strong>ION0005</strong> — Referencing an attribute that is not declared or imported</li>
+      </ul>
+    </section>
+
+  </div>
+</DocsLayout>

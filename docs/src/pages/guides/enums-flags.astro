@@ -1,0 +1,104 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Enums & Flags — IonPath" current="/guides/enums-flags/">
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">Enums & Flags</h1>
+    <p class="text-text-secondary mb-8">IonPath supports both single-value enumerations (<code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">enum</code>) and bitfield enumerations (<code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">flags</code>).</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <section>
+      <h2 id="enums" class="text-xl font-bold mb-4">Enums</h2>
+      <p class="text-sm text-text-secondary mb-4">Enums define a set of named constants with auto-incrementing values:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">enum</span> <span class="type-name">Status</span>: <span class="type-keyword">u1</span> {'{'}
+    Pending,        <span class="text-text-muted">// = 0</span>
+    Active,         <span class="text-text-muted">// = 1</span>
+    Inactive = 5,   <span class="text-text-muted">// = 5 (explicit)</span>
+    Archived        <span class="text-text-muted">// = 6 (auto-increment from 5)</span>
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">The base type (after the colon) determines the wire encoding size. Can be any unsigned integer: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">u1</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">u2</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">u4</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">u8</code>.</p>
+    </section>
+
+    <section>
+      <h2 id="flags" class="text-xl font-bold mb-4">Flags</h2>
+      <p class="text-sm text-text-secondary mb-4">Flags are bitfield enums — their values can be combined with bitwise OR. Use the bit-shift syntax for clarity:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">flags</span> <span class="type-name">Permissions</span>: <span class="type-keyword">u4</span> {'{'}
+    None = 0,
+    Read = 1 &lt;&lt; 0,       <span class="text-text-muted">// = 1</span>
+    Write = 1 &lt;&lt; 1,      <span class="text-text-muted">// = 2</span>
+    Execute = 1 &lt;&lt; 2,    <span class="text-text-muted">// = 4</span>
+    Admin = 1 &lt;&lt; 3,      <span class="text-text-muted">// = 8</span>
+    All = 15             <span class="text-text-muted">// = 0b1111</span>
+{'}'}</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="differences" class="text-xl font-bold mb-4">Enum vs Flags</h2>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Feature</span>
+          <span>enum / flags</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="text-[12px] type-property">Value semantics</span>
+          <span class="text-[12px] text-text-secondary"><strong>enum</strong>: exactly one value. <strong>flags</strong>: combinable via bitwise OR.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="text-[12px] type-property">Auto-increment</span>
+          <span class="text-[12px] text-text-secondary"><strong>enum</strong>: sequential (+1). <strong>flags</strong>: no auto-increment — all values must be explicit.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="text-[12px] type-property">Bit overlap check</span>
+          <span class="text-[12px] text-text-secondary"><strong>flags only</strong>: compiler detects overlapping bits (<a href="/guides/diagnostics/" class="text-accent hover:underline">ION0011</a>).</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="text-[12px] type-property">C# attribute</span>
+          <span class="text-[12px] text-text-secondary"><strong>flags</strong>: generates <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">[Flags]</code> attribute.</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="validation" class="text-xl font-bold mb-4">Validation Rules</h2>
+      <ul class="list-disc list-inside space-y-2 text-sm text-text-secondary">
+        <li><strong>ION0006</strong> — Duplicate member names within the same enum/flags</li>
+        <li><strong>ION0007</strong> — Non-constant values (only integer literals and bit-shift expressions allowed)</li>
+        <li><strong>ION0008</strong> — Duplicate values (two members with the same numeric value in an enum)</li>
+        <li><strong>ION0011</strong> — Overlapping bits in flags (e.g., <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">3</code> overlaps with <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">1</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">2</code>)</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 id="usage" class="text-xl font-bold mb-4">Using Enums and Flags</h2>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">enum</span> <span class="type-name">UserRole</span>: <span class="type-keyword">u1</span> {'{'}
+    Guest,
+    Member,
+    Moderator,
+    Admin
+{'}'}
+
+<span class="text-accent-3">flags</span> <span class="type-name">UserFlags</span>: <span class="type-keyword">u4</span> {'{'}
+    None = 0,
+    Verified = 1 &lt;&lt; 0,
+    Premium = 1 &lt;&lt; 1,
+    Bot = 1 &lt;&lt; 2
+{'}'}
+
+<span class="text-accent-3">msg</span> <span class="type-name">User</span> {'{'}
+    id: <span class="type-keyword">u4</span>;
+    role: <span class="type-name">UserRole</span>;
+    flags: <span class="type-name">UserFlags</span>;
+{'}'}</pre>
+      </div>
+    </section>
+
+  </div>
+</DocsLayout>

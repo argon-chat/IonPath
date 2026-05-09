@@ -1,0 +1,151 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="CLI Reference — IonPath" current="/guides/compiler/">
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">CLI Reference</h1>
+    <p class="text-text-secondary mb-8">The <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ionc</code> command-line tool compiles <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">.ion</code> schemas, validates contracts, and manages schema locks.</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <section>
+      <h2 id="commands" class="text-xl font-bold mb-4">Commands</h2>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Command</span>
+          <span>Description</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">ionc compile</span>
+          <span class="text-[12px] text-text-secondary">Full compilation with code generation. Alias: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ionc build</code></span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">ionc check</span>
+          <span class="text-[12px] text-text-secondary">Fast parse and validate without code generation</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">ionc init</span>
+          <span class="text-[12px] text-text-secondary">Interactive scaffolding — creates <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ion.config.json</code> with feature/platform selection</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">ionc lock init</span>
+          <span class="text-[12px] text-text-secondary">Create initial <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ion.lock.json</code> from current schema</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">ionc lock check</span>
+          <span class="text-[12px] text-text-secondary">Validate current schema against existing lock file</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">ionc lock update</span>
+          <span class="text-[12px] text-text-secondary">Update lock file to match current schema (acknowledges breaking changes)</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">ionc serve</span>
+          <span class="text-[12px] text-text-secondary">Start the Language Server Protocol (LSP) server for editor integration</span>
+        </div>
+      </div>
+
+      <h3 id="serve-flags" class="text-lg font-semibold mt-6 mb-3">Serve Flags</h3>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Flag</span>
+          <span>Description</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">--stdio</span>
+          <span class="text-[12px] text-text-secondary">Use standard input/output for LSP transport (default for most editors)</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">--port &lt;number&gt;</span>
+          <span class="text-[12px] text-text-secondary">Use TCP transport on the specified port</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="compile-flags" class="text-xl font-bold mb-4">Compile Flags</h2>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Flag</span>
+          <span>Description</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">-n, --no-emit-csproj</span>
+          <span class="text-[12px] text-text-secondary">Skip <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">.csproj</code> generation for .NET targets</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">-o, --only &lt;target&gt;</span>
+          <span class="text-[12px] text-text-secondary">Generate only for a specific platform: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">dotnet</code> or <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">browser</code></span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">--maybe</span>
+          <span class="text-[12px] text-text-secondary">Use Maybe wrapper for nullable types instead of native nullability</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">--update-lock</span>
+          <span class="text-[12px] text-text-secondary">Force-update the lock file, acknowledging any breaking changes</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">--no-lock</span>
+          <span class="text-[12px] text-text-secondary">Skip schema lock validation entirely</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">--check</span>
+          <span class="text-[12px] text-text-secondary">Validate only — no code generation (same as <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ionc check</code>)</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">-v, --verbose</span>
+          <span class="text-[12px] text-text-secondary">Show detailed timing per compilation stage</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">--json</span>
+          <span class="text-[12px] text-text-secondary">Output diagnostics as JSON (for CI/CD integration)</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="examples" class="text-xl font-bold mb-4">Examples</h2>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted"># Full compile</span>
+ionc compile
+
+<span class="text-text-muted"># Validate only, with verbose output</span>
+ionc check --verbose
+
+<span class="text-text-muted"># Generate only TypeScript</span>
+ionc compile --only browser
+
+<span class="text-text-muted"># Compile and update lock file</span>
+ionc compile --update-lock
+
+<span class="text-text-muted"># CI/CD mode — JSON diagnostics, no lock validation</span>
+ionc compile --json --no-lock
+
+<span class="text-text-muted"># Initialize lock file for the first time</span>
+ionc lock init</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="exit-codes" class="text-xl font-bold mb-4">Exit Codes</h2>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Code</span>
+          <span>Meaning</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">0</span>
+          <span class="text-[12px] text-text-secondary">Success — compilation completed without errors</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">1</span>
+          <span class="text-[12px] text-text-secondary">Compilation failed — one or more errors found</span>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</DocsLayout>

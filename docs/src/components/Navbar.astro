@@ -1,0 +1,217 @@
+---
+import { BookOpen, History, Github, Compass, Sun, Moon, Search, Menu, X, Boxes } from 'lucide-astro';
+
+interface Props {
+  current?: string;
+}
+const { current = '/' } = Astro.props;
+const isGuides = current.startsWith('/guides/');
+const isDocs = current.startsWith('/docs/');
+
+const guideSections = [
+  {
+    label: 'Getting Started',
+    items: [
+      { href: '/guides/getting-started/', label: 'Getting Started' },
+      { href: '/guides/ion-config/', label: 'Project Configuration' },
+    ],
+  },
+  {
+    label: 'Language Reference',
+    items: [
+      { href: '/guides/syntax-overview/', label: 'Syntax Overview' },
+      { href: '/guides/primitive-types/', label: 'Primitive Types' },
+      { href: '/guides/messages/', label: 'Messages' },
+      { href: '/guides/services/', label: 'Services' },
+      { href: '/guides/unions/', label: 'Unions' },
+      { href: '/guides/enums-flags/', label: 'Enums & Flags' },
+      { href: '/guides/typedefs/', label: 'Typedefs' },
+      { href: '/guides/generics/', label: 'Generics' },
+      { href: '/guides/attributes/', label: 'Attributes' },
+      { href: '/guides/directives/', label: 'Directives' },
+      { href: '/guides/modules/', label: 'Modules' },
+      { href: '/guides/comments/', label: 'Comments' },
+    ],
+  },
+  {
+    label: 'Compiler',
+    items: [
+      { href: '/guides/compiler/', label: 'CLI Reference' },
+      { href: '/guides/compilation-pipeline/', label: 'Compilation Pipeline' },
+      { href: '/guides/diagnostics/', label: 'Diagnostics' },
+      { href: '/guides/schema-lock/', label: 'Schema Lock' },
+    ],
+  },
+  {
+    label: 'JavaScript SDK',
+    items: [
+      { href: '/guides/js-sdk-overview/', label: 'Overview' },
+      { href: '/guides/js-sdk-usage/', label: 'Usage' },
+      { href: '/guides/js-sdk-formatters/', label: 'Formatters' },
+    ],
+  },
+  {
+    label: '.NET Runtime',
+    items: [
+      { href: '/guides/dotnet-runtime/', label: 'Overview' },
+      { href: '/guides/dotnet-server/', label: 'Server Setup' },
+      { href: '/guides/dotnet-client/', label: 'Client' },
+      { href: '/guides/dotnet-formatters/', label: 'Formatters' },
+      { href: '/guides/dotnet-networking/', label: 'Wire Protocol' },
+    ],
+  },
+  {
+    label: 'Code Generation',
+    items: [
+      { href: '/guides/codegen-csharp/', label: 'C# Code Generation' },
+      { href: '/guides/codegen-typescript/', label: 'TypeScript Code Generation' },
+    ],
+  },
+];
+---
+
+<nav class="fixed top-0 left-0 right-0 z-50">
+  <div class="absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-oled-border/50 to-transparent"></div>
+  <div class="navbar-bg backdrop-blur-2xl backdrop-saturate-150">
+    <div class="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
+      <div class="flex items-center gap-2">
+        <button id="mobile-menu-btn" type="button" class="flex lg:hidden items-center justify-center w-8 h-8 rounded-lg text-text-secondary hover:text-text-primary hover:bg-oled-hover transition-colors cursor-pointer" aria-label="Toggle menu">
+          <Menu class="size-5 mobile-menu-icon" />
+          <X class="size-5 mobile-close-icon hidden" />
+        </button>
+
+        <a href="/" class="flex items-center gap-2.5 group">
+          <div class="relative flex h-8 w-8 items-center justify-center rounded-xl bg-accent/8 border border-accent/10 group-hover:bg-accent/12 group-hover:border-accent/20 transition-all duration-300">
+            <Boxes class="size-4 text-accent" />
+          </div>
+          <span class="text-[15px] font-semibold tracking-tight text-text-primary">IonPath</span>
+        </a>
+      </div>
+
+      <div class="flex items-center gap-1">
+        <div class="hidden sm:flex items-center gap-1">
+          <a href="/guides/getting-started/" class:list={["flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors", isGuides ? 'text-accent bg-accent-subtle' : 'text-text-secondary hover:text-text-primary hover:bg-oled-hover']}>
+            <Compass class="size-3.5" />
+            Guides
+          </a>
+          <a href="/docs/" class:list={["flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors", isDocs ? 'text-accent bg-accent-subtle' : 'text-text-secondary hover:text-text-primary hover:bg-oled-hover']}>
+            <BookOpen class="size-3.5" />
+            Reference
+          </a>
+          <a href="/changelog/" class:list={["flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors", current === '/changelog/' ? 'text-accent bg-accent-subtle' : 'text-text-secondary hover:text-text-primary hover:bg-oled-hover']}>
+            <History class="size-3.5" />
+            Changelog
+          </a>
+          <a href="https://github.com/nicurt/IonPath" target="_blank" rel="noopener" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-text-secondary hover:text-text-primary hover:bg-oled-hover transition-colors">
+            <Github class="size-3.5" />
+            <span class="hidden md:inline">GitHub</span>
+          </a>
+        </div>
+
+        <div class="w-px h-5 bg-oled-border-subtle mx-1 hidden sm:block"></div>
+
+        <button data-search-trigger type="button" class="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-oled-hover transition-colors cursor-pointer" aria-label="Search">
+          <Search class="size-3.5" />
+          <span class="hidden md:inline text-xs">Search</span>
+          <kbd class="hidden md:inline text-[10px] text-text-muted bg-oled-elevated px-1.5 py-0.5 rounded border border-oled-border-subtle font-mono">⌘K</kbd>
+        </button>
+
+        <button id="theme-toggle" type="button" class="flex items-center justify-center w-8 h-8 rounded-lg text-text-secondary hover:text-text-primary hover:bg-oled-hover transition-colors cursor-pointer" aria-label="Toggle theme">
+          <Sun class="size-4 hidden dark:block" />
+          <Moon class="size-4 block dark:hidden" />
+        </button>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- Mobile sidebar overlay -->
+<div id="mobile-sidebar" class="fixed inset-0 z-40 hidden lg:hidden">
+  <div id="mobile-sidebar-backdrop" class="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>
+  <aside class="absolute top-14 left-0 bottom-0 w-72 bg-oled-bg border-r border-oled-border-subtle overflow-y-auto mobile-sidebar-panel">
+    <nav class="flex flex-col gap-1 p-4">
+      <div class="sm:hidden flex flex-col gap-1 mb-4 pb-4 border-b border-oled-border-subtle">
+        <a href="/guides/getting-started/" class:list={["px-3 py-2 rounded-lg text-sm transition-colors", isGuides ? 'text-accent bg-accent-subtle' : 'text-text-secondary hover:text-text-primary hover:bg-oled-hover']}>Guides</a>
+        <a href="/docs/" class:list={["px-3 py-2 rounded-lg text-sm transition-colors", isDocs ? 'text-accent bg-accent-subtle' : 'text-text-secondary hover:text-text-primary hover:bg-oled-hover']}>Reference</a>
+        <a href="/changelog/" class:list={["px-3 py-2 rounded-lg text-sm transition-colors", current === '/changelog/' ? 'text-accent bg-accent-subtle' : 'text-text-secondary hover:text-text-primary hover:bg-oled-hover']}>Changelog</a>
+        <a href="https://github.com/nicurt/IonPath" target="_blank" rel="noopener" class="px-3 py-2 rounded-lg text-sm text-text-secondary hover:text-text-primary hover:bg-oled-hover transition-colors">GitHub</a>
+      </div>
+
+      {guideSections.map(section => (
+        <>
+          <div class="mt-3 mb-1">
+            <span class="section-label px-3">{section.label}</span>
+          </div>
+          {section.items.map(g => (
+            <a
+              href={g.href}
+              class:list={["px-3 py-1.5 rounded-lg text-sm transition-colors",
+                current === g.href ? 'text-accent bg-accent-subtle' : 'text-text-secondary hover:text-text-primary hover:bg-oled-hover']}
+            >
+              {g.label}
+            </a>
+          ))}
+        </>
+      ))}
+    </nav>
+  </aside>
+</div>
+
+<script>
+  function initThemeToggle() {
+    const btn = document.getElementById('theme-toggle');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      const isDark = document.documentElement.classList.contains('dark');
+      const { top, left, width, height } = btn.getBoundingClientRect();
+      const x = left + width / 2;
+      const y = top + height / 2;
+      const maxR = Math.hypot(
+        Math.max(x, window.innerWidth - x),
+        Math.max(y, window.innerHeight - y)
+      );
+
+      const applyTheme = () => {
+        document.documentElement.classList.toggle('dark');
+        localStorage.setItem('theme', isDark ? 'light' : 'dark');
+      };
+
+      if (typeof document.startViewTransition !== 'function') {
+        applyTheme();
+        return;
+      }
+
+      const transition = document.startViewTransition(applyTheme);
+      transition.ready?.then(() => {
+        document.documentElement.animate(
+          { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${maxR}px at ${x}px ${y}px)`] },
+          { duration: 500, easing: 'ease-in-out', pseudoElement: '::view-transition-new(root)' }
+        );
+      });
+    });
+  }
+
+  function initMobileMenu() {
+    const btn = document.getElementById('mobile-menu-btn');
+    const sidebar = document.getElementById('mobile-sidebar');
+    const backdrop = document.getElementById('mobile-sidebar-backdrop');
+    if (!btn || !sidebar) return;
+
+    function toggle() {
+      const isOpen = !sidebar!.classList.contains('hidden');
+      sidebar!.classList.toggle('hidden', isOpen);
+      btn!.querySelector('.mobile-menu-icon')?.classList.toggle('hidden', !isOpen);
+      btn!.querySelector('.mobile-close-icon')?.classList.toggle('hidden', isOpen);
+    }
+
+    btn.addEventListener('click', toggle);
+    backdrop?.addEventListener('click', toggle);
+    sidebar.querySelectorAll('a[href]').forEach(a => {
+      a.addEventListener('click', () => { if (!sidebar!.classList.contains('hidden')) toggle(); });
+    });
+  }
+
+  document.addEventListener('astro:page-load', () => { initThemeToggle(); initMobileMenu(); });
+  initThemeToggle();
+  initMobileMenu();
+</script>

@@ -1,0 +1,114 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title=".NET Server Setup — IonPath" current="/guides/dotnet-server/">
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">.NET Server Setup</h1>
+    <p class="text-text-secondary mb-8">Host IonPath services in an ASP.NET Core application with dependency injection, RPC endpoint mapping, and interceptors.</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <section>
+      <h2 id="setup" class="text-xl font-bold mb-4">Basic Setup</h2>
+      <p class="text-sm text-text-secondary mb-4">Register IonPath services and map RPC endpoints in your <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">Program.cs</code>:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">var</span> builder = WebApplication.CreateBuilder(args);
+
+<span class="text-text-muted">// Register IonPath protocol services</span>
+builder.Services.AddIonProtocol(options =>
+{'{'}
+    options.WithTransport&lt;<span class="type-name">MyAppTransport</span>&gt;();
+{'}'});
+
+<span class="text-text-muted">// Register your service implementations</span>
+builder.Services.AddScoped&lt;<span class="type-name">IUserService</span>, <span class="type-name">UserServiceImpl</span>&gt;();
+
+<span class="text-accent-3">var</span> app = builder.Build();
+
+<span class="text-text-muted">// Map all IonPath RPC endpoints</span>
+app.MapRpcEndpoints();
+
+app.Run();</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="service-impl" class="text-xl font-bold mb-4">Implementing a Service</h2>
+      <p class="text-sm text-text-secondary mb-4">Implement the generated interface (<code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">IServiceName</code>) and register it with DI:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">public class</span> <span class="type-name">UserServiceImpl</span> : <span class="type-name">IUserService</span>
+{'{'}
+    <span class="text-accent-3">private readonly</span> <span class="type-name">IDbContext</span> _db;
+
+    <span class="text-accent-3">public</span> UserServiceImpl(<span class="type-name">IDbContext</span> db) => _db = db;
+
+    <span class="text-accent-3">public async</span> Task&lt;<span class="type-name">User</span>&gt; GetUser(
+        <span class="type-keyword">uint</span> spaceId,  <span class="text-text-muted">// base arg</span>
+        <span class="type-keyword">uint</span> userId,   <span class="text-text-muted">// method arg</span>
+        CancellationToken ct)
+    {'{'}
+        <span class="text-accent-3">return await</span> _db.Users
+            .Where(u => u.SpaceId == spaceId && u.Id == userId)
+            .FirstAsync(ct);
+    {'}'}
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">Base arguments and method arguments are flattened into the method signature. A <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">CancellationToken</code> is automatically passed for request cancellation.</p>
+    </section>
+
+    <section>
+      <h2 id="streaming" class="text-xl font-bold mb-4">Streaming Methods</h2>
+      <p class="text-sm text-text-secondary mb-4">Server-streaming methods return <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">IAsyncEnumerable&lt;T&gt;</code>:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">public async</span> IAsyncEnumerable&lt;<span class="type-name">User</span>&gt; WatchUpdates(
+    <span class="type-keyword">uint</span> spaceId,
+    [EnumeratorCancellation] CancellationToken ct)
+{'{'}
+    <span class="text-accent-3">await foreach</span> (<span class="text-accent-3">var</span> update <span class="text-accent-3">in</span> _updates.ReadAllAsync(ct))
+    {'{'}
+        <span class="text-accent-3">if</span> (update.SpaceId == spaceId)
+            <span class="text-accent-3">yield return</span> update;
+    {'}'}
+{'}'}</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="interceptors" class="text-xl font-bold mb-4">Interceptors</h2>
+      <p class="text-sm text-text-secondary mb-4">Interceptors provide cross-cutting concerns (logging, metrics, auth) around method execution:</p>
+      <div class="code-block text-[13px]">
+        <pre>builder.Services.AddIonProtocol(options =>
+{'{'}
+    options.AddInterceptor&lt;<span class="type-name">LoggingInterceptor</span>&gt;();
+    options.AddInterceptor&lt;<span class="type-name">MetricsInterceptor</span>&gt;();
+{'}'});</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">Interceptors execute in registration order. They receive the execution context and can inspect/modify the request, response, or error.</p>
+    </section>
+
+    <section>
+      <h2 id="ticket-auth" class="text-xl font-bold mb-4">Ticket-Based Authentication</h2>
+      <p class="text-sm text-text-secondary mb-4">IonPath uses ticket-based authentication instead of standard HTTP headers. Configure the ticket exchange:</p>
+      <div class="code-block text-[13px]">
+        <pre>builder.Services.AddIonProtocol(options =>
+{'{'}
+    options.WithTicketExchange&lt;<span class="type-name">JwtTicketExchange</span>&gt;();
+{'}'});</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">The <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">IIonTicketExchange</code> interface validates tickets and returns the associated identity. For WebSocket, the ticket is passed via the subprotocol header; for HTTP, via a custom header.</p>
+    </section>
+
+    <section>
+      <h2 id="telemetry" class="text-xl font-bold mb-4">OpenTelemetry</h2>
+      <p class="text-sm text-text-secondary mb-4">IonPath instruments method calls with OpenTelemetry spans and metrics via the <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">Instruments</code> class:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// Automatically creates spans for each RPC method call:</span>
+<span class="text-text-muted">// ion.rpc.{'{'}service{'}'}.{'{'}method{'}'}</span>
+<span class="text-text-muted">// With attributes: ion.service, ion.method, ion.status</span></pre>
+      </div>
+    </section>
+
+  </div>
+</DocsLayout>

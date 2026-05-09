@@ -1,0 +1,79 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import { FileCode, Terminal, Binary, Lock, Globe, Cpu, Code, Shield } from 'lucide-astro';
+---
+
+<DocsLayout title="Documentation — IonPath" current="/docs/">
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">IonPath Documentation</h1>
+    <p class="text-text-secondary mb-8">
+      Comprehensive reference for the IonPath contract language, compiler, and runtime libraries.
+    </p>
+  </div>
+
+  <div class="grid gap-4 sm:grid-cols-2 animate-fade-in-up-delay-1">
+    <a href="/guides/getting-started/" class="glass rounded-2xl p-5 group hover:border-accent/20 transition-all">
+      <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-subtle mb-4">
+        <Terminal class="size-5 text-accent" />
+      </div>
+      <h3 class="font-semibold mb-1 group-hover:text-accent transition-colors">Getting Started</h3>
+      <p class="text-sm text-text-secondary">Install ionc, create your first .ion schema, configure the project, and run the compiler.</p>
+    </a>
+
+    <a href="/guides/syntax-overview/" class="glass rounded-2xl p-5 group hover:border-accent/20 transition-all">
+      <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-subtle mb-4">
+        <FileCode class="size-5 text-accent" />
+      </div>
+      <h3 class="font-semibold mb-1 group-hover:text-accent transition-colors">Language Reference</h3>
+      <p class="text-sm text-text-secondary">Messages, services, unions, enums, flags, generics, typedefs, attributes, and directives.</p>
+    </a>
+
+    <a href="/guides/primitive-types/" class="glass rounded-2xl p-5 group hover:border-accent/20 transition-all">
+      <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-subtle mb-4">
+        <Binary class="size-5 text-accent" />
+      </div>
+      <h3 class="font-semibold mb-1 group-hover:text-accent transition-colors">Primitive Types</h3>
+      <p class="text-sm text-text-secondary">Complete type table with integer, float, string, date/time, and special types. C# and TypeScript mappings.</p>
+    </a>
+
+    <a href="/guides/compiler/" class="glass rounded-2xl p-5 group hover:border-accent/20 transition-all">
+      <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-subtle mb-4">
+        <Cpu class="size-5 text-accent" />
+      </div>
+      <h3 class="font-semibold mb-1 group-hover:text-accent transition-colors">Compiler & CLI</h3>
+      <p class="text-sm text-text-secondary">ionc commands, compilation pipeline stages, diagnostics, and schema lock management.</p>
+    </a>
+
+    <a href="/guides/js-sdk-overview/" class="glass rounded-2xl p-5 group hover:border-accent/20 transition-all">
+      <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-subtle mb-4">
+        <Globe class="size-5 text-accent" />
+      </div>
+      <h3 class="font-semibold mb-1 group-hover:text-accent transition-colors">JavaScript SDK</h3>
+      <p class="text-sm text-text-secondary">ion.webcore.js — binary I/O, CBOR codec, formatter system, unary and WebSocket clients.</p>
+    </a>
+
+    <a href="/guides/dotnet-runtime/" class="glass rounded-2xl p-5 group hover:border-accent/20 transition-all">
+      <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-subtle mb-4">
+        <Cpu class="size-5 text-accent" />
+      </div>
+      <h3 class="font-semibold mb-1 group-hover:text-accent transition-colors">.NET Runtime</h3>
+      <p class="text-sm text-text-secondary">Server and client libraries, formatters, interceptors, networking, and DI integration.</p>
+    </a>
+
+    <a href="/guides/codegen-csharp/" class="glass rounded-2xl p-5 group hover:border-accent/20 transition-all">
+      <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-subtle mb-4">
+        <Code class="size-5 text-accent" />
+      </div>
+      <h3 class="font-semibold mb-1 group-hover:text-accent transition-colors">Code Generation</h3>
+      <p class="text-sm text-text-secondary">What ionc generates for C# and TypeScript — interfaces, formatters, models, clients, and servers.</p>
+    </a>
+
+    <a href="/guides/diagnostics/" class="glass rounded-2xl p-5 group hover:border-accent/20 transition-all">
+      <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-subtle mb-4">
+        <Shield class="size-5 text-accent" />
+      </div>
+      <h3 class="font-semibold mb-1 group-hover:text-accent transition-colors">Diagnostics</h3>
+      <p class="text-sm text-text-secondary">All ION0001–ION0030 error and warning codes with causes, examples, and fix suggestions.</p>
+    </a>
+  </div>
+</DocsLayout>

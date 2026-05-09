@@ -1,0 +1,140 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="C# Code Generation — IonPath" current="/guides/codegen-csharp/">
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">C# Code Generation</h1>
+    <p class="text-text-secondary mb-8">The <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">dotnet</code> generator produces multi-file C# output with models, clients, server executors, and formatters.</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <section>
+      <h2 id="output-structure" class="text-xl font-bold mb-4">Output Structure</h2>
+      <p class="text-sm text-text-secondary mb-4">For a project named <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">MyProject</code>, the generator creates:</p>
+      <div class="glass rounded-xl p-5">
+        <div class="font-mono text-[12px] space-y-1">
+          <p class="text-text-muted">MyProject.Generated/</p>
+          <p class="ml-4">├── <span class="type-name">MyProject.Generated.csproj</span></p>
+          <p class="ml-4">├── <span class="type-name">moduleInit.cs</span> <span class="text-text-muted">— typedefs, formatter registration</span></p>
+          <p class="ml-4">├── models/</p>
+          <p class="ml-8">├── <span class="type-name">User.cs</span> <span class="text-text-muted">— message classes</span></p>
+          <p class="ml-8">├── <span class="type-name">Status.cs</span> <span class="text-text-muted">— enum types</span></p>
+          <p class="ml-8">└── <span class="type-name">Shape.cs</span> <span class="text-text-muted">— union interfaces + cases</span></p>
+          <p class="ml-4">├── client/</p>
+          <p class="ml-8">└── <span class="type-name">UserService.client.cs</span> <span class="text-text-muted">— client proxy</span></p>
+          <p class="ml-4">├── server/</p>
+          <p class="ml-8">├── <span class="type-name">IUserService.cs</span> <span class="text-text-muted">— service interface</span></p>
+          <p class="ml-8">└── <span class="type-name">UserService.executor.cs</span> <span class="text-text-muted">— server executor</span></p>
+          <p class="ml-4">└── formatters/</p>
+          <p class="ml-8">├── <span class="type-name">User.formatter.cs</span></p>
+          <p class="ml-8">└── <span class="type-name">UserService.formatter.cs</span></p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="models" class="text-xl font-bold mb-4">Model Generation</h2>
+      <p class="text-sm text-text-secondary mb-3">Each <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg</code> generates a sealed class:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// From: msg User {'{'} id: u4; name: string; email: string?; {'}'}</span>
+
+<span class="text-accent-3">public sealed class</span> <span class="type-name">User</span>
+{'{'}
+    <span class="text-accent-3">public</span> <span class="type-keyword">uint</span> id {'{'} <span class="text-accent-3">get</span>; <span class="text-accent-3">set</span>; {'}'}
+    <span class="text-accent-3">public</span> <span class="type-keyword">string</span> name {'{'} <span class="text-accent-3">get</span>; <span class="text-accent-3">set</span>; {'}'}
+    <span class="text-accent-3">public</span> <span class="type-name">IonMaybe</span>&lt;<span class="type-keyword">string</span>&gt; email {'{'} <span class="text-accent-3">get</span>; <span class="text-accent-3">set</span>; {'}'}
+{'}'}</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="service-interface" class="text-xl font-bold mb-4">Service Interface</h2>
+      <p class="text-sm text-text-secondary mb-3">Each <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">service</code> generates an interface:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// From: service UserService(spaceId: u4) {'{'} GetUser(userId: u4): User; {'}'}</span>
+
+<span class="text-accent-3">public interface</span> <span class="type-name">IUserService</span> : <span class="type-name">IIonService</span>
+{'{'}
+    Task&lt;<span class="type-name">User</span>&gt; GetUser(
+        <span class="type-keyword">uint</span> spaceId,
+        <span class="type-keyword">uint</span> userId,
+        CancellationToken ct = <span class="text-accent-3">default</span>);
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">Base arguments become the first parameters. <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">CancellationToken</code> is always appended.</p>
+    </section>
+
+    <section>
+      <h2 id="client-proxy" class="text-xl font-bold mb-4">Client Proxy</h2>
+      <p class="text-sm text-text-secondary mb-3">Generated client proxies handle serialization and HTTP/WebSocket transport:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// Generated client proxy (simplified)</span>
+<span class="text-accent-3">internal sealed class</span> <span class="type-name">Ion_UserService_ClientImpl</span> : <span class="type-name">IUserService</span>
+{'{'}
+    <span class="text-accent-3">private readonly</span> <span class="type-name">IonClient</span> _client;
+    <span class="text-accent-3">private readonly</span> <span class="type-keyword">uint</span> _spaceId;
+
+    <span class="text-accent-3">public async</span> Task&lt;<span class="type-name">User</span>&gt; GetUser(<span class="type-keyword">uint</span> spaceId, <span class="type-keyword">uint</span> userId, CancellationToken ct)
+    {'{'}
+        <span class="text-accent-3">var</span> request = <span class="text-accent-3">new</span> <span class="type-name">IonRequest</span>(<span class="text-accent-2">"UserService"</span>, <span class="text-accent-2">"GetUser"</span>);
+        <span class="text-text-muted">// Serialize [spaceId, userId] to CBOR</span>
+        <span class="text-text-muted">// POST to /ion/UserService/GetUser.unary</span>
+        <span class="text-text-muted">// Deserialize CBOR response to User</span>
+        <span class="text-accent-3">return</span> result;
+    {'}'}
+{'}'}</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="server-executor" class="text-xl font-bold mb-4">Server Executor</h2>
+      <p class="text-sm text-text-secondary mb-3">The executor sits between the network layer and your service implementation:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// Generated executor (simplified)</span>
+<span class="text-accent-3">internal sealed class</span> <span class="type-name">Ion_UserService_ServiceExecutor</span>
+    : <span class="type-name">IServiceExecutorRouter</span>
+{'{'}
+    <span class="text-accent-3">public async</span> Task Execute(
+        <span class="type-keyword">string</span> method,
+        ReadOnlyMemory&lt;<span class="type-keyword">byte</span>&gt; payload,
+        <span class="type-name">IIonRequestTerminator</span> terminator)
+    {'{'}
+        <span class="text-text-muted">// 1. Deserialize args from CBOR</span>
+        <span class="text-text-muted">// 2. Resolve IUserService from DI</span>
+        <span class="text-text-muted">// 3. Call service.GetUser(args...)</span>
+        <span class="text-text-muted">// 4. Serialize result to CBOR</span>
+        <span class="text-text-muted">// 5. Write response via terminator</span>
+    {'}'}
+{'}'}</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="module-init" class="text-xl font-bold mb-4">Module Initialization</h2>
+      <p class="text-sm text-text-secondary mb-3"><code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">moduleInit.cs</code> runs at application startup and registers all formatters, descriptors, and type aliases:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// moduleInit.cs (auto-generated)</span>
+<span class="text-accent-3">global using</span> <span class="type-name">UserId</span> = <span class="type-keyword">uint</span>;
+
+[<span class="type-name">ModuleInitializer</span>]
+<span class="text-accent-3">internal static void</span> Initialize()
+{'{'}
+    <span class="text-text-muted">// Register all formatters</span>
+    <span class="type-name">IonFormatterStorage</span>&lt;<span class="type-name">User</span>&gt;.Serialize = ...;
+    <span class="type-name">IonFormatterStorage</span>&lt;<span class="type-name">User</span>&gt;.Deserialize = ...;
+
+    <span class="text-text-muted">// Register service descriptors</span>
+    <span class="type-name">IonDescriptorStorage</span>.Register(<span class="text-accent-2">"UserService"</span>, ...);
+{'}'}</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="csproj" class="text-xl font-bold mb-4">.csproj Generation</h2>
+      <p class="text-sm text-text-secondary mb-4">By default, the compiler also generates a <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">.csproj</code> file with the correct NuGet references. Use <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">--no-emit-csproj</code> to skip this if you manage the project file manually.</p>
+    </section>
+
+  </div>
+</DocsLayout>

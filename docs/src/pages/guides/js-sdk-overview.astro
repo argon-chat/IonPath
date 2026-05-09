@@ -1,0 +1,98 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="JavaScript SDK Overview — IonPath" current="/guides/js-sdk-overview/">
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">JavaScript SDK Overview</h1>
+    <p class="text-text-secondary mb-8">The <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ion.webcore.js</code> package provides the browser-side runtime for IonPath — binary I/O, CBOR codec, formatter storage, and typed HTTP/WebSocket clients.</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <section>
+      <h2 id="architecture" class="text-xl font-bold mb-4">Architecture</h2>
+      <p class="text-sm text-text-secondary mb-4">The SDK is layered as follows:</p>
+      <div class="glass rounded-xl p-5">
+        <div class="space-y-3 font-mono text-[12px]">
+          <div class="flex items-center gap-3">
+            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-xs font-bold text-accent">1</span>
+            <span class="type-name">IonBinaryReader / IonBinaryWriter</span>
+            <span class="text-text-muted text-[11px]">— low-level byte I/O over ArrayBuffer</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-xs font-bold text-accent">2</span>
+            <span class="type-name">IonCBOR</span>
+            <span class="text-text-muted text-[11px]">— CBOR encoding/decoding (RFC 8949)</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-xs font-bold text-accent">3</span>
+            <span class="type-name">IonFormatterStorage</span>
+            <span class="text-text-muted text-[11px]">— type serialization registry</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-xs font-bold text-accent">4</span>
+            <span class="type-name">IonUnaryRequest / IonWsClient</span>
+            <span class="text-text-muted text-[11px]">— HTTP POST (unary) / WebSocket (streaming)</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="installation" class="text-xl font-bold mb-4">Installation</h2>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted"># The package is typically added as a dependency alongside generated code</span>
+npm install {'@'}nicurt/ion.webcore.js</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="binary-io" class="text-xl font-bold mb-4">Binary I/O</h2>
+      <p class="text-sm text-text-secondary mb-4"><code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">IonBinaryReader</code> and <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">IonBinaryWriter</code> operate on <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ArrayBuffer</code> for efficient byte-level I/O:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">import</span> {'{'} <span class="type-name">IonBinaryWriter</span>, <span class="type-name">IonBinaryReader</span> {'}'} <span class="text-accent-3">from</span> <span class="text-accent-2">'{'@'}nicurt/ion.webcore.js'</span>;
+
+<span class="text-text-muted">// Write</span>
+<span class="text-accent-3">const</span> writer = <span class="text-accent-3">new</span> <span class="type-name">IonBinaryWriter</span>();
+writer.writeUInt32(42);
+writer.writeString(<span class="text-accent-2">"hello"</span>);
+<span class="text-accent-3">const</span> buffer = writer.toArrayBuffer();
+
+<span class="text-text-muted">// Read</span>
+<span class="text-accent-3">const</span> reader = <span class="text-accent-3">new</span> <span class="type-name">IonBinaryReader</span>(buffer);
+<span class="text-accent-3">const</span> num = reader.readUInt32();    <span class="text-text-muted">// 42</span>
+<span class="text-accent-3">const</span> str = reader.readString();    <span class="text-text-muted">// "hello"</span></pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="cbor" class="text-xl font-bold mb-4">CBOR Codec</h2>
+      <p class="text-sm text-text-secondary mb-4"><code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">IonCBOR</code> handles CBOR encoding on top of the binary writer/reader. All IonPath messages are encoded as CBOR arrays:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">import</span> {'{'} <span class="type-name">IonCBOR</span> {'}'} <span class="text-accent-3">from</span> <span class="text-accent-2">'{'@'}nicurt/ion.webcore.js'</span>;
+
+<span class="text-text-muted">// Encode a value</span>
+<span class="text-accent-3">const</span> encoded = <span class="type-name">IonCBOR</span>.encode([42, <span class="text-accent-2">"hello"</span>, <span class="text-accent-3">true</span>]);
+
+<span class="text-text-muted">// Decode a value</span>
+<span class="text-accent-3">const</span> decoded = <span class="type-name">IonCBOR</span>.decode(encoded);  <span class="text-text-muted">// [42, "hello", true]</span></pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="whats-next" class="text-xl font-bold mb-4">What's Next</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+        <a href="/guides/js-sdk-usage/" class="glass rounded-xl p-4 hover:border-accent/30 transition-colors">
+          <h3 class="font-semibold text-sm mb-1">Client Usage</h3>
+          <p class="text-xs text-text-secondary">Making unary and streaming RPC calls</p>
+        </a>
+        <a href="/guides/js-sdk-formatters/" class="glass rounded-xl p-4 hover:border-accent/30 transition-colors">
+          <h3 class="font-semibold text-sm mb-1">Formatters</h3>
+          <p class="text-xs text-text-secondary">Type serialization and formatter storage</p>
+        </a>
+      </div>
+    </section>
+
+  </div>
+</DocsLayout>

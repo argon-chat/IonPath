@@ -1,0 +1,199 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Syntax Overview — IonPath" current="/guides/syntax-overview/">
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">Syntax Overview</h1>
+    <p class="text-text-secondary mb-8">IonPath uses a concise IDL (Interface Definition Language) to declare types, services, and contracts. Files use the <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">.ion</code> extension.</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <section>
+      <h2 id="file-structure" class="text-xl font-bold mb-4">File Structure</h2>
+      <p class="text-sm text-text-secondary mb-4">An <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">.ion</code> file consists of directives at the top, followed by type and service declarations in any order:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// directives</span>
+<span class="text-accent-3">#use</span> <span class="text-accent-2">"common.ion"</span>
+<span class="text-accent-3">#feature</span> <span class="text-accent-2">"std"</span>
+
+<span class="text-text-muted">// custom attribute declaration</span>
+<span class="text-accent-3">attribute</span> <span class="type-name">{'@'}deprecated</span>(version: <span class="type-keyword">string</span>, reason: <span class="type-keyword">string</span>);
+
+<span class="text-text-muted">// message (data structure)</span>
+<span class="text-accent-3">msg</span> <span class="type-name">User</span> {'{'}
+    id: <span class="type-keyword">u4</span>;
+    name: <span class="type-keyword">string</span>;
+    email: <span class="type-keyword">string</span>?;    <span class="text-text-muted">// optional</span>
+    tags: <span class="type-keyword">string</span>[];    <span class="text-text-muted">// array</span>
+{'}'}
+
+<span class="text-text-muted">// enum</span>
+<span class="text-accent-3">enum</span> <span class="type-name">Status</span>: <span class="type-keyword">u1</span> {'{'}
+    Active,
+    Inactive = <span class="text-accent-3">2</span>
+{'}'}
+
+<span class="text-text-muted">// flags (bitwise)</span>
+<span class="text-accent-3">flags</span> <span class="type-name">Permissions</span>: <span class="type-keyword">u4</span> {'{'}
+    Read = <span class="text-accent-3">1</span> &lt;&lt; <span class="text-accent-3">0</span>,
+    Write = <span class="text-accent-3">1</span> &lt;&lt; <span class="text-accent-3">1</span>,
+    Admin = <span class="text-accent-3">1</span> &lt;&lt; <span class="text-accent-3">2</span>
+{'}'}
+
+<span class="text-text-muted">// typedef (type alias)</span>
+<span class="text-accent-3">typedef</span> <span class="type-name">UserId</span> = <span class="type-keyword">u4</span>;
+
+<span class="text-text-muted">// union (discriminated)</span>
+<span class="text-accent-3">union</span> <span class="type-name">Result</span> {'{'}
+    Success(data: <span class="type-name">User</span>),
+    Error(code: <span class="type-keyword">i4</span>, message: <span class="type-keyword">string</span>)
+{'}'}
+
+<span class="text-text-muted">// service (RPC)</span>
+<span class="text-accent-3">service</span> <span class="type-name">UserService</span>(spaceId: <span class="type-keyword">u4</span>) {'{'}
+    GetUser(id: <span class="type-keyword">u4</span>): <span class="type-name">User</span>;
+    <span class="text-text-muted">stream</span> WatchUsers(): <span class="type-name">User</span>;
+{'}'}</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="constructs" class="text-xl font-bold mb-4">Language Constructs</h2>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Keyword</span>
+          <span>Description</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">msg</span>
+          <span class="text-[12px] text-text-secondary">Data structure with indexed fields — like a struct or record</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">service</span>
+          <span class="text-[12px] text-text-secondary">RPC interface with methods — generates client and server code</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">union</span>
+          <span class="text-[12px] text-text-secondary">Discriminated union — tagged variant type</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">enum</span>
+          <span class="text-[12px] text-text-secondary">Enumeration with named constants (single value)</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">flags</span>
+          <span class="text-[12px] text-text-secondary">Bitfield enumeration (combinable values)</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">typedef</span>
+          <span class="text-[12px] text-text-secondary">Type alias — give a name to an existing type</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">attribute</span>
+          <span class="text-[12px] text-text-secondary">Custom annotation declaration</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">#use</span>
+          <span class="text-[12px] text-text-secondary">Import another .ion module</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">#feature</span>
+          <span class="text-[12px] text-text-secondary">Enable a feature module (std, vector, orleans)</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="type-modifiers" class="text-xl font-bold mb-4">Type Modifiers</h2>
+      <p class="text-sm text-text-secondary mb-4">Types can be modified with suffixes:</p>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Modifier</span>
+          <span>Description</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">T?</span>
+          <span class="text-[12px] text-text-secondary">Optional — wraps in <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Maybe&lt;T&gt;</code>. Null on the wire when absent.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">T[]</span>
+          <span class="text-[12px] text-text-secondary">Array — wraps in <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Array&lt;T&gt;</code>. Variable-length sequence.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">~T</span>
+          <span class="text-[12px] text-text-secondary">Partial — wraps in <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Partial&lt;T&gt;</code>. Sparse update (only modified fields sent).</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="method-modifiers" class="text-xl font-bold mb-4">Method Modifiers</h2>
+      <p class="text-sm text-text-secondary mb-4">Service methods support these modifiers:</p>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Modifier</span>
+          <span>Description</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">unary</span>
+          <span class="text-[12px] text-text-secondary">Request-response (default). One request, one response over HTTP.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">stream</span>
+          <span class="text-[12px] text-text-secondary">Streaming response or bidirectional streaming over WebSocket.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">internal</span>
+          <span class="text-[12px] text-text-secondary">Hidden/internal method — not exposed in public API.</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="comments" class="text-xl font-bold mb-4">Comments</h2>
+      <p class="text-sm text-text-secondary mb-4">Single-line comments with <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">//</code>:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// This is a documentation comment for the User message.</span>
+<span class="text-text-muted">// It can span multiple lines.</span>
+<span class="text-accent-3">msg</span> <span class="type-name">User</span> {'{'}
+    <span class="text-text-muted">// The unique user identifier</span>
+    id: <span class="type-keyword">u4</span>;
+{'}'}</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="deep-dive" class="text-xl font-bold mb-4">Deep Dive</h2>
+      <p class="text-sm text-text-secondary mb-3">Each construct has its own detailed guide:</p>
+      <div class="grid sm:grid-cols-2 gap-3">
+        <a href="/guides/primitive-types/" class="glass rounded-xl p-4 group hover:border-accent/20 transition-all">
+          <h3 class="font-semibold text-sm group-hover:text-accent transition-colors">Primitive Types</h3>
+          <p class="text-xs text-text-muted mt-1">All 27+ built-in types with wire sizes.</p>
+        </a>
+        <a href="/guides/messages/" class="glass rounded-xl p-4 group hover:border-accent/20 transition-all">
+          <h3 class="font-semibold text-sm group-hover:text-accent transition-colors">Messages</h3>
+          <p class="text-xs text-text-muted mt-1">Data structures with field indexing.</p>
+        </a>
+        <a href="/guides/services/" class="glass rounded-xl p-4 group hover:border-accent/20 transition-all">
+          <h3 class="font-semibold text-sm group-hover:text-accent transition-colors">Services</h3>
+          <p class="text-xs text-text-muted mt-1">RPC definitions and method types.</p>
+        </a>
+        <a href="/guides/unions/" class="glass rounded-xl p-4 group hover:border-accent/20 transition-all">
+          <h3 class="font-semibold text-sm group-hover:text-accent transition-colors">Unions</h3>
+          <p class="text-xs text-text-muted mt-1">Discriminated unions and shared fields.</p>
+        </a>
+        <a href="/guides/enums-flags/" class="glass rounded-xl p-4 group hover:border-accent/20 transition-all">
+          <h3 class="font-semibold text-sm group-hover:text-accent transition-colors">Enums & Flags</h3>
+          <p class="text-xs text-text-muted mt-1">Enumerations and bitfield types.</p>
+        </a>
+        <a href="/guides/generics/" class="glass rounded-xl p-4 group hover:border-accent/20 transition-all">
+          <h3 class="font-semibold text-sm group-hover:text-accent transition-colors">Generics</h3>
+          <p class="text-xs text-text-muted mt-1">Parameterized types and constraints.</p>
+        </a>
+      </div>
+    </section>
+
+  </div>
+</DocsLayout>

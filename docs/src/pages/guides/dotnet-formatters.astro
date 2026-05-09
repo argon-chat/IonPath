@@ -1,0 +1,145 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title=".NET Formatters & Types — IonPath" current="/guides/dotnet-formatters/">
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">.NET Formatters & Types</h1>
+    <p class="text-text-secondary mb-8">Core types and CBOR serialization primitives provided by the <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ion.runtime</code> package.</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <section>
+      <h2 id="ion-formatter" class="text-xl font-bold mb-4">IonFormatter</h2>
+      <p class="text-sm text-text-secondary mb-4"><code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">IonFormatter</code> is a static class providing low-level CBOR serialization for all primitives:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// Signed integers</span>
+<span class="type-name">IonFormatter</span>.WriteSByte(writer, value);   <span class="text-text-muted">// i1</span>
+<span class="type-name">IonFormatter</span>.WriteInt16(writer, value);   <span class="text-text-muted">// i2</span>
+<span class="type-name">IonFormatter</span>.WriteInt32(writer, value);   <span class="text-text-muted">// i4</span>
+<span class="type-name">IonFormatter</span>.WriteInt64(writer, value);   <span class="text-text-muted">// i8</span>
+<span class="type-name">IonFormatter</span>.WriteInt128(writer, value);  <span class="text-text-muted">// i16</span>
+
+<span class="text-text-muted">// Unsigned integers</span>
+<span class="type-name">IonFormatter</span>.WriteByte(writer, value);    <span class="text-text-muted">// u1</span>
+<span class="type-name">IonFormatter</span>.WriteUInt16(writer, value);  <span class="text-text-muted">// u2</span>
+<span class="type-name">IonFormatter</span>.WriteUInt32(writer, value);  <span class="text-text-muted">// u4</span>
+<span class="type-name">IonFormatter</span>.WriteUInt64(writer, value);  <span class="text-text-muted">// u8</span>
+<span class="type-name">IonFormatter</span>.WriteUInt128(writer, value); <span class="text-text-muted">// u16</span>
+
+<span class="text-text-muted">// Floats</span>
+<span class="type-name">IonFormatter</span>.WriteHalf(writer, value);    <span class="text-text-muted">// f2</span>
+<span class="type-name">IonFormatter</span>.WriteFloat(writer, value);   <span class="text-text-muted">// f4</span>
+<span class="type-name">IonFormatter</span>.WriteDouble(writer, value);  <span class="text-text-muted">// f8</span>
+
+<span class="text-text-muted">// Special types</span>
+<span class="type-name">IonFormatter</span>.WriteString(writer, value);
+<span class="type-name">IonFormatter</span>.WriteGuid(writer, value);
+<span class="type-name">IonFormatter</span>.WriteDateTime(writer, value);
+<span class="type-name">IonFormatter</span>.WriteBool(writer, value);</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="ion-maybe" class="text-xl font-bold mb-4">IonMaybe&lt;T&gt;</h2>
+      <p class="text-sm text-text-secondary mb-4">A Rust-style <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">Option</code> monad for nullable values. Generated for <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T?</code> fields:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// Implicit conversions</span>
+<span class="type-name">IonMaybe</span>&lt;<span class="type-keyword">string</span>&gt; email = <span class="text-accent-2">"user{'@'}example.com"</span>;
+<span class="type-name">IonMaybe</span>&lt;<span class="type-keyword">string</span>&gt; empty = <span class="text-accent-3">default</span>;
+
+<span class="text-text-muted">// Pattern matching</span>
+<span class="text-accent-3">if</span> (email.HasValue)
+    Console.WriteLine(email.Value);
+
+<span class="text-text-muted">// LINQ-style operations</span>
+<span class="text-accent-3">var</span> upper = email.Map(e => e.ToUpper());
+<span class="text-accent-3">var</span> fallback = empty.Or(<span class="text-accent-2">"default{'@'}example.com"</span>);
+
+<span class="text-text-muted">// Wire format: CBOR null for None, CBOR value for Some</span></pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="ion-partial" class="text-xl font-bold mb-4">IonPartial&lt;T&gt;</h2>
+      <p class="text-sm text-text-secondary mb-4">Tracks field modifications for sparse (PATCH-like) updates. Only modified fields are serialized:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">var</span> patch = <span class="text-accent-3">new</span> <span class="type-name">IonPartial</span>&lt;<span class="type-name">User</span>&gt;();
+
+<span class="text-text-muted">// Set specific fields</span>
+patch.Set(u => u.name, <span class="text-accent-2">"New Name"</span>);
+patch.Set(u => u.email, <span class="text-accent-2">"new{'@'}example.com"</span>);
+
+<span class="text-text-muted">// Check if a field was modified</span>
+<span class="text-accent-3">bool</span> modified = patch.IsSet(u => u.name);  <span class="text-text-muted">// true</span>
+<span class="text-accent-3">bool</span> untouched = patch.IsSet(u => u.id);  <span class="text-text-muted">// false</span>
+
+<span class="text-text-muted">// On the wire: only 'name' and 'email' are serialized</span>
+<span class="text-accent-3">await</span> userService.UpdateUser(42, patch);</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="ion-bytes" class="text-xl font-bold mb-4">IonBytes</h2>
+      <p class="text-sm text-text-secondary mb-4">Zero-copy byte buffer type for efficient binary data transfer:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// From byte array</span>
+<span class="type-name">IonBytes</span> data = <span class="text-accent-3">new byte</span>[] {'{'} 0x01, 0x02, 0x03 {'}'};
+
+<span class="text-text-muted">// From ReadOnlyMemory</span>
+<span class="type-name">IonBytes</span> data2 = <span class="text-accent-3">new</span> <span class="type-name">IonBytes</span>(memory);
+
+<span class="text-text-muted">// Access the underlying data</span>
+ReadOnlySpan&lt;<span class="type-keyword">byte</span>&gt; span = data.Span;
+
+<span class="text-text-muted">// Wire format: CBOR byte string</span></pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="ion-union" class="text-xl font-bold mb-4">IIonUnion&lt;T&gt;</h2>
+      <p class="text-sm text-text-secondary mb-4">Marker interface for discriminated union types. Each union case is a sealed class implementing this interface:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// Generated from: union Shape {'{'} Circle(r: f4), Rectangle(w: f4, h: f4) {'}'}</span>
+<span class="text-accent-3">public interface</span> <span class="type-name">Shape</span> : <span class="type-name">IIonUnion</span>&lt;<span class="type-name">Shape</span>&gt; {'{'} {'}'}
+
+<span class="text-text-muted">// Pattern match with switch</span>
+<span class="type-name">Shape</span> shape = GetShape();
+<span class="text-accent-3">var</span> area = shape <span class="text-accent-3">switch</span>
+{'{'}
+    <span class="type-name">Shape</span>.Circle c    => Math.PI * c.r * c.r,
+    <span class="type-name">Shape</span>.Rectangle r => r.w * r.h,
+    _ => <span class="text-accent-3">throw new</span> NotSupportedException()
+{'}'};</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="formatter-storage" class="text-xl font-bold mb-4">IonFormatterStorage&lt;T&gt;</h2>
+      <p class="text-sm text-text-secondary mb-4">Type-safe formatter registry. Generated code registers formatters here at module initialization:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// Generated in moduleInit.cs</span>
+<span class="type-name">IonFormatterStorage</span>&lt;<span class="type-name">User</span>&gt;.Serialize = (writer, value) =>
+{'{'}
+    writer.WriteArrayHeader(3);
+    <span class="type-name">IonFormatter</span>.WriteUInt32(writer, value.id);
+    <span class="type-name">IonFormatter</span>.WriteString(writer, value.name);
+    <span class="type-name">IonFormatter</span>.WriteString(writer, value.email);
+{'}'};
+
+<span class="type-name">IonFormatterStorage</span>&lt;<span class="type-name">User</span>&gt;.Deserialize = (reader) =>
+{'{'}
+    reader.ReadArrayHeader();
+    <span class="text-accent-3">return new</span> <span class="type-name">User</span>
+    {'{'}
+        id = <span class="type-name">IonFormatter</span>.ReadUInt32(reader),
+        name = <span class="type-name">IonFormatter</span>.ReadString(reader),
+        email = <span class="type-name">IonFormatter</span>.ReadString(reader)
+    {'}'};
+{'}'};</pre>
+      </div>
+    </section>
+
+  </div>
+</DocsLayout>

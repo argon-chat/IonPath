@@ -1,0 +1,196 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Getting Started — IonPath" current="/guides/getting-started/">
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">Getting Started</h1>
+    <p class="text-text-secondary mb-8">Install the IonPath compiler, create your first schema, and generate type-safe code.</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <!-- Prerequisites -->
+    <section>
+      <h2 id="prerequisites" class="text-xl font-bold mb-4">Prerequisites</h2>
+      <ul class="list-disc list-inside space-y-2 text-sm text-text-secondary">
+        <li><a href="https://dotnet.microsoft.com/download" target="_blank" rel="noopener" class="text-accent hover:underline">.NET 9+</a> SDK installed</li>
+        <li>A text editor — the <a href="#vscode-extension" class="text-accent hover:underline">IonPath Toolkit</a> VS Code extension is recommended</li>
+      </ul>
+    </section>
+
+    <!-- Install -->
+    <section>
+      <h2 id="install" class="text-xl font-bold mb-4">Install the CLI</h2>
+      <p class="text-sm text-text-secondary mb-4">Install <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ionc</code> as a .NET global tool:</p>
+      <div class="code-block text-[13px]">
+        <pre>dotnet tool install -g ionc</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">Verify the installation:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">$</span> ionc --version
+<span class="text-text-muted">ionc 1.3.2</span></pre>
+      </div>
+    </section>
+
+    <!-- Init project -->
+    <section>
+      <h2 id="init-project" class="text-xl font-bold mb-4">Initialize a Project</h2>
+      <p class="text-sm text-text-secondary mb-4">Create a new directory and run <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ionc init</code> to scaffold the project:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">$</span> mkdir my-contracts && cd my-contracts
+<span class="text-text-muted">$</span> ionc init</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">This creates an <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ion.config.json</code> file — the project manifest:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// ion.config.json</span>
+{'{'}
+  <span class="text-accent-2">"name"</span>: <span class="text-accent-2">"MyContracts"</span>,
+  <span class="text-accent-2">"features"</span>: [<span class="text-accent-2">"std"</span>],
+  <span class="text-accent-2">"generators"</span>: {'{'}
+    <span class="text-accent-2">"dotnet"</span>: {'{'}
+      <span class="text-accent-2">"features"</span>: [<span class="text-accent-2">"models"</span>, <span class="text-accent-2">"client"</span>, <span class="text-accent-2">"server"</span>],
+      <span class="text-accent-2">"outputs"</span>: <span class="text-accent-2">"./"</span>
+    {'}'},
+    <span class="text-accent-2">"browser"</span>: {'{'}
+      <span class="text-accent-2">"outputFile"</span>: <span class="text-accent-2">"./client.generated.ts"</span>
+    {'}'}
+  {'}'}
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">See <a href="/guides/ion-config/" class="text-accent hover:underline">Project Configuration</a> for all options.</p>
+    </section>
+
+    <!-- First schema -->
+    <section>
+      <h2 id="first-schema" class="text-xl font-bold mb-4">Write Your First Schema</h2>
+      <p class="text-sm text-text-secondary mb-4">Create a file called <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">math.ion</code>:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">service</span> <span class="type-name">MathInteraction</span>(leftOperand: <span class="type-keyword">i4</span>) {'{'}
+    Add(rightOperand: <span class="type-keyword">i4</span>): <span class="type-keyword">i4</span>;
+    Mul(rightOperand: <span class="type-keyword">i4</span>): <span class="type-keyword">i4</span>;
+    PowArray(rightOperand: <span class="type-keyword">i4</span>[]): <span class="type-keyword">i4</span>[];
+    ToPositive(rightOperand: <span class="type-keyword">i4</span>?): <span class="type-keyword">i4</span>?;
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">This defines a service with a <strong>base argument</strong> (<code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">leftOperand</code>) that is shared across all methods, plus four RPC methods with various type modifiers.</p>
+    </section>
+
+    <!-- Compile -->
+    <section>
+      <h2 id="compile" class="text-xl font-bold mb-4">Compile</h2>
+      <p class="text-sm text-text-secondary mb-4">Run the compiler:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">$</span> ionc compile
+<span class="text-accent">✓</span> Compiled 1 module
+<span class="text-accent">✓</span> Generated C# (models, client, server)
+<span class="text-accent">✓</span> Generated TypeScript (browser)
+<span class="text-accent">✓</span> ion.lock.json updated</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">The compiler generates:</p>
+      <div class="glass rounded-xl p-4 mt-3">
+        <div class="space-y-2 text-sm font-mono">
+          <div class="flex items-center gap-2">
+            <span class="text-text-muted">├──</span>
+            <span class="text-accent-2">models/</span>
+            <span class="text-text-muted text-xs">— C# type definitions</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-text-muted">├──</span>
+            <span class="text-accent-2">client/</span>
+            <span class="text-text-muted text-xs">— C# client implementations</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-text-muted">├──</span>
+            <span class="text-accent-2">server/</span>
+            <span class="text-text-muted text-xs">— C# server executors</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-text-muted">├──</span>
+            <span>math.formatters.cs</span>
+            <span class="text-text-muted text-xs">— CBOR serializers</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-text-muted">├──</span>
+            <span>moduleInit.cs</span>
+            <span class="text-text-muted text-xs">— type aliases & registration</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-text-muted">├──</span>
+            <span>client.generated.ts</span>
+            <span class="text-text-muted text-xs">— TypeScript client</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-text-muted">└──</span>
+            <span class="text-accent">ion.lock.json</span>
+            <span class="text-text-muted text-xs">— schema lock</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Useful flags -->
+    <section>
+      <h2 id="useful-flags" class="text-xl font-bold mb-4">Useful Flags</h2>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Flag</span>
+          <span>Description</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">--check</span>
+          <span class="text-[12px] text-text-secondary">Validate only — no code generation</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">--verbose</span>
+          <span class="text-[12px] text-text-secondary">Show detailed timing per compilation stage</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">--only dotnet</span>
+          <span class="text-[12px] text-text-secondary">Generate only for a specific target platform</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">--json</span>
+          <span class="text-[12px] text-text-secondary">Output diagnostics as JSON (for CI/CD)</span>
+        </div>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">See <a href="/guides/compiler/" class="text-accent hover:underline">CLI Reference</a> for all flags.</p>
+    </section>
+
+    <!-- VS Code extension -->
+    <section>
+      <h2 id="vscode-extension" class="text-xl font-bold mb-4">VS Code Extension</h2>
+      <p class="text-sm text-text-secondary mb-4">Install the <strong>IonPath Toolkit</strong> extension for:</p>
+      <ul class="list-disc list-inside space-y-2 text-sm text-text-secondary">
+        <li>Syntax highlighting for <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">.ion</code> files</li>
+        <li>JSON schema validation for <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ion.config.json</code></li>
+        <li>TextMate grammar support</li>
+      </ul>
+      <p class="text-sm text-text-secondary mt-3">Search for <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ionpath-toolkit</code> in the VS Code marketplace or install from the <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">extensions/ionpath-toolkit</code> directory.</p>
+    </section>
+
+    <!-- What's next -->
+    <section>
+      <h2 id="whats-next" class="text-xl font-bold mb-4">What's Next</h2>
+      <div class="grid sm:grid-cols-2 gap-3">
+        <a href="/guides/syntax-overview/" class="glass rounded-xl p-4 group hover:border-accent/20 transition-all">
+          <h3 class="font-semibold text-sm group-hover:text-accent transition-colors">Syntax Overview</h3>
+          <p class="text-xs text-text-muted mt-1">Learn the full IonPath language syntax.</p>
+        </a>
+        <a href="/guides/primitive-types/" class="glass rounded-xl p-4 group hover:border-accent/20 transition-all">
+          <h3 class="font-semibold text-sm group-hover:text-accent transition-colors">Primitive Types</h3>
+          <p class="text-xs text-text-muted mt-1">All 27+ built-in types with mappings.</p>
+        </a>
+        <a href="/guides/ion-config/" class="glass rounded-xl p-4 group hover:border-accent/20 transition-all">
+          <h3 class="font-semibold text-sm group-hover:text-accent transition-colors">Project Configuration</h3>
+          <p class="text-xs text-text-muted mt-1">ion.config.json schema reference.</p>
+        </a>
+        <a href="/guides/schema-lock/" class="glass rounded-xl p-4 group hover:border-accent/20 transition-all">
+          <h3 class="font-semibold text-sm group-hover:text-accent transition-colors">Schema Lock</h3>
+          <p class="text-xs text-text-muted mt-1">Understand wire-format stability.</p>
+        </a>
+      </div>
+    </section>
+
+  </div>
+</DocsLayout>

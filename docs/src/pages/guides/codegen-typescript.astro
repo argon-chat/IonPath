@@ -1,0 +1,173 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="TypeScript Code Generation — IonPath" current="/guides/codegen-typescript/">
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">TypeScript Code Generation</h1>
+    <p class="text-text-secondary mb-8">The <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">browser</code> generator produces a single TypeScript file with all types, formatters, and client classes.</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <section>
+      <h2 id="output" class="text-xl font-bold mb-4">Output</h2>
+      <p class="text-sm text-text-secondary mb-4">Unlike the C# multi-file approach, TypeScript generates a single file:</p>
+      <div class="glass rounded-xl p-5">
+        <div class="font-mono text-[12px] space-y-1">
+          <p class="text-text-muted">MyProject.Generated/</p>
+          <p class="ml-4">└── <span class="type-name">MyProject.ts</span> <span class="text-text-muted">— all types, formatters, and clients</span></p>
+        </div>
+      </div>
+      <p class="text-sm text-text-secondary mt-4">Generate with:</p>
+      <div class="code-block text-[13px]">
+        <pre>ionc compile --only browser</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="types" class="text-xl font-bold mb-4">Type Generation</h2>
+
+      <h3 class="text-lg font-semibold mt-4 mb-3">Messages → Interfaces</h3>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// From: msg User {'{'} id: u4; name: string; email: string?; {'}'}</span>
+
+<span class="text-accent-3">export interface</span> <span class="type-name">User</span> {'{'}
+    id: <span class="type-keyword">number</span>;
+    name: <span class="type-keyword">string</span>;
+    email: <span class="type-keyword">string</span> | <span class="type-keyword">null</span>;
+{'}'}</pre>
+      </div>
+
+      <h3 class="text-lg font-semibold mt-6 mb-3">Enums → String Enums</h3>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// From: enum Status: u1 {'{'} Active, Inactive {'}'}</span>
+
+<span class="text-accent-3">export enum</span> <span class="type-name">Status</span> {'{'}
+    Active = 0,
+    Inactive = 1
+{'}'}</pre>
+      </div>
+
+      <h3 class="text-lg font-semibold mt-6 mb-3">Unions → Discriminated Unions</h3>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// From: union Shape {'{'} Circle(r: f4), Rectangle(w: f4, h: f4) {'}'}</span>
+
+<span class="text-accent-3">export type</span> <span class="type-name">Shape</span> =
+    | {'{'} <span class="type-property">_tag</span>: <span class="text-accent-2">"Circle"</span>; r: <span class="type-keyword">number</span> {'}'}
+    | {'{'} <span class="type-property">_tag</span>: <span class="text-accent-2">"Rectangle"</span>; w: <span class="type-keyword">number</span>; h: <span class="type-keyword">number</span> {'}'};</pre>
+      </div>
+
+      <h3 class="text-lg font-semibold mt-6 mb-3">Typedefs → Type Aliases</h3>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// From: typedef UserId = u4;</span>
+
+<span class="text-accent-3">export type</span> <span class="type-name">UserId</span> = <span class="type-keyword">number</span>;</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="type-mapping" class="text-xl font-bold mb-4">Type Mapping</h2>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Ion Type</span>
+          <span>TypeScript Type</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">i1, i2, i4, u1, u2, u4, f2, f4, f8</span>
+          <span class="font-mono text-[12px] text-text-secondary">number</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">i8, i16, u8, u16, bigint</span>
+          <span class="font-mono text-[12px] text-text-secondary">bigint</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">bool</span>
+          <span class="font-mono text-[12px] text-text-secondary">boolean</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">string, uri</span>
+          <span class="font-mono text-[12px] text-text-secondary">string</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">bytes</span>
+          <span class="font-mono text-[12px] text-text-secondary">Uint8Array</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">guid</span>
+          <span class="font-mono text-[12px] text-text-secondary">string</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">datetime, dateonly, timeonly</span>
+          <span class="font-mono text-[12px] text-text-secondary">Date</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">duration</span>
+          <span class="font-mono text-[12px] text-text-secondary">number</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">T?</span>
+          <span class="font-mono text-[12px] text-text-secondary">T | null</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">T[]</span>
+          <span class="font-mono text-[12px] text-text-secondary">T[]</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="clients" class="text-xl font-bold mb-4">Generated Clients</h2>
+      <p class="text-sm text-text-secondary mb-3">Each service generates a client class that uses <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ion.webcore.js</code> for transport:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// Generated from: service UserService(spaceId: u4) {'{'} GetUser(userId: u4): User; {'}'}</span>
+
+<span class="text-accent-3">export class</span> <span class="type-name">UserServiceClient</span> {'{'}
+    <span class="text-accent-3">constructor</span>(baseUrl: <span class="type-keyword">string</span>, spaceId: <span class="type-keyword">number</span>, options?: <span class="type-name">ClientOptions</span>);
+
+    <span class="text-accent-3">async</span> GetUser(userId: <span class="type-keyword">number</span>): Promise&lt;<span class="type-name">User</span>&gt;;
+{'}'}</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="formatters" class="text-xl font-bold mb-4">Formatters</h2>
+      <p class="text-sm text-text-secondary mb-4">Generated formatters are registered with <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">IonFormatterStorage</code> and handle CBOR array serialization:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// Auto-registered at module load</span>
+<span class="type-name">IonFormatterStorage</span>.register(<span class="text-accent-2">"User"</span>, {'{'}
+    serialize(writer: <span class="type-name">IonBinaryWriter</span>, value: <span class="type-name">User</span>) {'{'}
+        writer.writeArrayHeader(3);
+        writer.writeUInt32(value.id);
+        writer.writeString(value.name);
+        <span class="text-accent-3">if</span> (value.email !== <span class="text-accent-3">null</span>) writer.writeString(value.email);
+        <span class="text-accent-3">else</span> writer.writeNull();
+    {'}'},
+    deserialize(reader: <span class="type-name">IonBinaryReader</span>): <span class="type-name">User</span> {'{'}
+        reader.readArrayHeader();
+        <span class="text-accent-3">return</span> {'{'}
+            id: reader.readUInt32(),
+            name: reader.readString(),
+            email: reader.isNull() ? <span class="text-accent-3">null</span> : reader.readString()
+        {'}'};
+    {'}'}
+{'}'});</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="usage" class="text-xl font-bold mb-4">Usage Example</h2>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">import</span> {'{'} <span class="type-name">UserServiceClient</span> {'}'} <span class="text-accent-3">from</span> <span class="text-accent-2">'./MyProject'</span>;
+
+<span class="text-accent-3">const</span> client = <span class="text-accent-3">new</span> <span class="type-name">UserServiceClient</span>(<span class="text-accent-2">"https://api.example.com"</span>, 1);
+
+<span class="text-text-muted">// Fully typed — TypeScript knows this returns User</span>
+<span class="text-accent-3">const</span> user = <span class="text-accent-3">await</span> client.GetUser(42);
+console.log(user.name);       <span class="text-text-muted">// string</span>
+console.log(user.email);      <span class="text-text-muted">// string | null</span></pre>
+      </div>
+    </section>
+
+  </div>
+</DocsLayout>

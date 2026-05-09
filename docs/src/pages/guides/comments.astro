@@ -1,0 +1,64 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Comments — IonPath" current="/guides/comments/">
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">Comments</h1>
+    <p class="text-text-secondary mb-8">IonPath supports single-line documentation comments that attach to the declaration immediately following them.</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <section>
+      <h2 id="syntax" class="text-xl font-bold mb-4">Syntax</h2>
+      <p class="text-sm text-text-secondary mb-4">Comments use <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">//</code> and can span multiple consecutive lines:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// Represents a user account in the system.</span>
+<span class="text-text-muted">// Contains basic profile information.</span>
+<span class="text-accent-3">msg</span> <span class="type-name">User</span> {'{'}
+    <span class="text-text-muted">// The unique identifier for this user.</span>
+    id: <span class="type-keyword">u4</span>;
+
+    <span class="text-text-muted">// The display name, visible to other users.</span>
+    name: <span class="type-keyword">string</span>;
+
+    <span class="text-text-muted">// Email address. Null if the user hasn't set one.</span>
+    email: <span class="type-keyword">string</span>?;
+{'}'}</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="attachment" class="text-xl font-bold mb-4">Comment Attachment</h2>
+      <p class="text-sm text-text-secondary mb-4">Comments attach to the <strong>next declaration</strong> in the file. They can appear before:</p>
+      <ul class="list-disc list-inside space-y-1 text-sm text-text-secondary">
+        <li>Messages, services, unions, enums, flags, typedefs</li>
+        <li>Fields within messages and unions</li>
+        <li>Methods within services</li>
+        <li>Members within enums and flags</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 id="generated" class="text-xl font-bold mb-4">In Generated Code</h2>
+      <p class="text-sm text-text-secondary mb-4">Comments are preserved as XML documentation in C# and JSDoc in TypeScript:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// C# output</span>
+<span class="text-text-muted">/// &lt;summary&gt;</span>
+<span class="text-text-muted">/// Represents a user account in the system.</span>
+<span class="text-text-muted">/// Contains basic profile information.</span>
+<span class="text-text-muted">/// &lt;/summary&gt;</span>
+<span class="text-accent-3">public sealed class</span> <span class="type-name">User</span> {'{'} ... {'}'}
+
+<span class="text-text-muted">// TypeScript output</span>
+<span class="text-text-muted">/**</span>
+<span class="text-text-muted"> * Represents a user account in the system.</span>
+<span class="text-text-muted"> * Contains basic profile information.</span>
+<span class="text-text-muted"> */</span>
+<span class="text-accent-3">export interface</span> <span class="type-name">User</span> {'{'} ... {'}'}</pre>
+      </div>
+    </section>
+
+  </div>
+</DocsLayout>

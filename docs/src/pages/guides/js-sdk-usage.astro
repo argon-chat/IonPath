@@ -1,0 +1,101 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="JS SDK — Client Usage — IonPath" current="/guides/js-sdk-usage/">
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">JS SDK — Client Usage</h1>
+    <p class="text-text-secondary mb-8">How to use generated TypeScript clients to make unary and streaming RPC calls from the browser.</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <section>
+      <h2 id="generated-client" class="text-xl font-bold mb-4">Generated Client</h2>
+      <p class="text-sm text-text-secondary mb-4">The <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ionc compile --only browser</code> command generates a TypeScript file with typed client classes for each service. Given this schema:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">service</span> <span class="type-name">UserService</span>(spaceId: <span class="type-keyword">u4</span>) {'{'}
+    GetUser(userId: <span class="type-keyword">u4</span>): <span class="type-name">User</span>;
+    <span class="text-accent-3">stream</span> WatchUpdates(): <span class="type-name">User</span>;
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">The generated code provides a typed client class.</p>
+    </section>
+
+    <section>
+      <h2 id="unary-calls" class="text-xl font-bold mb-4">Unary Calls (HTTP POST)</h2>
+      <p class="text-sm text-text-secondary mb-4">Unary methods use <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">IonUnaryRequest</code> under the hood — a single HTTP POST with CBOR body and CBOR response:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">import</span> {'{'} <span class="type-name">UserServiceClient</span> {'}'} <span class="text-accent-3">from</span> <span class="text-accent-2">'./generated/services'</span>;
+
+<span class="text-accent-3">const</span> client = <span class="text-accent-3">new</span> <span class="type-name">UserServiceClient</span>(<span class="text-accent-2">"https://api.example.com"</span>, 1);
+<span class="text-text-muted">// base arg: spaceId = 1</span>
+
+<span class="text-accent-3">const</span> user = <span class="text-accent-3">await</span> client.GetUser(42);
+console.log(user.name);  <span class="text-text-muted">// fully typed</span></pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">Under the hood:</p>
+      <ol class="list-decimal list-inside space-y-1 text-sm text-text-secondary mt-2">
+        <li>Arguments are serialized to CBOR: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">[spaceId, userId]</code></li>
+        <li>HTTP POST to <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">/ion/UserService/GetUser.unary</code></li>
+        <li>Response body (CBOR) is deserialized into a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">User</code> object</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2 id="streaming-calls" class="text-xl font-bold mb-4">Streaming Calls (WebSocket)</h2>
+      <p class="text-sm text-text-secondary mb-4">Streaming methods use <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">IonWsClient</code> — a WebSocket connection that yields typed events:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">const</span> stream = client.WatchUpdates();
+
+stream.on(<span class="text-accent-2">"data"</span>, (user) => {'{'}
+    console.log(<span class="text-accent-2">`Updated:</span> ${'{'}user.name{'}'}<span class="text-accent-2">`</span>);
+{'}'});
+
+stream.on(<span class="text-accent-2">"end"</span>, () => {'{'}
+    console.log(<span class="text-accent-2">"Stream ended"</span>);
+{'}'});
+
+stream.on(<span class="text-accent-2">"error"</span>, (err) => {'{'}
+    console.error(<span class="text-accent-2">"Stream error:"</span>, err);
+{'}'});</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="wire-protocol" class="text-xl font-bold mb-4">Wire Protocol</h2>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Opcode</span>
+          <span>Meaning</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">0x00</span>
+          <span class="text-[12px] text-text-secondary"><strong>Data</strong> — CBOR-encoded message payload</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">0x01</span>
+          <span class="text-[12px] text-text-secondary"><strong>End</strong> — graceful stream termination</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">0x02</span>
+          <span class="text-[12px] text-text-secondary"><strong>Error</strong> — error with protocol error code and message</span>
+        </div>
+      </div>
+      <p class="text-sm text-text-secondary mt-4">Each WebSocket binary message is prefixed with a 1-byte opcode followed by the CBOR payload.</p>
+    </section>
+
+    <section>
+      <h2 id="auth" class="text-xl font-bold mb-4">Authentication</h2>
+      <p class="text-sm text-text-secondary mb-4">Ticket-based authentication is supported via the WebSocket subprotocol header. Set the ticket when creating the client:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">const</span> client = <span class="text-accent-3">new</span> <span class="type-name">UserServiceClient</span>(
+    <span class="text-accent-2">"https://api.example.com"</span>,
+    1,  <span class="text-text-muted">// spaceId</span>
+    {'{'} ticket: <span class="text-accent-2">"eyJhbG..."</span> {'}'}
+);</pre>
+      </div>
+    </section>
+
+  </div>
+</DocsLayout>

@@ -1,0 +1,135 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Compilation Pipeline — IonPath" current="/guides/compilation-pipeline/">
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">Compilation Pipeline</h1>
+    <p class="text-text-secondary mb-8">The IonPath compiler processes <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">.ion</code> files through a multi-stage pipeline. Each stage validates or transforms the schema, and errors are collected across all stages (the compiler does not stop at the first error).</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <section>
+      <h2 id="stages" class="text-xl font-bold mb-4">Pipeline Stages</h2>
+      <p class="text-sm text-text-secondary mb-4">Stages execute in this order:</p>
+
+      <div class="space-y-4">
+        <div class="glass rounded-xl p-4">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-xs font-bold text-accent">1</span>
+            <h3 class="font-semibold">Parse</h3>
+          </div>
+          <p class="text-sm text-text-secondary ml-10">Lexes and parses all <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">.ion</code> files into an AST (Abstract Syntax Tree). The parser has error recovery — it continues parsing after syntax errors to report as many issues as possible in one pass.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-xs font-bold text-accent">2</span>
+            <h3 class="font-semibold">ImportCycleDetectionStage</h3>
+          </div>
+          <p class="text-sm text-text-secondary ml-10">Detects circular <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#use</code> imports. If module A imports B and B imports A, reports <a href="/guides/diagnostics/" class="text-accent hover:underline">ION0001</a>.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-xs font-bold text-accent">3</span>
+            <h3 class="font-semibold">DuplicateSymbolValidationStage</h3>
+          </div>
+          <p class="text-sm text-text-secondary ml-10">Checks for duplicate type, message, service, or enum names within and across modules. Reports <a href="/guides/diagnostics/" class="text-accent hover:underline">ION0002</a>.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-xs font-bold text-accent">4</span>
+            <h3 class="font-semibold">TransformStage</h3>
+          </div>
+          <p class="text-sm text-text-secondary ml-10">Converts the syntax AST into runtime IR (Internal Representation). Compiles messages, services, enums, flags, unions, and attributes into their typed objects. Performs first pass of type resolution — forward references are allowed.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-xs font-bold text-accent">5</span>
+            <h3 class="font-semibold">StreamParameterValidationStage</h3>
+          </div>
+          <p class="text-sm text-text-secondary ml-10">Validates that each service method has at most one <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">stream</code> parameter. Reports <a href="/guides/diagnostics/" class="text-accent hover:underline">ION0013</a> on violation.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-xs font-bold text-accent">6</span>
+            <h3 class="font-semibold">RestoreUnresolvedTypeStage</h3>
+          </div>
+          <p class="text-sm text-text-secondary ml-10">Second pass of type resolution. Resolves all forward references. If a type cannot be resolved, suggests similar names using <strong>Levenshtein distance</strong> matching. Reports <a href="/guides/diagnostics/" class="text-accent hover:underline">ION0009</a>.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-xs font-bold text-accent">7</span>
+            <h3 class="font-semibold">CircularTypeReferenceStage</h3>
+          </div>
+          <p class="text-sm text-text-secondary ml-10">DFS-based cycle detection in the type graph. If message A has a field of type B, and B has a field of type A, reports <a href="/guides/diagnostics/" class="text-accent hover:underline">ION0030</a> with the full cycle path.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-xs font-bold text-accent">8</span>
+            <h3 class="font-semibold">SchemaLockValidationStage</h3>
+          </div>
+          <p class="text-sm text-text-secondary ml-10">Compares the current schema against <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ion.lock.json</code>. Detects breaking changes: removed fields, reordered fields, changed types, removed methods, etc. Reports <a href="/guides/diagnostics/" class="text-accent hover:underline">ION0020–ION0029</a>. Skipped with <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">--no-lock</code>.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-xs font-bold text-accent">9</span>
+            <h3 class="font-semibold">Code Generation</h3>
+          </div>
+          <p class="text-sm text-text-secondary ml-10">Generates target code (C#, TypeScript) from the validated IR. Only runs if there are no errors. See <a href="/guides/codegen-csharp/" class="text-accent hover:underline">C# Code Generation</a> and <a href="/guides/codegen-typescript/" class="text-accent hover:underline">TypeScript Code Generation</a>.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="error-collection" class="text-xl font-bold mb-4">Error Collection</h2>
+      <p class="text-sm text-text-secondary mb-4">The compiler <strong>collects all errors</strong> across stages rather than stopping at the first one. Each stage can set <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">StopOnError</code> to halt the pipeline after critical failures (e.g., circular imports make further resolution meaningless).</p>
+      <p class="text-sm text-text-secondary">Diagnostics have three severity levels:</p>
+      <div class="type-grid mt-3">
+        <div class="type-grid-header">
+          <span>Severity</span>
+          <span>Behavior</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] text-status-down">Error</span>
+          <span class="text-[12px] text-text-secondary">Blocks code generation. Must be fixed.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] text-status-degraded">Warning</span>
+          <span class="text-[12px] text-text-secondary">Compilation succeeds, but potential issues (e.g., non-nullable field added).</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] text-text-muted">Info</span>
+          <span class="text-[12px] text-text-secondary">Informational only — no action required.</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="verbose" class="text-xl font-bold mb-4">Verbose Output</h2>
+      <p class="text-sm text-text-secondary mb-4">Use <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">--verbose</code> to see timing for each stage:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">$</span> ionc compile --verbose
+<span class="text-text-muted">[  2ms]</span> Parse (3 modules)
+<span class="text-text-muted">[  0ms]</span> ImportCycleDetection
+<span class="text-text-muted">[  1ms]</span> DuplicateSymbolValidation
+<span class="text-text-muted">[  3ms]</span> Transform
+<span class="text-text-muted">[  0ms]</span> StreamParameterValidation
+<span class="text-text-muted">[  1ms]</span> RestoreUnresolvedType
+<span class="text-text-muted">[  0ms]</span> CircularTypeReference
+<span class="text-text-muted">[  1ms]</span> SchemaLockValidation
+<span class="text-text-muted">[  5ms]</span> CodeGeneration (dotnet, browser)
+<span class="text-accent">✓</span> Done in 13ms</pre>
+      </div>
+    </section>
+
+  </div>
+</DocsLayout>

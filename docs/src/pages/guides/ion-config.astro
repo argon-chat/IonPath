@@ -1,0 +1,121 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Project Configuration — IonPath" current="/guides/ion-config/">
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">Project Configuration</h1>
+    <p class="text-text-secondary mb-8">The <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ion.config.json</code> file defines your project name, enabled features, and code generation targets.</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <section>
+      <h2 id="full-example" class="text-xl font-bold mb-4">Full Example</h2>
+      <div class="code-block text-[13px]">
+        <pre>{'{'}
+  "name": "MyProject",
+  "features": ["std"],
+  "modules": {'{'}
+    "auth": "../shared/auth-contracts"
+  {'}'},
+  "generators": {'{'}
+    "dotnet": {'{'}
+      "features": ["models", "client", "server"],
+      "outputs": "./"
+    {'}'},
+    "browser": {'{'}
+      "outputFile": "./client.generated.ts"
+    {'}'}
+  {'}'}
+{'}'}</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="name" class="text-xl font-bold mb-4">name</h2>
+      <p class="text-sm text-text-secondary mb-3"><strong>Required.</strong> The project name. Used as the module identifier in generated code and schema lock files.</p>
+      <div class="code-block text-[13px]">
+        <pre>"name": "MyContracts"</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="features" class="text-xl font-bold mb-4">features</h2>
+      <p class="text-sm text-text-secondary mb-3"><strong>Required.</strong> An array of feature modules to enable. Available features:</p>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Feature</span>
+          <span>Description</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">std</span>
+          <span class="text-[12px] text-text-secondary">Standard library — includes all primitive types, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Maybe&lt;T&gt;</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Array&lt;T&gt;</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Partial&lt;T&gt;</code></span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">vector</span>
+          <span class="text-[12px] text-text-secondary">Vector math types — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Vector2</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Vector3</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Vector4</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Quaternion</code></span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">orleans</span>
+          <span class="text-[12px] text-text-secondary">Microsoft Orleans integration — grain-aware code generation</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="generators" class="text-xl font-bold mb-4">generators</h2>
+      <p class="text-sm text-text-secondary mb-3"><strong>Required.</strong> At least one generator must be configured. Each key is a target platform.</p>
+
+      <h3 id="dotnet" class="text-lg font-semibold mt-6 mb-3">dotnet</h3>
+      <p class="text-sm text-text-secondary mb-3">Generates C# code with multiple output files.</p>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Field</span>
+          <span>Description</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-property">features</span>
+          <span class="text-[12px] text-text-secondary">Array of: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">"models"</code> (type definitions), <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">"client"</code> (RPC client impls), <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">"server"</code> (server executors)</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-property">outputs</span>
+          <span class="text-[12px] text-text-secondary">Output directory for generated files (relative to project root)</span>
+        </div>
+      </div>
+
+      <h3 id="browser" class="text-lg font-semibold mt-6 mb-3">browser</h3>
+      <p class="text-sm text-text-secondary mb-3">Generates a single TypeScript file for browser clients.</p>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Field</span>
+          <span>Description</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-property">outputFile</span>
+          <span class="text-[12px] text-text-secondary">Path to the generated <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">.ts</code> file</span>
+        </div>
+      </div>
+
+
+    </section>
+
+    <section>
+      <h2 id="modules" class="text-xl font-bold mb-4">modules</h2>
+      <p class="text-sm text-text-secondary mb-3"><strong>Optional.</strong> A map of external module dependencies. Each key is the module name (used in <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#import</code> directives), and the value is a relative path to the module's root directory:</p>
+      <div class="code-block text-[13px]">
+        <pre>"modules": {'{'}
+  "auth": "../shared/auth-contracts",
+  "common": "../shared/common-types"
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">Each referenced path must contain a valid <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ion.config.json</code>. Modules are resolved recursively — if a module depends on other modules, those are resolved too. See the <a href="/guides/modules/" class="text-accent hover:underline">Modules guide</a> for details on resolution, cycle detection, and content hashing.</p>
+    </section>
+
+    <section>
+      <h2 id="validation" class="text-xl font-bold mb-4">Validation</h2>
+      <p class="text-sm text-text-secondary">The <a href="#" class="text-accent hover:underline">IonPath Toolkit</a> VS Code extension provides JSON schema validation for <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ion.config.json</code>. The schema is bundled at <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">extensions/ionpath-toolkit/schemas/ion-config.schema.json</code> and triggers automatically for any file named <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ion.config.json</code>.</p>
+    </section>
+
+  </div>
+</DocsLayout>

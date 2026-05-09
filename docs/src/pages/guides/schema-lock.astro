@@ -1,0 +1,171 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Schema Lock — IonPath" current="/guides/schema-lock/">
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">Schema Lock</h1>
+    <p class="text-text-secondary mb-8">The <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ion.lock.json</code> file pins wire-format contracts to prevent accidental breaking changes between services.</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <section>
+      <h2 id="why" class="text-xl font-bold mb-4">Why Schema Locks?</h2>
+      <p class="text-sm text-text-secondary mb-4">In distributed systems, multiple services share the same message definitions. If one team reorders a field, every service reading that field by index will misinterpret the data. Schema locks enforce that:</p>
+      <ul class="list-disc list-inside space-y-2 text-sm text-text-secondary">
+        <li>Field indices don't change (index = wire identity)</li>
+        <li>Field types don't change (encoding must be compatible)</li>
+        <li>Method signatures are stable</li>
+        <li>Enum/flags values are preserved</li>
+        <li>Union case ordering stays fixed (discriminator identity)</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 id="structure" class="text-xl font-bold mb-4">Lock File Structure</h2>
+      <div class="code-block text-[13px]">
+        <pre>{'{'}
+  "version": 1,
+  "module": "MyProject",
+  "definitions": {'{'}
+    "User": {'{'}
+      "kind": "msg",
+      "nextIndex": 3,
+      "fields": [
+        {'{'} "index": 0, "name": "id", "type": "u4" {'}'},
+        {'{'} "index": 1, "name": "name", "type": "string" {'}'},
+        {'{'} "index": 2, "name": "email", "type": "Maybe<string>" {'}'}
+      ]
+    {'}'},
+    "UserService": {'{'}
+      "kind": "service",
+      "methods": {'{'}
+        "GetUser": {'{'}
+          "args": [
+            {'{'} "index": 0, "name": "userId", "type": "u4" {'}'}
+          ],
+          "returns": "User",
+          "modifiers": []
+        {'}'}
+      {'}'}
+    {'}'},
+    "Status": {'{'}
+      "kind": "enum",
+      "members": [
+        {'{'} "name": "Active", "value": 0 {'}'},
+        {'{'} "name": "Inactive", "value": 1 {'}'}
+      ]
+    {'}'}
+  {'}'}
+{'}'}</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="what-is-locked" class="text-xl font-bold mb-4">What Gets Locked</h2>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Element</span>
+          <span>Locked Property</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">msg</span>
+          <span class="text-[12px] text-text-secondary">Field order (indices), field names, field types, definition presence</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">service</span>
+          <span class="text-[12px] text-text-secondary">Method presence, argument types & order, return types, modifiers</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">enum / flags</span>
+          <span class="text-[12px] text-text-secondary">Member names, member numeric values</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">union</span>
+          <span class="text-[12px] text-text-secondary">Case order (discriminator index), case field types</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="workflow" class="text-xl font-bold mb-4">Workflow</h2>
+
+      <h3 class="text-lg font-semibold mb-3">1. Initialize the lock</h3>
+      <div class="code-block text-[13px]">
+        <pre>ionc lock init</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-2 mb-6">Creates <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ion.lock.json</code> from the current schema. Run this once after the initial schema is stable.</p>
+
+      <h3 class="text-lg font-semibold mb-3">2. Validate on every compile</h3>
+      <div class="code-block text-[13px]">
+        <pre>ionc compile</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-2 mb-6">The compiler automatically validates against the lock file. Breaking changes are reported as errors (ION0020–ION0029).</p>
+
+      <h3 class="text-lg font-semibold mb-3">3. Intentional breaking changes</h3>
+      <div class="code-block text-[13px]">
+        <pre>ionc compile --update-lock</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-2 mb-6">When you <em>intentionally</em> make a breaking change, pass <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">--update-lock</code> to regenerate the lock file. This is a deliberate acknowledgment.</p>
+
+      <h3 class="text-lg font-semibold mb-3">4. Check only</h3>
+      <div class="code-block text-[13px]">
+        <pre>ionc lock check</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-2">Validates the current schema against the lock without running code generation.</p>
+    </section>
+
+    <section>
+      <h2 id="breaking-changes" class="text-xl font-bold mb-4">Breaking Change Detection</h2>
+      <p class="text-sm text-text-secondary mb-4">The following modifications are detected as breaking:</p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-oled-border-subtle">
+              <th class="text-left py-2 px-3 text-text-muted font-medium">Change</th>
+              <th class="text-left py-2 px-3 text-text-muted font-medium">Code</th>
+              <th class="text-center py-2 px-3 text-text-muted font-medium">Severity</th>
+            </tr>
+          </thead>
+          <tbody class="text-text-secondary">
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 text-xs">Field removed</td><td class="py-2 px-3 font-mono text-xs"><a href="/guides/diagnostics/#ION0020" class="text-accent hover:underline">ION0020</a></td><td class="py-2 px-3 text-center text-status-down">Error</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 text-xs">Field reordered</td><td class="py-2 px-3 font-mono text-xs"><a href="/guides/diagnostics/#ION0021" class="text-accent hover:underline">ION0021</a></td><td class="py-2 px-3 text-center text-status-down">Error</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 text-xs">Field type changed</td><td class="py-2 px-3 font-mono text-xs"><a href="/guides/diagnostics/#ION0022" class="text-accent hover:underline">ION0022</a></td><td class="py-2 px-3 text-center text-status-down">Error</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 text-xs">Definition removed</td><td class="py-2 px-3 font-mono text-xs"><a href="/guides/diagnostics/#ION0023" class="text-accent hover:underline">ION0023</a></td><td class="py-2 px-3 text-center text-status-down">Error</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 text-xs">Definition kind changed</td><td class="py-2 px-3 font-mono text-xs"><a href="/guides/diagnostics/#ION0024" class="text-accent hover:underline">ION0024</a></td><td class="py-2 px-3 text-center text-status-down">Error</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 text-xs">Method removed</td><td class="py-2 px-3 font-mono text-xs"><a href="/guides/diagnostics/#ION0025" class="text-accent hover:underline">ION0025</a></td><td class="py-2 px-3 text-center text-status-degraded">Warning</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 text-xs">Method signature changed</td><td class="py-2 px-3 font-mono text-xs"><a href="/guides/diagnostics/#ION0026" class="text-accent hover:underline">ION0026</a></td><td class="py-2 px-3 text-center text-status-down">Error</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 text-xs">Enum/flags value changed</td><td class="py-2 px-3 font-mono text-xs"><a href="/guides/diagnostics/#ION0027" class="text-accent hover:underline">ION0027</a></td><td class="py-2 px-3 text-center text-status-down">Error</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 text-xs">Union case reordered</td><td class="py-2 px-3 font-mono text-xs"><a href="/guides/diagnostics/#ION0028" class="text-accent hover:underline">ION0028</a></td><td class="py-2 px-3 text-center text-status-down">Error</td></tr>
+            <tr><td class="py-2 px-3 text-xs">Non-nullable field added</td><td class="py-2 px-3 font-mono text-xs"><a href="/guides/diagnostics/#ION0029" class="text-accent hover:underline">ION0029</a></td><td class="py-2 px-3 text-center text-status-degraded">Warning</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="safe-changes" class="text-xl font-bold mb-4">Safe Changes</h2>
+      <p class="text-sm text-text-secondary mb-3">These changes are always safe and do not trigger warnings:</p>
+      <ul class="list-disc list-inside space-y-1 text-sm text-text-secondary">
+        <li>Adding new <strong>nullable</strong> fields to the end of a message</li>
+        <li>Adding new methods to a service</li>
+        <li>Adding new members to an enum or flags (at the end)</li>
+        <li>Adding new union cases (at the end)</li>
+        <li>Adding entirely new types/services/definitions</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 id="ci-cd" class="text-xl font-bold mb-4">CI/CD Integration</h2>
+      <p class="text-sm text-text-secondary mb-4">In CI pipelines, use lock validation to catch breaking changes before merge:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted"># GitHub Actions example</span>
+- name: Validate schema
+  run: ionc lock check --json
+  continue-on-error: false</pre>
+      </div>
+    </section>
+
+  </div>
+</DocsLayout>

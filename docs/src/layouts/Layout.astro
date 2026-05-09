@@ -1,0 +1,221 @@
+---
+import '../styles/global.css';
+
+interface Props {
+	title?: string;
+	description?: string;
+}
+
+const {
+	title = 'IonPath Documentation',
+	description = 'IonPath — a contract language and binary protocol for distributed applications. CBOR encoding, multi-language code generation, and schema stability enforcement.',
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="en" class="dark">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="generator" content={Astro.generator} />
+		<title>{title}</title>
+		<meta name="description" content={description} />
+
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={description} />
+		<meta property="og:type" content="website" />
+
+		<script is:inline>
+			(function() {
+				var t = localStorage.getItem('theme');
+				if (t === 'light') {
+					document.documentElement.classList.remove('dark');
+				} else if (t === 'dark') {
+					document.documentElement.classList.add('dark');
+				} else if (!window.matchMedia('(prefers-color-scheme: dark)').matches) {
+					document.documentElement.classList.remove('dark');
+				}
+			})();
+		</script>
+	</head>
+	<body class="min-h-screen overflow-x-hidden flex flex-col">
+		<a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-accent focus:text-white focus:text-sm focus:font-medium">Skip to content</a>
+		<slot />
+
+		<!-- Back to top -->
+		<button id="back-to-top" type="button" aria-label="Back to top"
+			class="fixed bottom-6 right-6 z-40 w-10 h-10 rounded-full bg-oled-elevated border border-oled-border-subtle flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-oled-hover transition-all opacity-0 translate-y-4 pointer-events-none cursor-pointer shadow-lg">
+			<svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+		</button>
+
+		<!-- Search modal -->
+		<div id="search-modal" class="fixed inset-0 z-[60] hidden">
+			<div id="search-backdrop" class="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>
+			<div class="relative flex justify-center pt-[15vh] px-4">
+				<div class="w-full max-w-lg bg-oled-surface border border-oled-border rounded-2xl shadow-2xl overflow-hidden">
+					<div class="flex items-center gap-3 px-4 py-3 border-b border-oled-border-subtle">
+						<svg class="size-4 text-text-muted shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+						<input id="search-input" type="text" placeholder="Search docs..." autocomplete="off" spellcheck="false"
+							class="flex-1 bg-transparent text-sm text-text-primary placeholder-text-muted outline-none" />
+						<kbd class="text-[10px] text-text-muted bg-oled-elevated px-1.5 py-0.5 rounded border border-oled-border-subtle font-mono">Esc</kbd>
+					</div>
+					<div id="search-results" class="max-h-80 overflow-y-auto p-2">
+						<div class="px-3 py-8 text-center text-sm text-text-muted">Type to search...</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</body>
+</html>
+
+<script>
+	// ── Back to top ──
+	function initBackToTop() {
+		const btn = document.getElementById('back-to-top');
+		if (!btn) return;
+		let visible = false;
+		const toggle = () => {
+			const show = window.scrollY > 400;
+			if (show !== visible) {
+				visible = show;
+				btn.classList.toggle('opacity-0', !show);
+				btn.classList.toggle('translate-y-4', !show);
+				btn.classList.toggle('pointer-events-none', !show);
+				btn.classList.toggle('opacity-100', show);
+				btn.classList.toggle('translate-y-0', show);
+				btn.classList.toggle('pointer-events-auto', show);
+			}
+		};
+		window.addEventListener('scroll', toggle, { passive: true });
+		btn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+		toggle();
+	}
+
+	// ── Copy code blocks ──
+	function initCopyButtons() {
+		document.querySelectorAll('.code-block').forEach(block => {
+			if (block.querySelector('.copy-code-btn')) return;
+			const btn = document.createElement('button');
+			btn.type = 'button';
+			btn.className = 'copy-code-btn';
+			btn.setAttribute('aria-label', 'Copy code');
+			btn.innerHTML = '<svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+			(block as HTMLElement).style.position = 'relative';
+			block.appendChild(btn);
+			btn.addEventListener('click', () => {
+				const pre = block.querySelector('pre');
+				const text = pre ? pre.textContent || '' : '';
+				navigator.clipboard.writeText(text).then(() => {
+					btn.innerHTML = '<svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+					setTimeout(() => {
+						btn.innerHTML = '<svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+					}, 1500);
+				});
+			});
+		});
+	}
+
+	// ── Search modal ──
+	function initSearch() {
+		const modal = document.getElementById('search-modal');
+		const input = document.getElementById('search-input') as HTMLInputElement | null;
+		const results = document.getElementById('search-results');
+		const backdrop = document.getElementById('search-backdrop');
+		if (!modal || !input || !results) return;
+
+		const searchIndex: Array<{title: string, description: string, url: string, category: string}> = [];
+
+		// Build index from sidebar links
+		document.querySelectorAll('aside nav a[href]').forEach(a => {
+			const el = a as HTMLAnchorElement;
+			const href = el.getAttribute('href') || '';
+			if (!href || href.startsWith('http')) return;
+			const text = el.textContent?.trim() || '';
+			if (!text) return;
+			const cat = href.includes('/guides/') ? 'Guide' : href.includes('/docs/') ? 'Reference' : 'Page';
+			if (!searchIndex.some(e => e.url === href)) {
+				searchIndex.push({ title: text, description: '', url: href, category: cat });
+			}
+		});
+
+		// Add static pages
+		[
+			{ title: 'Home', url: '/', category: 'Page' },
+			{ title: 'Changelog', url: '/changelog/', category: 'Page' },
+		].forEach(p => {
+			if (!searchIndex.some(e => e.url === p.url)) searchIndex.push({ ...p, description: '' });
+		});
+
+		function open() {
+			modal!.classList.remove('hidden');
+			requestAnimationFrame(() => input!.focus());
+		}
+		function close() {
+			modal!.classList.add('hidden');
+			input!.value = '';
+			render('');
+		}
+
+		function render(query: string) {
+			if (!query) {
+				results!.innerHTML = '<div class="px-3 py-8 text-center text-sm text-text-muted">Type to search...</div>';
+				return;
+			}
+			const q = query.toLowerCase();
+			const matches = searchIndex.filter(e =>
+				e.title.toLowerCase().includes(q) || e.category.toLowerCase().includes(q)
+			);
+			if (!matches.length) {
+				results!.innerHTML = '<div class="px-3 py-8 text-center text-sm text-text-muted">No results</div>';
+				return;
+			}
+			results!.innerHTML = matches.map((m, i) => `
+				<a href="${m.url}" class="search-result flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors hover:bg-oled-hover ${i === 0 ? 'bg-oled-hover' : ''}" data-idx="${i}">
+					<span class="text-[10px] uppercase tracking-wider font-semibold text-text-muted w-16 shrink-0">${m.category}</span>
+					<span class="text-text-primary">${m.title}</span>
+				</a>
+			`).join('');
+		}
+
+		// Keyboard nav inside results
+		function getLinks() { return Array.from(results!.querySelectorAll('a.search-result')); }
+		function highlightIdx(links: Element[], idx: number) {
+			links.forEach((l, i) => {
+				l.classList.toggle('bg-oled-hover', i === idx);
+			});
+		}
+
+		let activeIdx = 0;
+		input.addEventListener('input', () => { render(input.value); activeIdx = 0; });
+		input.addEventListener('keydown', (e) => {
+			const links = getLinks();
+			if (e.key === 'ArrowDown') { e.preventDefault(); activeIdx = Math.min(activeIdx + 1, links.length - 1); highlightIdx(links, activeIdx); }
+			else if (e.key === 'ArrowUp') { e.preventDefault(); activeIdx = Math.max(activeIdx - 1, 0); highlightIdx(links, activeIdx); }
+			else if (e.key === 'Enter' && links[activeIdx]) { (links[activeIdx] as HTMLAnchorElement).click(); close(); }
+		});
+
+		backdrop?.addEventListener('click', close);
+		document.addEventListener('keydown', (e) => {
+			if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); open(); }
+			if (e.key === 'Escape' && !modal.classList.contains('hidden')) { close(); }
+		});
+
+		// Trigger buttons
+		document.querySelectorAll('[data-search-trigger]').forEach(btn => {
+			btn.addEventListener('click', open);
+		});
+	}
+
+	function initAll() {
+		initBackToTop();
+		initCopyButtons();
+		initSearch();
+	}
+	document.addEventListener('astro:page-load', initAll);
+	initAll();
+</script>

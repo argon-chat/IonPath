@@ -1,0 +1,180 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Modules — IonPath" current="/guides/modules/">
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">Modules</h1>
+    <p class="text-text-secondary mb-8">IonPath supports external module dependencies — reusable schema packages that your project can import types from. Modules are declared in <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ion.config.json</code> and imported via the <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">#import</code> directive.</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <section>
+      <h2 id="overview" class="text-xl font-bold mb-4">Overview</h2>
+      <p class="text-sm text-text-secondary mb-4">A module is an IonPath project that exposes its type definitions for use in other projects. Each module has its own <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ion.config.json</code> and can itself depend on other modules.</p>
+      <ol class="list-decimal list-inside space-y-2 text-sm text-text-secondary">
+        <li>Declare module dependencies in your <a href="/guides/ion-config/#modules" class="text-accent hover:underline">ion.config.json</a></li>
+        <li>Import specific types using <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#import {'{'} Type {'}'} from "module"</code></li>
+        <li>The compiler resolves all modules, parses their <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">.ion</code> files, and makes imported types available</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2 id="declaring" class="text-xl font-bold mb-4">Declaring Dependencies</h2>
+      <p class="text-sm text-text-secondary mb-4">Add a <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">modules</code> section to your <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ion.config.json</code>. Each key is the module name, and the value is a relative path to the module's root directory:</p>
+      <div class="code-block text-[13px]">
+        <pre>{'{'}
+  "name": "MyProject",
+  "features": ["std"],
+  "modules": {'{'}
+    "auth": "../shared/auth-contracts",
+    "common": "../shared/common-types"
+  {'}'},
+  "generators": {'{'}
+    "dotnet": {'{'}
+      "features": ["models", "client", "server"],
+      "outputs": "./"
+    {'}'}
+  {'}'}
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">The module path must point to a directory containing a valid <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ion.config.json</code>. If the config file is missing, the compiler reports <a href="/guides/diagnostics/#ION0041" class="text-accent hover:underline">ION0041</a>.</p>
+    </section>
+
+    <section>
+      <h2 id="importing-types" class="text-xl font-bold mb-4">Importing Types</h2>
+      <p class="text-sm text-text-secondary mb-4">Use the <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">#import</code> directive to bring specific types from a module into scope:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">#import</span> {'{'} <span class="type-name">User</span>, <span class="type-name">Role</span> {'}'} <span class="type-keyword">from</span> <span class="text-accent-2">"auth"</span>
+
+<span class="text-accent-3">service</span> <span class="type-name">UserService</span>() {'{'}
+    GetUser(id: <span class="type-keyword">u4</span>): <span class="type-name">User</span>;
+    GetRoles(userId: <span class="type-keyword">u4</span>): <span class="type-name">Array</span>&lt;<span class="type-name">Role</span>&gt;;
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">Only the listed types are imported — unlike the deprecated <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#use</code> directive, which imported everything from a file.</p>
+
+      <div class="mt-4 flex items-start gap-3 rounded-xl border border-accent/20 bg-accent-subtle p-4">
+        <span class="text-accent text-sm mt-0.5">ℹ</span>
+        <p class="text-sm text-text-secondary">If a type is not found in the module, the compiler reports <a href="/guides/diagnostics/#ION0043" class="text-accent hover:underline">ION0043</a>. If a close match exists, it suggests the correct name (<a href="/guides/diagnostics/#ION0044" class="text-accent hover:underline">ION0044</a>).</p>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="resolution" class="text-xl font-bold mb-4">Resolution Process</h2>
+      <p class="text-sm text-text-secondary mb-4">When the compiler encounters module dependencies, it performs the following steps:</p>
+      <div class="space-y-3">
+        <div class="glass rounded-xl p-4">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-xs font-bold text-accent">1</span>
+            <h3 class="font-semibold">Read Module Config</h3>
+          </div>
+          <p class="text-sm text-text-secondary ml-10">Reads <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ion.config.json</code> from the module's root directory to discover the module's name, features, and its own dependencies.</p>
+        </div>
+        <div class="glass rounded-xl p-4">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-xs font-bold text-accent">2</span>
+            <h3 class="font-semibold">Parse Module Files</h3>
+          </div>
+          <p class="text-sm text-text-secondary ml-10">All <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">.ion</code> files in the module directory are parsed. Types defined in these files become available for import.</p>
+        </div>
+        <div class="glass rounded-xl p-4">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-xs font-bold text-accent">3</span>
+            <h3 class="font-semibold">Resolve Transitive Dependencies</h3>
+          </div>
+          <p class="text-sm text-text-secondary ml-10">If the module itself declares dependencies in its <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">modules</code> section, those are resolved recursively. Paths are relative to the dependent module's root.</p>
+        </div>
+        <div class="glass rounded-xl p-4">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-xs font-bold text-accent">4</span>
+            <h3 class="font-semibold">Content Hashing</h3>
+          </div>
+          <p class="text-sm text-text-secondary ml-10">A SHA-256 hash of all module source files is computed for change detection. The hash is stored in the lock file and validated on subsequent compilations (<a href="/guides/diagnostics/#ION0046" class="text-accent hover:underline">ION0046</a>).</p>
+        </div>
+        <div class="glass rounded-xl p-4">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-xs font-bold text-accent">5</span>
+            <h3 class="font-semibold">Topological Ordering</h3>
+          </div>
+          <p class="text-sm text-text-secondary ml-10">Modules are sorted in dependency order — dependencies are compiled before dependents, ensuring all types are available when needed.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="cycle-detection" class="text-xl font-bold mb-4">Cycle Detection</h2>
+      <p class="text-sm text-text-secondary mb-4">Circular module dependencies are forbidden. If module A depends on B and B depends on A (directly or transitively), the compiler reports <a href="/guides/diagnostics/#ION0040" class="text-accent hover:underline">ION0040</a>.</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// ✗ ion.config.json in project-a</span>
+{'{'}
+  "modules": {'{'} "b": "../project-b" {'}'}
+{'}'}
+
+<span class="text-text-muted">// ✗ ion.config.json in project-b</span>
+{'{'}
+  "modules": {'{'} "a": "../project-a" {'}'}  <span class="text-status-down">// ION0040: Circular module dependency</span>
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">Break the cycle by extracting shared types into a separate module that both projects can depend on.</p>
+    </section>
+
+    <section>
+      <h2 id="name-conflicts" class="text-xl font-bold mb-4">Name Conflicts</h2>
+      <p class="text-sm text-text-secondary mb-4">If your project defines a type with the same name as a type in an imported module, the compiler reports <a href="/guides/diagnostics/#ION0048" class="text-accent hover:underline">ION0048</a> as a warning. Rename one of the types to avoid ambiguity.</p>
+    </section>
+
+    <section>
+      <h2 id="unused-imports" class="text-xl font-bold mb-4">Unused Imports</h2>
+      <p class="text-sm text-text-secondary mb-4">Importing a type that is never referenced produces <a href="/guides/diagnostics/#ION0045" class="text-accent hover:underline">ION0045</a> (warning). This helps keep imports clean and explicit.</p>
+    </section>
+
+    <section>
+      <h2 id="diagnostics" class="text-xl font-bold mb-4">Related Diagnostics</h2>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Code</span>
+          <span>Description</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword"><a href="/guides/diagnostics/#ION0040" class="hover:underline">ION0040</a></span>
+          <span class="text-[12px] text-text-secondary">Circular module dependency detected</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword"><a href="/guides/diagnostics/#ION0041" class="hover:underline">ION0041</a></span>
+          <span class="text-[12px] text-text-secondary">Module config (<code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ion.config.json</code>) not found</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword"><a href="/guides/diagnostics/#ION0042" class="hover:underline">ION0042</a></span>
+          <span class="text-[12px] text-text-secondary">Unknown module not declared in config</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword"><a href="/guides/diagnostics/#ION0043" class="hover:underline">ION0043</a></span>
+          <span class="text-[12px] text-text-secondary">Type not found in module</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword"><a href="/guides/diagnostics/#ION0044" class="hover:underline">ION0044</a></span>
+          <span class="text-[12px] text-text-secondary">Type not found in module (with suggestion)</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword"><a href="/guides/diagnostics/#ION0045" class="hover:underline">ION0045</a></span>
+          <span class="text-[12px] text-text-secondary">Imported type from module unused</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword"><a href="/guides/diagnostics/#ION0046" class="hover:underline">ION0046</a></span>
+          <span class="text-[12px] text-text-secondary">Module content hash mismatch (lock file)</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword"><a href="/guides/diagnostics/#ION0047" class="hover:underline">ION0047</a></span>
+          <span class="text-[12px] text-text-secondary">Deprecated <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#use</code> directive</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword"><a href="/guides/diagnostics/#ION0048" class="hover:underline">ION0048</a></span>
+          <span class="text-[12px] text-text-secondary">Cross-module duplicate type name</span>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</DocsLayout>
