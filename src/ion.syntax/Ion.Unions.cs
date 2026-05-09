@@ -12,17 +12,18 @@ public partial class IonParser
 
     public static Parser<char, IonUnionSyntax> Union =>
         Map(IonUnionSyntax
-                (doc, attrs, pos, name, baseFields, cases) =>
+                (doc, attrs, pos, name, baseFields, cases, endPos) =>
                 new IonUnionSyntax(name, baseFields.GetValueOrDefault([]).ToList(), cases.ToList())
                     .WithComments(doc)
                     .WithAttributes(attrs)
-                    .WithPos(pos),
+                    .WithPos(pos, endPos),
             LeadingDoc,
             Attributes,
             CurrentPos,
             UnionKeyword.Then(Identifier),
             ArgList.Labelled("args").Optional(),
-            UnionCase.Separated(Char(',').Before(SkipWhitespaces)).Between(Char('{').Before(SkipWhitespaces), Char('}'))
+            UnionCase.Separated(Char(',').Before(SkipWhitespaces)).Between(Char('{').Before(SkipWhitespaces), Char('}')),
+            CurrentPos
         );
 
     public static Parser<char, IonUnionTypeCaseSyntax> UnionCase =>

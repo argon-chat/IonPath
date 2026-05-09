@@ -54,7 +54,7 @@ public class IonFoldingRangeHandler(IonWorkspace workspace) : FoldingRangeHandle
         if (content is not null)
             AddCommentRanges(ranges, content);
 
-        // #use / #feature directive blocks
+        // #import / #use / #feature directive blocks
         if (content is not null)
             AddDirectiveRanges(ranges, content);
 
@@ -143,7 +143,7 @@ public class IonFoldingRangeHandler(IonWorkspace workspace) : FoldingRangeHandle
         for (var i = 0; i < lines.Length; i++)
         {
             var trimmed = lines[i].TrimStart();
-            if (trimmed.StartsWith("#use") || trimmed.StartsWith("#feature"))
+            if (trimmed.StartsWith("#use") || trimmed.StartsWith("#feature") || trimmed.StartsWith("#import"))
             {
                 directiveStart ??= i;
             }

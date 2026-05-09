@@ -19,21 +19,34 @@ public partial class IonParser
             )
         );
 
+    private static Parser<char, (IEnumerable<string> Types, string Module, SourcePos ModStart, SourcePos ModEnd)> ImportBody =>
+        String("#import")
+            .Before(SkipWhitespaces)
+            .Then(
+                Map((types, _, modStart, module, modEnd) => (Types: types, Module: module, ModStart: modStart, ModEnd: modEnd),
+                    ImportTypeList.Before(SkipWhitespaces),
+                    String("from").Before(SkipWhitespaces),
+                    CurrentPos,
+                    StringLiteral,
+                    CurrentPos
+                )
+            )
+            .Before(SkipWhitespaces)
+            .Before(Try(Char(';')).Optional());
+
     private static Parser<char, IonSyntaxMember> ImportDirective =>
         Map(IonSyntaxMember
-            (doc, pos, typeNames, moduleName) => new IonImportSyntax(typeNames.ToList(), moduleName).WithPos(pos).WithComments(doc),
+            (doc, pos, body, endPos) =>
+            {
+                var import = new IonImportSyntax(body.Types.ToList(), body.Module);
+                import.ModuleNameStart = body.ModStart;
+                import.ModuleNameEnd = body.ModEnd;
+                return import.WithPos(pos, endPos).WithComments(doc);
+            },
             DocComment.Optional(),
             CurrentPos,
-            Try(
-                String("#import")
-                    .Before(SkipWhitespaces)
-                    .Then(ImportTypeList)
-                    .Before(SkipWhitespaces)
-            ),
-            String("from")
-                .Before(SkipWhitespaces)
-                .Then(StringLiteral)
-                .Before(SkipWhitespaces)
+            Try(ImportBody),
+            CurrentPos
         );
 
     private static Parser<char, IEnumerable<string>> ImportTypeList =>
@@ -41,7 +54,7 @@ public partial class IonParser
             .Before(SkipWhitespaces)
             .Then(
                 ImportIdentifier.Before(SkipWhitespaces)
-                    .SeparatedAtLeastOnce(Char(',').Before(SkipWhitespaces))
+                    .Separated(Char(',').Before(SkipWhitespaces))
             )
             .Before(SkipWhitespaces)
             .Before(Char('}'));

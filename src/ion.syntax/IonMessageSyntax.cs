@@ -45,7 +45,14 @@ public record IonAttributeSyntax(IonIdentifier Name, List<string> Args) : IonSyn
 
 public record IonUseSyntax(string Path) : IonSyntaxMember;
 
-public record IonImportSyntax(List<string> TypeNames, string ModuleName) : IonSyntaxMember;
+public record IonImportSyntax(List<string> TypeNames, string ModuleName) : IonSyntaxMember
+{
+    /// <summary>
+    /// Position of the module name string literal (for precise error reporting).
+    /// </summary>
+    public SourcePos ModuleNameStart { get; set; }
+    public SourcePos ModuleNameEnd { get; set; }
+}
 
 public record IonTypedefSyntax(IonUnderlyingTypeSyntax TypeName, IonUnderlyingTypeSyntax? BaseType) : IonSyntaxMember;
 

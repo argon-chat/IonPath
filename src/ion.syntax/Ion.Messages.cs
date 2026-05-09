@@ -65,17 +65,18 @@ public partial class IonParser
         );
 
     private static Parser<char, IEnumerable<IonFieldSyntax>> FieldList =>
-        Field.ManyBetween(Char('{').Before(SkipWhitespaces), Char('}').Before(SkipWhitespaces));
+        Field.ManyBetween(Char('{').Before(SkipWhitespaces), Char('}'));
 
 
     public static Parser<char, IonSyntaxMember> Message =>
         Map(IonSyntaxMember
-                (doc, attrs, pos, msgName, fields) =>
-                new IonMessageSyntax(msgName, fields.ToList()).WithComments(doc).WithAttributes(attrs).WithPos(pos),
+                (doc, attrs, pos, msgName, fields, endPos) =>
+                new IonMessageSyntax(msgName, fields.ToList()).WithComments(doc).WithAttributes(attrs).WithPos(pos, endPos),
             LeadingDoc,
             Attributes,
             CurrentPos,
             MsgKeyword.Then(Identifier),
-            FieldList
+            FieldList,
+            CurrentPos
         );
 }

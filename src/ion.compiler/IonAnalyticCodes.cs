@@ -105,6 +105,8 @@ public static class IonAnalyticCodes
         = new("ION0046", "Module '{0}' content hash has changed since last lock. Run 'ionc modules lock' to update.");
     public static readonly IonAnalyticCode ION0047_DeprecatedUseDirective
         = new("ION0047", "#use is deprecated. Use '#import {{ TypeName }} from \"moduleName\"' instead.");
+    public static readonly IonAnalyticCode ION0048_CrossModuleDuplicateTypeName
+        = new("ION0048", "Type '{0}' in this project has the same name as type '{0}' from module '{1}'. This may cause ambiguity.");
 }
 
 public record IonAnalyticCode(string code, string template);

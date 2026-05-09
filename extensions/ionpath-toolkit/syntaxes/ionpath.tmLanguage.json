@@ -48,6 +48,30 @@
     "directives": {
       "patterns": [
         {
+          "name": "meta.directive.import.ionpath",
+          "match": "(#import)\\s*(\\{)([^}]*)(\\})\\s*(from)\\s*(\"[^\"]*\")(;?)",
+          "captures": {
+            "1": { "name": "keyword.control.directive.ionpath" },
+            "2": { "name": "punctuation.definition.block.begin.ionpath" },
+            "3": {
+              "patterns": [
+                {
+                  "name": "entity.name.type.import.ionpath",
+                  "match": "\\b[A-Za-z_][A-Za-z0-9_]*\\b"
+                },
+                {
+                  "name": "punctuation.separator.comma.ionpath",
+                  "match": ","
+                }
+              ]
+            },
+            "4": { "name": "punctuation.definition.block.end.ionpath" },
+            "5": { "name": "keyword.control.from.ionpath" },
+            "6": { "name": "string.quoted.double.ionpath" },
+            "7": { "name": "punctuation.terminator.ionpath" }
+          }
+        },
+        {
           "name": "meta.directive.ionpath",
           "match": "(#(?:use|feature))\\s+(\"[^\"]*\")",
           "captures": {
@@ -57,7 +81,7 @@
         },
         {
           "name": "keyword.control.directive.ionpath",
-          "match": "#(?:use|feature)\\b"
+          "match": "#(?:use|feature|import)\\b"
         }
       ]
     },

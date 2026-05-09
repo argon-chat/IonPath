@@ -27,12 +27,22 @@ public sealed class ImportValidationStage(CompilationContext ctx) : CompilationS
             ValidateImports(file, externalModuleNames);
             ValidateDeprecatedUse(file);
         }
+
+        DetectCrossModuleDuplicateTypes(externalModuleNames);
     }
 
     private void ValidateImports(IonFileSyntax file, Dictionary<string, List<IonType>> externalModuleNames)
     {
         foreach (var import in file.importSyntaxes)
         {
+            // Create a syntax base that points to the module name for precise error spans
+            var moduleNameSpan = new IonSyntaxBase
+            {
+                StartPosition = import.ModuleNameStart,
+                EndPosition = import.ModuleNameEnd,
+                SourceFile = import.SourceFile
+            };
+
             // Check module exists
             if (!externalModuleNames.TryGetValue(import.ModuleName, out var moduleTypes))
             {
@@ -40,7 +50,7 @@ public sealed class ImportValidationStage(CompilationContext ctx) : CompilationS
                     IonAnalyticCodes.ION0042_ModuleUnknown.code,
                     IonDiagnosticSeverity.Error,
                     string.Format(IonAnalyticCodes.ION0042_ModuleUnknown.template, import.ModuleName),
-                    import));
+                    moduleNameSpan));
                 continue;
             }
 
@@ -93,6 +103,48 @@ public sealed class ImportValidationStage(CompilationContext ctx) : CompilationS
                 IonDiagnosticSeverity.Warning,
                 IonAnalyticCodes.ION0047_DeprecatedUseDirective.template,
                 use));
+        }
+    }
+
+    /// <summary>
+    /// Detects type names in the local project that collide with type names
+    /// from imported external modules. Emits a warning for each collision.
+    /// </summary>
+    private void DetectCrossModuleDuplicateTypes(Dictionary<string, List<IonType>> externalModuleTypes)
+    {
+        // Collect all local type names from parsed files
+        var localTypeNames = Context.Files
+            .SelectMany(f => f.Definitions)
+            .Select(d => d switch
+            {
+                IonMessageSyntax msg => (Name: msg.Name.Identifier, Syntax: (IonSyntaxMember)msg),
+                IonEnumSyntax e => (Name: e.Name.Identifier, Syntax: (IonSyntaxMember)e),
+                IonFlagsSyntax fl => (Name: fl.Name.Identifier, Syntax: (IonSyntaxMember)fl),
+                IonUnionSyntax u => (Name: u.unionName.Identifier, Syntax: (IonSyntaxMember)u),
+                IonTypedefSyntax td => (Name: td.TypeName.Name.Identifier, Syntax: (IonSyntaxMember)td),
+                IonServiceSyntax svc => (Name: svc.serviceName.Identifier, Syntax: (IonSyntaxMember)svc),
+                _ => default
+            })
+            .Where(x => x != default)
+            .ToList();
+
+        foreach (var (moduleName, moduleTypes) in externalModuleTypes)
+        {
+            var externalNames = moduleTypes
+                .Select(t => t.name.Identifier)
+                .ToHashSet();
+
+            foreach (var (localName, localSyntax) in localTypeNames)
+            {
+                if (!externalNames.Contains(localName))
+                    continue;
+
+                Context.Diagnostics.Add(new IonDiagnostic(
+                    IonAnalyticCodes.ION0048_CrossModuleDuplicateTypeName.code,
+                    IonDiagnosticSeverity.Warning,
+                    string.Format(IonAnalyticCodes.ION0048_CrossModuleDuplicateTypeName.template, localName, moduleName),
+                    localSyntax));
+            }
         }
     }
 }

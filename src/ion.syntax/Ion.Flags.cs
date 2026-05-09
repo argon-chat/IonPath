@@ -53,13 +53,13 @@ public partial class IonParser
 
 
     public static Parser<char, IonSyntaxMember> EnumLike(string keyword, Func<IonIdentifier, IonUnderlyingTypeSyntax, IEnumerable<IonFlagEntrySyntax>, IonSyntaxMember> ctor) =>
-        Map(IonSyntaxMember (pos, doc, attrs, name, baseType, entries) =>
+        Map(IonSyntaxMember (pos, doc, attrs, name, baseType, entries, endPos) =>
                 ctor(name, baseType.HasValue
                         ? baseType.Value
                         : new IonUnderlyingTypeSyntax(new IonIdentifier("u4"), [], false, false, false), entries)
                     .WithComments(doc)
                     .WithAttributes(attrs)
-                    .WithPos(pos),
+                    .WithPos(pos, endPos),
             CurrentPos,
             LeadingDoc,
             Attributes,
@@ -67,7 +67,8 @@ public partial class IonParser
             Try(Char(':').Before(SkipWhitespaces).Then(Type)).Optional(),
             FlagEntry
                 .Separated(Char(',').Before(SkipWhitespaces))
-                .Between(Char('{').Before(SkipWhitespaces), Char('}').Before(SkipWhitespaces))
+                .Between(Char('{').Before(SkipWhitespaces), Char('}')),
+            CurrentPos
         );
 
 

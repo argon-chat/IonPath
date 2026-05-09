@@ -35,13 +35,14 @@ public partial class IonParser
 
     public static Parser<char, IonServiceSyntax> Service =>
         Map(
-            (doc, attrs, pos, name, parameters, methods) =>
-                new IonServiceSyntax(name, parameters.Value.ToList(), methods.ToList()).WithAttributes(attrs.ToList()).WithPos(pos).WithComments(doc),
+            (doc, attrs, pos, name, parameters, methods, endPos) =>
+                new IonServiceSyntax(name, parameters.Value.ToList(), methods.ToList()).WithAttributes(attrs.ToList()).WithPos(pos, endPos).WithComments(doc),
             LeadingDoc,
             Attributes,
             CurrentPos,
             String("service").Before(SkipWhitespaces).Then(Identifier),
             ArgList.Optional().Assert(maybe => maybe.HasValue, "Argument list required"),
-            ServiceMethod.Many().Between(Char('{').Before(SkipWhitespaces), Char('}').Before(SkipWhitespaces))
+            ServiceMethod.Many().Between(Char('{').Before(SkipWhitespaces), Char('}')),
+            CurrentPos
         );
 }

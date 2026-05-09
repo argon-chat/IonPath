@@ -12,7 +12,7 @@ public class IonCompletionHandler(IonWorkspace workspace) : CompletionHandlerBas
         return new CompletionRegistrationOptions
         {
             DocumentSelector = TextDocumentSelector.ForLanguage("ion"),
-            TriggerCharacters = new Container<string>(":", "<", "#"),
+            TriggerCharacters = new Container<string>(":", "<", "#", "{", ",", "\""),
             ResolveProvider = false
         };
     }
@@ -35,19 +35,46 @@ public class IonCompletionHandler(IonWorkspace workspace) : CompletionHandlerBas
                 var lineText = lines[line].TrimEnd('\r');
                 var prefix = lineText[..Math.Min(request.Position.Character, lineText.Length)].TrimStart();
 
-                if (prefix.StartsWith("#import") && prefix.Contains("from"))
+                if (prefix.StartsWith("#import") || lineText.TrimStart().StartsWith("#import"))
                 {
-                    // After "from" — suggest module names
-                    items = GetModuleNameCompletions();
-                }
-                else if (prefix.StartsWith("#import") && prefix.Contains('{'))
-                {
-                    // Inside { } — suggest type names from the module on this line
-                    var moduleName = ExtractModuleNameFromLine(lineText);
-                    if (moduleName is not null)
-                        items = GetModuleTypeCompletions(moduleName);
+                    var trimmedLine = lineText.TrimStart();
+                    var cursorInLine = request.Position.Character;
+
+                    // Find where { and } are relative to cursor
+                    var braceOpen = trimmedLine.IndexOf('{');
+                    var braceClose = trimmedLine.IndexOf('}');
+                    var fromIdx = trimmedLine.IndexOf("from", StringComparison.Ordinal);
+
+                    if (fromIdx >= 0 && cursorInLine > lineText.IndexOf("from", StringComparison.Ordinal))
+                    {
+                        // After "from" — suggest module names
+                        items = GetModuleNameCompletions();
+                    }
+                    else if (braceOpen >= 0 && (braceClose < 0 || cursorInLine <= lineText.IndexOf('}'))
+                             && cursorInLine > lineText.IndexOf('{'))
+                    {
+                        // Inside { } — suggest type names
+                        var moduleName = ExtractModuleNameFromLine(lineText);
+                        if (moduleName is not null)
+                            items = GetModuleTypeCompletions(moduleName);
+                        else
+                            items = GetAllExternalTypeCompletions();
+                    }
                     else
-                        items = GetAllExternalTypeCompletions();
+                    {
+                        // Just typed #import, offer snippet
+                        items =
+                        [
+                            new CompletionItem
+                            {
+                                Label = "#import",
+                                Kind = CompletionItemKind.Keyword,
+                                InsertText = "#import { $1 } from \"$2\"",
+                                InsertTextFormat = InsertTextFormat.Snippet,
+                                Detail = "Import types from module"
+                            }
+                        ];
+                    }
                 }
                 else if (prefix.StartsWith("#use"))
                 {

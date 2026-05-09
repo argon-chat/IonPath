@@ -25,7 +25,7 @@ public partial class IonParser
     /// past invalid input to the next recognizable definition.
     /// </summary>
     private static readonly string[] DefinitionKeywords =
-        ["msg", "service", "import", "use", "feature", "flags", "enum", "typedef", "union", "attr"];
+        ["msg", "service", "#import", "#use", "#feature", "flags", "enum", "typedef", "union", "attr"];
 
     /// <summary>
     /// Attempts to parse a Definition, and on failure skips to the next definition keyword
