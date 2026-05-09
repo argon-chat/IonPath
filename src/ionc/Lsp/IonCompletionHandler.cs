@@ -47,8 +47,8 @@ public class IonCompletionHandler(IonWorkspace workspace) : CompletionHandlerBas
 
                     if (fromIdx >= 0 && cursorInLine > lineText.IndexOf("from", StringComparison.Ordinal))
                     {
-                        // After "from" — suggest module names
-                        items = GetModuleNameCompletions();
+                        // After "from" — suggest module names (including inside quotes)
+                        items = GetModuleNameCompletions(uri);
                     }
                     else if (braceOpen >= 0 && (braceClose < 0 || cursorInLine <= lineText.IndexOf('}'))
                              && cursorInLine > lineText.IndexOf('{'))
@@ -56,9 +56,9 @@ public class IonCompletionHandler(IonWorkspace workspace) : CompletionHandlerBas
                         // Inside { } — suggest type names
                         var moduleName = ExtractModuleNameFromLine(lineText);
                         if (moduleName is not null)
-                            items = GetModuleTypeCompletions(moduleName);
+                            items = GetModuleTypeCompletions(uri, moduleName);
                         else
-                            items = GetAllExternalTypeCompletions();
+                            items = GetAllExternalTypeCompletions(uri);
                     }
                     else
                     {
@@ -133,9 +133,10 @@ public class IonCompletionHandler(IonWorkspace workspace) : CompletionHandlerBas
         return Task.FromResult(new CompletionList(items));
     }
 
-    private List<CompletionItem> GetModuleNameCompletions()
+    private List<CompletionItem> GetModuleNameCompletions(string filePath)
     {
-        return workspace.ExternalModules
+        var modules = workspace.GetExternalModulesForFile(filePath);
+        return modules
             .Where(m => m.SourceModule is not null)
             .Select(m => m.SourceModule!)
             .Distinct()
@@ -148,9 +149,10 @@ public class IonCompletionHandler(IonWorkspace workspace) : CompletionHandlerBas
             .ToList();
     }
 
-    private List<CompletionItem> GetModuleTypeCompletions(string moduleName)
+    private List<CompletionItem> GetModuleTypeCompletions(string filePath, string moduleName)
     {
-        return workspace.ExternalModules
+        var modules = workspace.GetExternalModulesForFile(filePath);
+        return modules
             .Where(m => m.SourceModule == moduleName)
             .SelectMany(m => m.Definitions)
             .Select(d => new CompletionItem
@@ -162,9 +164,10 @@ public class IonCompletionHandler(IonWorkspace workspace) : CompletionHandlerBas
             .ToList();
     }
 
-    private List<CompletionItem> GetAllExternalTypeCompletions()
+    private List<CompletionItem> GetAllExternalTypeCompletions(string filePath)
     {
-        return workspace.ExternalModules
+        var modules = workspace.GetExternalModulesForFile(filePath);
+        return modules
             .Where(m => m.SourceModule is not null)
             .SelectMany(m => m.Definitions.Select(d => (Module: m.SourceModule!, Type: d)))
             .Select(x => new CompletionItem

@@ -1,6 +1,6 @@
 ﻿mode: ContinuousDeployment
 semantic-version-format: Strict
-next-version: 1.10.0
+next-version: 1.11.0
 
 strategies:
   - ConfiguredNextVersion
