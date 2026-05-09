@@ -20,6 +20,7 @@ public sealed class ModuleResolver
     /// </summary>
     public sealed record ResolvedModule(
         string Name,
+        string ProjectName,
         string ConfigPath,
         string RootPath,
         IReadOnlyList<IonFileSyntax> Files,
@@ -109,7 +110,8 @@ public sealed class ModuleResolver
             var childModules = config.Modules ?? new Dictionary<string, string>();
 
             var resolved = new ResolvedModule(
-                Name: config.Name ?? name,
+                Name: name,
+                ProjectName: config.Name ?? name,
                 ConfigPath: configPath,
                 RootPath: moduleRoot,
                 Files: parsedFiles,
