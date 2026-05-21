@@ -248,3 +248,70 @@ public sealed class TypeScriptTypeNameResolver : TypeNameResolverBase
         };
     }
 }
+
+/// <summary>
+/// Rust реализация type resolver.
+/// </summary>
+public sealed class RustTypeNameResolver : TypeNameResolverBase
+{
+    private static readonly Dictionary<string, string> PrimitiveMap = new()
+    {
+        ["void"] = "()",
+        ["bool"] = "bool",
+        ["i1"] = "i8",
+        ["i2"] = "i16",
+        ["i4"] = "i32",
+        ["i8"] = "i64",
+        ["i16"] = "i128",
+        ["u1"] = "u8",
+        ["u2"] = "u16",
+        ["u4"] = "u32",
+        ["u8"] = "u64",
+        ["u16"] = "u128",
+        ["f2"] = "ion_rustcore::IonF16",
+        ["f4"] = "f32",
+        ["f8"] = "f64",
+        ["string"] = "String",
+        ["bytes"] = "ion_rustcore::IonBytes",
+        ["guid"] = "uuid::Uuid",
+        ["datetime"] = "chrono::DateTime<chrono::FixedOffset>",
+        ["dateonly"] = "ion_rustcore::IonDateOnly",
+        ["timeonly"] = "ion_rustcore::IonTimeOnly",
+        ["duration"] = "ion_rustcore::IonDuration",
+        ["bigint"] = "i128",
+        ["uri"] = "String",
+    };
+
+    public override string ResolvePrimitive(string ionTypeName)
+        => PrimitiveMap.GetValueOrDefault(ionTypeName, ionTypeName);
+
+    public override string ResolveUnionInterface(IonUnion union) => union.name.Identifier;
+
+    public override string WrapNullable(string typeName) => $"Option<{typeName}>";
+
+    public override string WrapArray(string typeName) => $"Vec<{typeName}>";
+
+    public override string FormatGeneric(string baseName, IEnumerable<string> typeArgs)
+        => $"{baseName}<{string.Join(", ", typeArgs)}>";
+
+    public override string ResolveFormatterRef(IonType type)
+    {
+        if (type.IsVoid)
+            throw new InvalidOperationException("Cannot get formatter ref for void type");
+        var resolved = Resolve(type);
+        return $"<{resolved} as IonFormat>::ion_read(d)?";
+    }
+
+    /// <summary>
+    /// Returns the write expression for a given type.
+    /// </summary>
+    public string ResolveWriteRef(IonType type, string valueExpr)
+    {
+        var resolved = Resolve(type);
+        return $"{valueExpr}.ion_write(e)?;";
+    }
+
+    protected override string MaybeWrapperName => "ion_rustcore::IonMaybe";
+    protected override string PartialWrapperName => "Option"; // Partial as all-Optional in Rust
+    protected override string ArrayWrapperName => "Vec";
+}

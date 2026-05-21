@@ -414,3 +414,6 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+src/tests/Contracts/gen-rust/target/
+
+packages/ion.rustcore/target/

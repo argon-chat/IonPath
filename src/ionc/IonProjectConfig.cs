@@ -143,10 +143,25 @@ public sealed record GoGeneratorConfig : IonPlatformConfig
     [JsonPropertyName("packageName")] public string? PackageName { get; init; }
 }
 
+public sealed record RustGeneratorConfig : IonPlatformConfig
+{
+    [JsonPropertyName("features")] public required HashSet<RustFeature> Features { get; init; }
+    [JsonPropertyName("outputs")] public required string Outputs { get; init; }
+    [JsonPropertyName("crateName")] public string? CrateName { get; init; }
+    [JsonPropertyName("rustcorePath")] public string? RustcorePath { get; init; }
+}
+
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum GoFeature
 {
     Server,
+    Client,
+    Models
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum RustFeature
+{
     Client,
     Models
 }
@@ -171,6 +186,11 @@ internal sealed class IonPlatformConfigConverter : JsonConverter<IonPlatformConf
         {
             // Browser config has outputFile
             return JsonSerializer.Deserialize<BrowserGeneratorConfig>(root.GetRawText(), options);
+        }
+        else if (root.TryGetProperty("crateName", out _))
+        {
+            // Rust config has crateName
+            return JsonSerializer.Deserialize<RustGeneratorConfig>(root.GetRawText(), options);
         }
         else if (root.TryGetProperty("packageName", out _))
         {
@@ -209,6 +229,9 @@ internal sealed class IonPlatformConfigConverter : JsonConverter<IonPlatformConf
                 break;
             case GoGeneratorConfig g:
                 JsonSerializer.Serialize(writer, g, options);
+                break;
+            case RustGeneratorConfig r:
+                JsonSerializer.Serialize(writer, r, options);
                 break;
             default:
                 throw new JsonException($"Unsupported platform config type: {value.GetType().Name}");

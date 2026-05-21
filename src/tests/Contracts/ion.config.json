@@ -11,6 +11,14 @@
         "models"
       ],
       "outputs": "./"
+    },
+    "rust": {
+      "features": [
+        "client"
+      ],
+      "outputs": "./gen-rust",
+      "crateName": "test-contracts",
+      "rustcorePath": "../../../../packages/ion.rustcore"
     }
   }
 }

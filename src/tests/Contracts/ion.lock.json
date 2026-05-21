@@ -1,0 +1,352 @@
+{
+  "version": 1,
+  "module": "TestContracts",
+  "definitions": {
+    "TestBlobs": {
+      "kind": "Service",
+      "methods": {
+        "Do": {
+          "args": [
+            {
+              "index": 0,
+              "name": "data",
+              "type": "bytes"
+            }
+          ],
+          "returns": "void",
+          "modifiers": []
+        },
+        "DoIt": {
+          "args": [
+            {
+              "index": 0,
+              "name": "data",
+              "type": "bytes"
+            }
+          ],
+          "returns": "bytes",
+          "modifiers": []
+        },
+        "DoIt2": {
+          "args": [
+            {
+              "index": 0,
+              "name": "data",
+              "type": "bytes"
+            }
+          ],
+          "returns": "bytes",
+          "modifiers": []
+        },
+        "DoIt3": {
+          "args": [
+            {
+              "index": 0,
+              "name": "data",
+              "type": "bytes"
+            }
+          ],
+          "returns": "bytes",
+          "modifiers": []
+        }
+      }
+    },
+    "MathInteraction": {
+      "kind": "Service",
+      "methods": {
+        "Add": {
+          "args": [
+            {
+              "index": 0,
+              "name": "leftOperand",
+              "type": "i4"
+            },
+            {
+              "index": 1,
+              "name": "rightOperand",
+              "type": "i4"
+            }
+          ],
+          "returns": "i4",
+          "modifiers": []
+        },
+        "Mul": {
+          "args": [
+            {
+              "index": 0,
+              "name": "leftOperand",
+              "type": "i4"
+            },
+            {
+              "index": 1,
+              "name": "rightOperand",
+              "type": "i4"
+            }
+          ],
+          "returns": "i4",
+          "modifiers": []
+        },
+        "Sub": {
+          "args": [
+            {
+              "index": 0,
+              "name": "leftOperand",
+              "type": "i4"
+            },
+            {
+              "index": 1,
+              "name": "rightOperand",
+              "type": "i4"
+            }
+          ],
+          "returns": "i4",
+          "modifiers": []
+        },
+        "Div": {
+          "args": [
+            {
+              "index": 0,
+              "name": "leftOperand",
+              "type": "i4"
+            },
+            {
+              "index": 1,
+              "name": "rightOperand",
+              "type": "i4"
+            }
+          ],
+          "returns": "i4",
+          "modifiers": []
+        },
+        "Pow": {
+          "args": [
+            {
+              "index": 0,
+              "name": "leftOperand",
+              "type": "i4"
+            },
+            {
+              "index": 1,
+              "name": "rightOperand",
+              "type": "i4"
+            }
+          ],
+          "returns": "i4",
+          "modifiers": []
+        },
+        "PowArray": {
+          "args": [
+            {
+              "index": 0,
+              "name": "leftOperand",
+              "type": "i4"
+            },
+            {
+              "index": 1,
+              "name": "rightOperand",
+              "type": "Array\u003Ci4\u003E"
+            }
+          ],
+          "returns": "Array\u003Ci4\u003E",
+          "modifiers": []
+        },
+        "ToPositive": {
+          "args": [
+            {
+              "index": 0,
+              "name": "leftOperand",
+              "type": "i4"
+            },
+            {
+              "index": 1,
+              "name": "rightOperand",
+              "type": "Maybe\u003Ci4\u003E"
+            }
+          ],
+          "returns": "Maybe\u003Ci4\u003E",
+          "modifiers": []
+        }
+      }
+    },
+    "RandomStreamInteraction": {
+      "kind": "Service",
+      "methods": {
+        "Integer": {
+          "args": [
+            {
+              "index": 0,
+              "name": "seed",
+              "type": "i4"
+            },
+            {
+              "index": 1,
+              "name": "i",
+              "type": "i4"
+            }
+          ],
+          "returns": "i4",
+          "modifiers": [
+            "stream"
+          ]
+        },
+        "Floats": {
+          "args": [
+            {
+              "index": 0,
+              "name": "seed",
+              "type": "i4"
+            },
+            {
+              "index": 1,
+              "name": "i",
+              "type": "f4",
+              "modifier": "stream"
+            }
+          ],
+          "returns": "f4",
+          "modifiers": [
+            "stream"
+          ]
+        }
+      }
+    },
+    "Vector": {
+      "kind": "Msg",
+      "nextIndex": 3,
+      "fields": [
+        {
+          "index": 0,
+          "name": "x",
+          "type": "f4"
+        },
+        {
+          "index": 1,
+          "name": "y",
+          "type": "f4"
+        },
+        {
+          "index": 2,
+          "name": "z",
+          "type": "f4"
+        }
+      ]
+    },
+    "VectorOfVector": {
+      "kind": "Msg",
+      "nextIndex": 3,
+      "fields": [
+        {
+          "index": 0,
+          "name": "x",
+          "type": "Vector"
+        },
+        {
+          "index": 1,
+          "name": "y",
+          "type": "Vector"
+        },
+        {
+          "index": 2,
+          "name": "z",
+          "type": "Vector"
+        }
+      ]
+    },
+    "VectorOfVectorOfVector": {
+      "kind": "Msg",
+      "nextIndex": 2,
+      "fields": [
+        {
+          "index": 0,
+          "name": "z",
+          "type": "VectorOfVector"
+        },
+        {
+          "index": 1,
+          "name": "w",
+          "type": "VectorOfVector"
+        }
+      ]
+    },
+    "VectorMathInteraction": {
+      "kind": "Service",
+      "methods": {
+        "Abs": {
+          "args": [
+            {
+              "index": 0,
+              "name": "leftOperand",
+              "type": "Vector"
+            }
+          ],
+          "returns": "Vector",
+          "modifiers": []
+        },
+        "Add": {
+          "args": [
+            {
+              "index": 0,
+              "name": "leftOperand",
+              "type": "Vector"
+            },
+            {
+              "index": 1,
+              "name": "rightOperand",
+              "type": "Vector"
+            }
+          ],
+          "returns": "Vector",
+          "modifiers": []
+        },
+        "AndNot": {
+          "args": [
+            {
+              "index": 0,
+              "name": "leftOperand",
+              "type": "Vector"
+            },
+            {
+              "index": 1,
+              "name": "rightOperand",
+              "type": "Vector"
+            }
+          ],
+          "returns": "Vector",
+          "modifiers": []
+        },
+        "Clamp": {
+          "args": [
+            {
+              "index": 0,
+              "name": "leftOperand",
+              "type": "Vector"
+            },
+            {
+              "index": 1,
+              "name": "min",
+              "type": "Vector"
+            },
+            {
+              "index": 2,
+              "name": "max",
+              "type": "Vector"
+            }
+          ],
+          "returns": "Vector",
+          "modifiers": []
+        },
+        "Do": {
+          "args": [
+            {
+              "index": 0,
+              "name": "leftOperand",
+              "type": "Vector"
+            }
+          ],
+          "returns": "VectorOfVectorOfVector",
+          "modifiers": []
+        }
+      }
+    }
+  }
+}

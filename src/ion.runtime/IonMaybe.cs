@@ -1,6 +1,7 @@
 ﻿namespace ion.runtime;
 
 using System;
+using System.Collections;
 
 public readonly record struct IonMaybe<T>
 {
@@ -31,7 +32,7 @@ public readonly record struct IonMaybe<T>
     public T UnwrapOr(T @default) => HasValue ? Value : @default;
 }
 
-public readonly record struct IonArray<T>
+public readonly record struct IonArray<T> : IReadOnlyList<T>
 {
     public IReadOnlyList<T> Values { get; }
 
@@ -40,6 +41,7 @@ public readonly record struct IonArray<T>
     public int Size => Values?.Count ?? 0;
 
     public T this[in int index] => Values[index];
+    public T this[int index] => Values[index];
 
     public IonArray(IEnumerable<T> enumerable) => Values = enumerable.ToList().AsReadOnly();
     public IonArray(IList<T> enumerable) => Values = enumerable.AsReadOnly();
@@ -53,4 +55,8 @@ public readonly record struct IonArray<T>
     public static implicit operator IonArray<T>(List<T> enumerable) =>
         new(enumerable);
 
+    public IEnumerator<T> GetEnumerator() => Values.GetEnumerator();
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+    public int Count => Size;
 }

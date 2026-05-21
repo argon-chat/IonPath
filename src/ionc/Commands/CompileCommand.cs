@@ -229,9 +229,6 @@ public class CompileCommand : AsyncCommand<CompileOptions>
 
         foreach (var (key, value) in project.Generators)
         {
-            if (key is IonGeneratorPlatform.Rust)
-                throw new NotSupportedException($"Platform {key} currently is not supported");
-
             if (!string.IsNullOrEmpty(options.OnlyTarget))
             {
                 if (!options.OnlyTarget.Equals(key.ToString(), StringComparison.OrdinalIgnoreCase))
@@ -308,6 +305,34 @@ public class CompileCommand : AsyncCommand<CompileOptions>
                     includeClient: cfg.Features.Contains(GoFeature.Client));
 
                 File.WriteAllText(outputDirectoryForFiles.File($"{packageName}_generated.go").FullName, content);
+                AnsiConsole.MarkupLine($"    [green]✓[/] Generated to [dim]{cfg.Outputs}[/]");
+            }
+
+            if (key is IonGeneratorPlatform.Rust)
+            {
+                var cfg = value as RustGeneratorConfig;
+                var generator = new RustCodeGenerator(project.Name);
+                var outputDirectoryForFiles = new DirectoryInfo(projectFile.Directory!.Combine(cfg!.Outputs).FullName);
+
+                if (!outputDirectoryForFiles.Exists)
+                    outputDirectoryForFiles.Create();
+
+                // Clean old .rs files
+                foreach (var file in outputDirectoryForFiles.EnumerateFiles("*.rs"))
+                    file.Delete();
+
+                // Generate Cargo.toml
+                var crateName = cfg.CrateName ?? project.Name.ToLowerInvariant().Replace(".", "-");
+                generator.GenerateProjectFile(crateName, outputDirectoryForFiles.File("Cargo.toml"), cfg.RustcorePath);
+
+                // Generate single file with types, formatters, and clients
+                var rustContent = generator.GenerateSingleFile(ctx);
+
+                var srcDir = outputDirectoryForFiles.Directory("src");
+                if (!srcDir.Exists)
+                    srcDir.Create();
+
+                File.WriteAllText(srcDir.File("lib.rs").FullName, rustContent);
                 AnsiConsole.MarkupLine($"    [green]✓[/] Generated to [dim]{cfg.Outputs}[/]");
             }
         }

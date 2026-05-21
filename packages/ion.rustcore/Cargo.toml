@@ -1,0 +1,23 @@
+[package]
+name = "ion-rustcore"
+version = "0.1.0"
+edition = "2021"
+description = "IonPath runtime library for Rust clients — CBOR-based RPC with unary and streaming support"
+license = "MIT"
+repository = "https://github.com/argon-chat/IonPath"
+homepage = "https://github.com/argon-chat/IonPath"
+keywords = ["rpc", "cbor", "codegen", "ion"]
+categories = ["network-programming", "encoding"]
+readme = "README.md"
+
+[dependencies]
+minicbor = { version = "2", features = ["std", "half"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
+tokio = { version = "1", features = ["rt", "macros", "sync"] }
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"] }
+futures-util = "0.3"
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+async-trait = "0.1"
+thiserror = "2"
+base64 = "0.22"
