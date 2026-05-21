@@ -85,6 +85,20 @@ public sealed class RustCodeGenerator : CodeGeneratorBase
         => throw new NotSupportedException("Rust target is client-only");
 
     // ═══════════════════════════════════════════════════════════════════
+    // ENUM OVERRIDE — pass correct repr type
+    // ═══════════════════════════════════════════════════════════════════
+
+    protected override string GenerateEnum(IonEnum e)
+    {
+        var members = e.members.Select(m => new EnumMember(
+            m.name.Identifier,
+            FormatEnumValue(m.constantValue, m.type)
+        ));
+        var baseType = _rustResolver.ResolvePrimitive(e.baseType.name.Identifier);
+        return Emitter.EnumDeclaration(e.name.Identifier, members, new EnumOptions(baseType));
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
     // SERVICE CLIENT IMPL
     // ═══════════════════════════════════════════════════════════════════
 
