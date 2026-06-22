@@ -1,12 +1,17 @@
 import * as path from "path";
 import * as net from "net";
 import * as cp from "child_process";
+import * as fs from "fs";
+import { promisify } from "util";
 import * as vscode from "vscode";
 import {
   LanguageClient,
   LanguageClientOptions,
   StreamInfo,
 } from "vscode-languageclient/node";
+
+// Async exec wrapper: never blocks the extension host event loop (unlike execSync).
+const execFileAsync = promisify(cp.execFile);
 
 let client: LanguageClient | undefined;
 let serverProcess: cp.ChildProcess | undefined;
@@ -19,15 +24,15 @@ const MIN_IONC_VERSION = "1.4.0";
 
 async function checkDotnet(): Promise<boolean> {
   try {
-    const result = cp.execSync("dotnet --version", { encoding: "utf8", timeout: 10000 });
-    outputChannel.appendLine(`[ionc] .NET SDK: ${result.trim()}`);
+    const { stdout } = await execFileAsync("dotnet", ["--version"], { encoding: "utf8", timeout: 10000 });
+    outputChannel.appendLine(`[ionc] .NET SDK: ${stdout.trim()}`);
     return true;
   } catch {
     return false;
   }
 }
 
-function findIonc(context: vscode.ExtensionContext): string | null {
+async function findIonc(context: vscode.ExtensionContext): Promise<string | null> {
   const config = vscode.workspace.getConfiguration("ionpath");
   const configured = config.get<string>("compilerPath", "");
 
@@ -42,7 +47,7 @@ function findIonc(context: vscode.ExtensionContext): string | null {
       context.extensionPath, "..", "..", "src", "ionc", "bin", "Debug", "net10.0", `ionc${ext}`
     );
     try {
-      require("fs").accessSync(devPath);
+      await fs.promises.access(devPath);
       return devPath;
     } catch {
       return null;
@@ -51,19 +56,18 @@ function findIonc(context: vscode.ExtensionContext): string | null {
 
   // Check if ionc is in PATH
   try {
-    const cmd = process.platform === "win32" ? "where ionc" : "which ionc";
-    const result = cp.execSync(cmd, { encoding: "utf8", timeout: 5000 }).trim();
-    return result.split(/\r?\n/)[0];
+    const cmd = process.platform === "win32" ? "where" : "which";
+    const { stdout } = await execFileAsync(cmd, ["ionc"], { encoding: "utf8", timeout: 5000 });
+    return stdout.trim().split(/\r?\n/)[0] || null;
   } catch {
     return null;
   }
 }
 
-function getIoncVersion(ioncPath: string): string | null {
+async function getIoncVersion(ioncPath: string): Promise<string | null> {
   try {
-    // ionc serve outputs version in stderr, or we can check the assembly
-    const result = cp.execSync(`"${ioncPath}" --version`, { encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"] });
-    return result.trim();
+    const { stdout } = await execFileAsync(ioncPath, ["--version"], { encoding: "utf8", timeout: 5000 });
+    return stdout.trim() || null;
   } catch {
     // ionc doesn't support --version yet, assume OK
     return null;
@@ -96,7 +100,7 @@ async function ensurePrerequisites(context: vscode.ExtensionContext): Promise<st
   }
 
   // 2. Check ionc
-  const ioncPath = findIonc(context);
+  const ioncPath = await findIonc(context);
   if (!ioncPath) {
     const action = await vscode.window.showErrorMessage(
       "IonPath compiler (ionc) not found. Install it as a .NET global tool.",
@@ -115,7 +119,7 @@ async function ensurePrerequisites(context: vscode.ExtensionContext): Promise<st
   }
 
   // 3. Check version (if supported)
-  const version = getIoncVersion(ioncPath);
+  const version = await getIoncVersion(ioncPath);
   if (version && compareVersions(version, MIN_IONC_VERSION) < 0) {
     const action = await vscode.window.showWarningMessage(
       `IonPath: ionc version ${version} is outdated. Minimum required: ${MIN_IONC_VERSION}.`,
@@ -236,8 +240,8 @@ class IonProjectTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
   private nodes: SchemaNode[] = [];
 
-  refresh() {
-    this.nodes = this.scanWorkspace();
+  async refresh() {
+    this.nodes = await this.scanWorkspace();
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -284,43 +288,27 @@ class IonProjectTreeProvider implements vscode.TreeDataProvider<SchemaNode> {
     }
   }
 
-  private scanWorkspace(): SchemaNode[] {
+  private async scanWorkspace(): Promise<SchemaNode[]> {
     const nodes: SchemaNode[] = [];
-    const folders = vscode.workspace.workspaceFolders;
-    if (!folders) return nodes;
+    if (!vscode.workspace.workspaceFolders) return nodes;
 
-    for (const folder of folders) {
-      const ionFiles = this.findIonFiles(folder.uri.fsPath);
-      for (const file of ionFiles) {
-        const fileNodes = this.parseFileForSymbols(file);
-        nodes.push(...fileNodes);
-      }
+    // findFiles respects files.exclude/search.exclude and runs off the UI thread,
+    // so it skips node_modules/bin/obj and never blocks the extension host.
+    const uris = await vscode.workspace.findFiles("**/*.ion", "**/node_modules/**");
+    const fileNodeLists = await Promise.all(
+      uris.map((uri) => this.parseFileForSymbols(uri.fsPath))
+    );
+    for (const fileNodes of fileNodeLists) {
+      nodes.push(...fileNodes);
     }
 
     return nodes;
   }
 
-  private findIonFiles(dir: string): string[] {
-    const fs = require("fs");
-    const results: string[] = [];
-    try {
-      const entries = fs.readdirSync(dir, { withFileTypes: true, recursive: true });
-      for (const entry of entries) {
-        if (entry.isFile() && entry.name.endsWith(".ion")) {
-          results.push(path.join(entry.parentPath || entry.path || dir, entry.name));
-        }
-      }
-    } catch {
-      // ignore
-    }
-    return results;
-  }
-
-  private parseFileForSymbols(filePath: string): SchemaNode[] {
-    const fs = require("fs");
+  private async parseFileForSymbols(filePath: string): Promise<SchemaNode[]> {
     const nodes: SchemaNode[] = [];
     try {
-      const content: string = fs.readFileSync(filePath, "utf8");
+      const content = await fs.promises.readFile(filePath, "utf8");
       const lines = content.split("\n");
 
       for (const line of lines) {
@@ -367,13 +355,13 @@ export async function activate(context: vscode.ExtensionContext) {
   });
   context.subscriptions.push(treeView);
 
-  // Refresh tree on file changes
+  // Refresh tree on file changes (fire-and-forget; refresh is async and self-contained)
   const watcher = vscode.workspace.createFileSystemWatcher("**/*.ion");
-  watcher.onDidChange(() => treeProvider.refresh());
-  watcher.onDidCreate(() => treeProvider.refresh());
-  watcher.onDidDelete(() => treeProvider.refresh());
+  watcher.onDidChange(() => void treeProvider.refresh());
+  watcher.onDidCreate(() => void treeProvider.refresh());
+  watcher.onDidDelete(() => void treeProvider.refresh());
   context.subscriptions.push(watcher);
-  treeProvider.refresh();
+  void treeProvider.refresh();
 
   // Commands
   context.subscriptions.push(
@@ -393,8 +381,9 @@ export async function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // Start server
-  await startServer(context);
+  // Start server in the background so activation returns immediately and the
+  // extension host is never blocked waiting on dotnet/ionc probing or LSP startup.
+  void startServer(context);
 }
 
 async function startServer(context: vscode.ExtensionContext) {

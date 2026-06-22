@@ -1,4 +1,5 @@
 ﻿using System.Globalization;
+using System.Reflection;
 using Microsoft.Extensions.Hosting;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -7,6 +8,22 @@ using ion.compiler.Commands;
 using ion.compiler.Lsp;
 using Microsoft.Extensions.Logging;
 using Spectre.Console.Cli;
+
+static string GetIoncVersion()
+{
+    var asm = Assembly.GetExecutingAssembly();
+    var informational = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+    // SourceLink/GitVersion appends "+<commit>"; strip it for a clean SemVer.
+    var version = informational?.Split('+')[0];
+    return version ?? asm.GetName().Version?.ToString(3) ?? "0.0.0";
+}
+
+// --version: intercept early so we print quickly without spinning up the generic host.
+if (args.Length > 0 && (args[0] == "--version" || args[0] == "-v"))
+{
+    Console.WriteLine(GetIoncVersion());
+    return 0;
+}
 
 
 // LSP serve mode: intercept before Spectre/Console setup
@@ -45,6 +62,7 @@ await Host.CreateDefaultBuilder(args)
     .UseSpectreConsole(config => {
         config.SetApplicationCulture(CultureInfo.InvariantCulture);
         config.SetApplicationName("ionc");
+        config.SetApplicationVersion(GetIoncVersion());
 
         config.AddCommand<CompileCommand>("compile").WithAlias("build");
         config.AddCommand<CheckCommand>("check");
