@@ -73,7 +73,7 @@ public class IonSignatureHelpHandler(IonWorkspace workspace) : SignatureHelpHand
                     var parameters = method.arguments.Select(a => new ParameterInformation
                     {
                         Label = new ParameterInformationLabel($"{a.argName.Identifier}: {a.type.Name.Identifier}"),
-                        Documentation = $"Type: `{a.type.Name.Identifier}`"
+                        Documentation = IonDocMarkdown.WithDoc(a.Comments, $"Type: `{a.type.Name.Identifier}`")
                     }).ToList();
 
                     var args = string.Join(", ", method.arguments.Select(a =>
@@ -83,7 +83,8 @@ public class IonSignatureHelpHandler(IonWorkspace workspace) : SignatureHelpHand
                     signatures.Add(new SignatureInformation
                     {
                         Label = $"{method.methodName.Identifier}({args}){ret}",
-                        Documentation = $"Method of service `{svc.serviceName.Identifier}`",
+                        Documentation = IonDocMarkdown.WithDoc(
+                            method.Comments, $"Method of service `{svc.serviceName.Identifier}`"),
                         Parameters = new Container<ParameterInformation>(parameters)
                     });
                 }
@@ -95,7 +96,7 @@ public class IonSignatureHelpHandler(IonWorkspace workspace) : SignatureHelpHand
                     var parameters = svc.BaseArguments.Select(a => new ParameterInformation
                     {
                         Label = new ParameterInformationLabel($"{a.argName.Identifier}: {a.type.Name.Identifier}"),
-                        Documentation = $"Type: `{a.type.Name.Identifier}`"
+                        Documentation = IonDocMarkdown.WithDoc(a.Comments, $"Type: `{a.type.Name.Identifier}`")
                     }).ToList();
 
                     var args = string.Join(", ", svc.BaseArguments.Select(a =>
@@ -104,7 +105,7 @@ public class IonSignatureHelpHandler(IonWorkspace workspace) : SignatureHelpHand
                     signatures.Add(new SignatureInformation
                     {
                         Label = $"service {svc.serviceName.Identifier}({args})",
-                        Documentation = "Service base arguments",
+                        Documentation = IonDocMarkdown.WithDoc(svc.Comments, "Service base arguments"),
                         Parameters = new Container<ParameterInformation>(parameters)
                     });
                 }
@@ -119,7 +120,7 @@ public class IonSignatureHelpHandler(IonWorkspace workspace) : SignatureHelpHand
                 var parameters = attr.Args.Select(a => new ParameterInformation
                 {
                     Label = new ParameterInformationLabel($"{a.argName.Identifier}: {a.type.Name.Identifier}"),
-                    Documentation = $"Type: `{a.type.Name.Identifier}`"
+                    Documentation = IonDocMarkdown.WithDoc(a.Comments, $"Type: `{a.type.Name.Identifier}`")
                 }).ToList();
 
                 var args = string.Join(", ", attr.Args.Select(a =>
@@ -128,7 +129,7 @@ public class IonSignatureHelpHandler(IonWorkspace workspace) : SignatureHelpHand
                 signatures.Add(new SignatureInformation
                 {
                     Label = $"@{attr.Name.Identifier}({args})",
-                    Documentation = "Attribute",
+                    Documentation = IonDocMarkdown.WithDoc(attr.Comments, "Attribute"),
                     Parameters = new Container<ParameterInformation>(parameters)
                 });
             }

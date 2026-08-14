@@ -1,8 +1,10 @@
 {
     "comments": {
-        // symbol used for single line comment. Remove this entry if your language does not support line comments
+        // `//` is an ordinary line comment (pure trivia) — safe for Ctrl+/ toggling.
+        // Doc comments (`///`, `//!`) are deliberately NOT used here: toggling a
+        // comment must never accidentally attach documentation to a declaration.
         "lineComment": "//",
-        // symbols used for start and end a block comment. Remove this entry if your language does not support block comments
+        // `/* */` is an ordinary, non-nesting block comment.
         "blockComment": [ "/*", "*/" ]
     },
     // symbols used as brackets
@@ -13,11 +15,15 @@
     ],
     // symbols that are auto closed when typing
     "autoClosingPairs": [
-        ["{", "}"],
-        ["[", "]"],
-        ["(", ")"],
-        ["\"", "\""],
-        ["'", "'"]
+        { "open": "{", "close": "}" },
+        { "open": "[", "close": "]" },
+        { "open": "(", "close": ")" },
+        // Quotes must not auto-close inside comments — otherwise typing an
+        // apostrophe in `/// Doesn't do X` inserts a stray closing quote.
+        { "open": "\"", "close": "\"", "notIn": ["string", "comment"] },
+        { "open": "'", "close": "'", "notIn": ["string", "comment"] },
+        // Typing `/**` opens a doc block comment and closes it for you.
+        { "open": "/**", "close": " */", "notIn": ["string"] }
     ],
     // symbols that can be used to surround a selection
     "surroundingPairs": [
@@ -26,5 +32,48 @@
         ["(", ")"],
         ["\"", "\""],
         ["'", "'"]
+    ],
+    // Do not auto-close brackets/quotes when the cursor is directly before one
+    // of these characters.
+    "autoCloseBefore": ";:.,=}])>` \n\t",
+    "onEnterRules": [
+        {
+            // Enter between `/**` and `*/` on the same line: expand to a
+            // three-line block with the cursor on a ` * ` continuation line.
+            "beforeText": "^\\s*/\\*\\*(?!/)([^\\*]|\\*(?!/))*$",
+            "afterText": "^\\s*\\*/$",
+            "action": { "indent": "indentOutdent", "appendText": " * " }
+        },
+        {
+            // Enter on a `/**` opener line: continue with ` * `.
+            "beforeText": "^\\s*/\\*\\*(?!/)([^\\*]|\\*(?!/))*$",
+            "action": { "indent": "none", "appendText": " * " }
+        },
+        {
+            // Enter on a ` * ` continuation line inside a block comment.
+            "beforeText": "^(\\t|[ ])*[ ]\\*([ ]([^\\*]|\\*(?!/))*)?$",
+            "previousLineText": "(?=^(\\s*(/\\*\\*|\\*)).*)(?=(?!(\\s*\\*/)))",
+            "action": { "indent": "none", "appendText": "* " }
+        },
+        {
+            // Enter after the closing ` */`: drop the extra leading space.
+            "beforeText": "^(\\t|[ ])*[ ]\\*/\\s*$",
+            "action": { "indent": "none", "removeText": 1 }
+        },
+        {
+            "beforeText": "^(\\t|[ ])*[ ]\\*[^/]*\\*/\\s*$",
+            "action": { "indent": "none", "removeText": 1 }
+        },
+        {
+            // Enter on a `//!` module doc line: continue the module doc block.
+            "beforeText": "^\\s*//!.*$",
+            "action": { "indent": "none", "appendText": "//! " }
+        },
+        {
+            // Enter on a `///` doc line: continue the doc block. `////` is an
+            // ordinary comment to the compiler, so it is excluded here too.
+            "beforeText": "^\\s*///(?!/).*$",
+            "action": { "indent": "none", "appendText": "/// " }
+        }
     ]
 }

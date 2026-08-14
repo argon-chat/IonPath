@@ -13,24 +13,80 @@
 
 
 namespace TestContracts;
+// Arithmetic RPC surface used by the IonPath integration tests.
+//
+// Every service in this module is stateless: the left-hand operand is bound
+// once, as a service argument, and reused by every method call on that client.
 
+/// <summary>
+/// Integer arithmetic over a fixed left-hand operand.
+///
+/// The operand is supplied when the client is constructed, so calling Add(2)
+/// on a client created with leftOperand = 40 yields 42.
+/// </summary>
 [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
 public interface IMathInteraction : IIonService
 {
+    /// <summary>
+    /// Adds rightOperand to the bound operand.
+    /// </summary>
+    /// <param name="leftOperand">The left-hand operand shared by every method on this service.</param>
     Task<i4> Add(i4 leftOperand, i4 rightOperand, CancellationToken ct = default);
+    /// <summary>
+    /// Multiplies the bound operand by rightOperand.
+    /// </summary>
+    /// <param name="leftOperand">The left-hand operand shared by every method on this service.</param>
     Task<i4> Mul(i4 leftOperand, i4 rightOperand, CancellationToken ct = default);
+    /// <summary>
+    /// Subtracts rightOperand from the bound operand.
+    /// </summary>
+    /// <param name="leftOperand">The left-hand operand shared by every method on this service.</param>
     Task<i4> Sub(i4 leftOperand, i4 rightOperand, CancellationToken ct = default);
+    /// <summary>
+    /// Divides the bound operand by rightOperand.
+    ///
+    /// Division by zero surfaces as an RPC fault, not as a return value.
+    /// </summary>
+    /// <param name="leftOperand">The left-hand operand shared by every method on this service.</param>
     Task<i4> Div(i4 leftOperand, i4 rightOperand, CancellationToken ct = default);
+    /// <summary>
+    /// Raises the bound operand to the power of rightOperand.
+    /// </summary>
+    /// <param name="leftOperand">The left-hand operand shared by every method on this service.</param>
     Task<i4> Pow(i4 leftOperand, i4 rightOperand, CancellationToken ct = default);
+    /// <summary>
+    /// Raises the bound operand to each power in rightOperand, elementwise.
+    ///
+    /// The result array has the same length as the input array.
+    /// </summary>
+    /// <param name="leftOperand">The left-hand operand shared by every method on this service.</param>
     Task<IonArray<i4>> PowArray(i4 leftOperand, IonArray<i4> rightOperand, CancellationToken ct = default);
+    /// <summary>
+    /// Returns the absolute value of rightOperand, or null when it is null.
+    /// </summary>
+    /// <param name="leftOperand">The left-hand operand shared by every method on this service.</param>
     Task<i4?> ToPositive(i4 leftOperand, i4? rightOperand, CancellationToken ct = default);
 }
 
 
+/// <summary>
+/// Deterministic pseudo-random streams seeded by the caller.
+/// </summary>
 [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
 public interface IRandomStreamInteraction : IIonService
 {
+    /// <summary>
+    /// Streams i pseudo-random integers derived from the seed.
+    /// </summary>
+    /// <param name="seed">Seed for the underlying generator. The same seed always yields the
+    /// same sequence, which is what makes the streaming tests reproducible.</param>
     IAsyncEnumerable<i4> Integer(i4 seed, i4 i, CancellationToken ct = default);
+    /// <summary>
+    /// Bidirectional stream: every f4 pushed by the client is answered with a
+    /// pseudo-random f4 derived from the seed and that input.
+    /// </summary>
+    /// <param name="seed">Seed for the underlying generator. The same seed always yields the
+    /// same sequence, which is what makes the streaming tests reproducible.</param>
     IAsyncEnumerable<f4> Floats(i4 seed, IAsyncEnumerable<f4>?  i, CancellationToken ct = default);
 }
 

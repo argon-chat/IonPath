@@ -145,6 +145,7 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
     <section>
       <h2 id="schema-lock" class="text-xl font-bold mb-4">Schema Lock Violations (ION0020–ION0029)</h2>
       <p class="text-sm text-text-secondary mb-4">These diagnostics fire when the current schema differs from the locked schema in <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ion.lock.json</code>:</p>
+      <p class="text-sm text-text-secondary mb-4"><a href="/guides/comments/" class="text-accent hover:underline">Comments</a> — including <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">///</code> doc comments — are never part of the locked schema, so editing documentation can never raise any of the diagnostics below.</p>
       <div class="space-y-4">
         <div class="glass rounded-xl p-4" id="ION0020">
           <div class="flex items-center gap-2 mb-2">

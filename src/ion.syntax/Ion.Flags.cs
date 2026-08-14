@@ -1,4 +1,4 @@
-﻿namespace ion.syntax;
+namespace ion.syntax;
 
 using Pidgin;
 using static Pidgin.Parser;
@@ -9,7 +9,7 @@ public partial class IonParser
     public static Parser<char, int> Integer =>
         Digit.AtLeastOnceString()
             .Select(int.Parse)
-            .Before(SkipWhitespaces);
+            .Before(SkipTrivia);
 
     public static Parser<char, int> IntExpression =>
         Map(
@@ -22,55 +22,77 @@ public partial class IonParser
                 };
             },
             Integer,
-            Try(String("<<").Before(SkipWhitespaces)),
+            Try(String("<<").Before(SkipTrivia)),
             Integer
         ).Or(Integer);
 
     private static Parser<char, IonFlagEntrySyntax> FlagEntry =>
         Map(
-            (pos, name, exprOpt) => new IonFlagEntrySyntax(name, exprOpt).WithPos(pos),
+            (lead, pos, name, exprOpt) => new IonFlagEntrySyntax(name, exprOpt)
+                .WithComments(lead.Doc)
+                .WithAttributes(lead.Attributes)
+                .WithPos(pos),
+            LeadingSection,
             CurrentPos,
-            Identifier.Before(SkipWhitespaces),
+            Identifier.Before(SkipTrivia),
             Try(
                 Char('=')
-                    .Before(SkipWhitespaces)
+                    .Before(SkipTrivia)
                     .Then(Expression)
-                    .Before(SkipWhitespaces)
+                    .Before(SkipTrivia)
             ).Optional()
         );
 
+    /// <summary>A run of value characters. Stops at <c>,</c>, <c>}</c>, end of line and at <c>/</c>.</summary>
+    private static Parser<char, string> ExpressionChunk =>
+        AnyCharExcept(',', '}', '\r', '\n', '/').AtLeastOnceString();
+
+    /// <summary>A block comment embedded in a value, e.g. <c>A = 1 /*bit 0*/ &lt;&lt; 1</c>. Collapses to a space.</summary>
+    private static Parser<char, string> ExpressionBlockComment =>
+        Try(CommentTrivia.Assert(t => t.Kind is IonTriviaKind.BlockComment or IonTriviaKind.DocBlockComment))
+            .ThenReturn(" ");
+
+    /// <summary>
+    /// The value of an enum/flags member. A block comment inside the value collapses to a space;
+    /// a <c>//</c> line comment matches neither alternative and therefore ends the value, so a
+    /// trailing <c>// note</c> is no longer swallowed into it (which used to surface as a bogus
+    /// ION0007_InvalidEnumValue).
+    /// </summary>
     private static Parser<char, IonExpression> Expression =>
-        Map((startPos, exp, endPos) => new IonExpression(exp).WithPos(startPos, endPos),
+        Map((startPos, parts, endPos) =>
+                new IonExpression(string.Concat(parts).Trim()).WithPos(startPos, endPos),
             CurrentPos,
-            AnyCharExcept(',', '}').AtLeastOnceString(),
+            OneOf(ExpressionChunk, ExpressionBlockComment).AtLeastOnce(),
             CurrentPos
         );
-    public static Parser<char, IonSyntaxMember> Flags =>
-        EnumLike("flags", (identifier, syntax, members) => new IonFlagsSyntax(identifier, syntax, members.ToList()));
 
-    public static Parser<char, IonSyntaxMember> Enums =>
-        EnumLike("enum", (identifier, syntax, members) => new IonEnumSyntax(identifier, syntax, members.ToList()));
+    private static Parser<char, IonSyntaxMember> FlagsCore =>
+        EnumLikeCore("flags", (identifier, syntax, members) => new IonFlagsSyntax(identifier, syntax, members.ToList()));
 
+    private static Parser<char, IonSyntaxMember> EnumsCore =>
+        EnumLikeCore("enum", (identifier, syntax, members) => new IonEnumSyntax(identifier, syntax, members.ToList()));
 
-    public static Parser<char, IonSyntaxMember> EnumLike(string keyword, Func<IonIdentifier, IonUnderlyingTypeSyntax, IEnumerable<IonFlagEntrySyntax>, IonSyntaxMember> ctor) =>
-        Map(IonSyntaxMember (pos, doc, attrs, name, baseType, entries, endPos) =>
+    public static Parser<char, IonSyntaxMember> Flags => WithLeading(FlagsCore);
+
+    public static Parser<char, IonSyntaxMember> Enums => WithLeading(EnumsCore);
+
+    public static Parser<char, IonSyntaxMember> EnumLike(string keyword,
+        Func<IonIdentifier, IonUnderlyingTypeSyntax, IEnumerable<IonFlagEntrySyntax>, IonSyntaxMember> ctor) =>
+        WithLeading(EnumLikeCore(keyword, ctor));
+
+    private static Parser<char, IonSyntaxMember> EnumLikeCore(string keyword,
+        Func<IonIdentifier, IonUnderlyingTypeSyntax, IEnumerable<IonFlagEntrySyntax>, IonSyntaxMember> ctor) =>
+        Map(IonSyntaxMember (pos, name, baseType, entries, endPos) =>
                 ctor(name, baseType.HasValue
                         ? baseType.Value
                         : new IonUnderlyingTypeSyntax(new IonIdentifier("u4"), [], false, false, false), entries)
-                    .WithComments(doc)
-                    .WithAttributes(attrs)
                     .WithPos(pos, endPos),
             CurrentPos,
-            LeadingDoc,
-            Attributes,
-            String(keyword).Before(SkipWhitespaces).Then(Identifier),
-            Try(Char(':').Before(SkipWhitespaces).Then(Type)).Optional(),
+            String(keyword).Before(SkipTrivia).Then(Identifier),
+            Try(Char(':').Before(SkipTrivia).Then(Type)).Optional(),
             FlagEntry
-                .Separated(Char(',').Before(SkipWhitespaces))
-                .Between(Char('{').Before(SkipWhitespaces), Char('}')),
+                .Separated(Char(',').Before(SkipTrivia))
+                .Between(Char('{').Before(SkipTrivia), SkipTriviaAll.Then(Char('}'))),
             CurrentPos
         );
-
-
-    
 }

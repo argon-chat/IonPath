@@ -70,6 +70,12 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
     {
         var sb = new StringBuilder();
         sb.AppendLine();
+
+        // Module level documentation. The browser target emits one bundled file assembled by
+        // the compile command, so the closest place a module is still identifiable is here,
+        // at the head of its service section.
+        sb.Append(DocCommentFormatter.JsDoc(module.Doc));
+
         foreach (var service in module.Services)
         {
             sb.AppendLine(GenerateService(service));
@@ -77,6 +83,28 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         }
 
         return sb.ToString();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // DOCUMENTATION HELPERS
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// JSDoc block for a declaration, or "" when undocumented. Every line carries
+    /// <paramref name="indent"/> and the block ends with a newline, so call sites
+    /// <c>Append</c> it unconditionally.
+    /// </summary>
+    private static string Doc(string? doc, string indent = "", IReadOnlyList<DocParam>? parameters = null)
+        => DocCommentFormatter.JsDoc(doc, indent, parameters);
+
+    /// <summary>
+    /// JSDoc for a service method: summary plus one <c>@param</c> per documented argument.
+    /// </summary>
+    private static string MethodDoc(IonMethod method, string indent, Func<IonArgument, string>? nameOf = null)
+    {
+        nameOf ??= a => a.name.Identifier;
+        var parameters = method.arguments.Select(a => new DocParam(nameOf(a), a.Doc)).ToList();
+        return Doc(method.Doc, indent, parameters);
     }
 
     private static string GenerateType(IonType type)
@@ -104,11 +132,15 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
     private static string GenerateEnum(IonEnum e)
     {
         var sb = new StringBuilder();
+        sb.Append(Doc(e.Doc));
         sb.AppendLine($"export enum {e.name.Identifier}");
         sb.AppendLine("{");
         foreach (var m in e.members)
+        {
+            sb.Append(Doc(m.Doc, new string(' ', 2)));
             sb.AppendLine(
                 $"{new string(' ', 2)}{m.name.Identifier} = {AppendPostfixForEnumType(m.type, m.constantValue)},");
+        }
         sb.AppendLine("}");
         return sb.ToString();
     }
@@ -116,11 +148,15 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
     private static string GenerateFlags(IonFlags f)
     {
         var sb = new StringBuilder();
+        sb.Append(Doc(f.Doc));
         sb.AppendLine($"export enum {f.name.Identifier}");
         sb.AppendLine("{");
         foreach (var m in f.members)
+        {
+            sb.Append(Doc(m.Doc, new string(' ', 2)));
             sb.AppendLine(
                 $"{new string(' ', 2)}{m.name.Identifier} = {AppendPostfixForEnumType(m.type, m.constantValue)},");
+        }
         sb.AppendLine("}");
         return sb.ToString();
     }
@@ -128,15 +164,17 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
     private static string GenerateTypedef(IonType type)
     {
         var underlying = ResolveTypeName(type.fields.FirstOrDefault()?.type);
-        return $"export type {type.name.Identifier} = {underlying};";
+        return $"{Doc(type.Doc)}export type {type.name.Identifier} = {underlying};";
     }
 
     private static string GenerateMessage(IonType type)
     {
         var sb = new StringBuilder();
+        sb.Append(Doc(type.Doc));
         sb.AppendLine($"export interface {type.name.Identifier} {{");
         foreach (var typeField in type.fields)
         {
+            sb.Append(Doc(typeField.Doc, new string(' ', 2)));
             sb.AppendLine($"{new string(' ', 2)}{GenerateField(typeField)};");
         }
 
@@ -147,12 +185,14 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
     private static string GenerateService(IonService service)
     {
         var sb = new StringBuilder();
+        sb.Append(Doc(service.Doc));
         sb.AppendLine($"export interface I{service.name.Identifier} extends IIonService");
         sb.AppendLine("{");
 
         foreach (var method in service.methods)
         {
             var args = string.Join(", ", method.arguments.Select(GenerateArgument));
+            sb.Append(MethodDoc(method, new string(' ', 2)));
             sb.AppendLine($"{new string(' ', 2)}{method.name.Identifier}({args}): {GenerateReturnType(method)};");
         }
 
@@ -517,7 +557,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string ServiceClientImplTemplate =
         """
-        export class {serviceTypename}_Executor extends ServiceExecutor<I{serviceTypename}> implements I{serviceTypename} {
+        {serviceDoc}export class {serviceTypename}_Executor extends ServiceExecutor<I{serviceTypename}> implements I{serviceTypename} {
           constructor(public ctx: IonClientContext, private signal: AbortSignal) {
               super();
           }
@@ -530,7 +570,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string ServiceClientMethodDecl =
         """
-          async {methodName}({args}): Promise<{methodReturnType}> {
+        {methodDoc}  async {methodName}({args}): Promise<{methodReturnType}> {
             const req = new IonRequest(this.ctx, "I{serviceTypename}", "{methodName}");
                   
             const writer = new CborWriter();
@@ -547,7 +587,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string ServiceClientMethodDeclNullable =
         """
-          async {methodName}({args}): Promise<{methodReturnType}> {
+        {methodDoc}  async {methodName}({args}): Promise<{methodReturnType}> {
             const req = new IonRequest(this.ctx, "I{serviceTypename}", "{methodName}");
                   
             const writer = new CborWriter();
@@ -564,7 +604,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string ServiceClientMethodDeclNoReturn =
         """
-          async {methodName}({args}): Promise<void> {
+        {methodDoc}  async {methodName}({args}): Promise<void> {
             const req = new IonRequest(this.ctx, "I{serviceTypename}", "{methodName}");
                   
             const writer = new CborWriter();
@@ -581,7 +621,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string ServiceClientMethodDeclStream =
         """
-          {methodName}({args}): AsyncIterable<{methodReturnType}> {
+        {methodDoc}  {methodName}({args}): AsyncIterable<{methodReturnType}> {
             const ws = new IonWsClient(this.ctx, "I{serviceTypename}", "{methodName}");
             
             const writer = new CborWriter();
@@ -635,6 +675,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 
             var templateMethod =
                 template
+                    .Replace("{methodDoc}", MethodDoc(method, new string(' ', 2), ClientArgumentDocName))
                     .Replace("{serviceTypename}", serviceTypename)
                     .Replace("{methodName}", methodName)
                     .Replace("{argSize}", argSize.ToString())
@@ -663,6 +704,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         }
 
         return builder
+            .Replace("{serviceDoc}", Doc(service.Doc))
             .Replace("{MethodInfoDecls}", methodInfoDecl.ToString())
             .Replace("{body}", methodsBuilder.ToString())
             .Replace("{serviceTypename}", serviceTypename);
@@ -674,6 +716,13 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
             return $"{field.name.Identifier}: {UnwrapType(field.type)}";
         }
     }
+
+    /// <summary>
+    /// The generated client executor renames the streaming argument to <c>inputStream</c>;
+    /// <c>@param</c> names must match the emitted signature.
+    /// </summary>
+    private static string ClientArgumentDocName(IonArgument arg)
+        => arg.mod is IonArgumentModifiers.Stream ? "inputStream" : arg.name.Identifier;
 
     private string UnwrapUnionName(IonUnion union, IonType caseType)
     {
@@ -699,11 +748,13 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 
         foreach (var field in union.sharedFields)
         {
+            absBuilder.Append(Doc(field.Doc, new string(' ', 2)));
             absBuilder.AppendLine($"  abstract {field.Name.Identifier}: {UnwrapType(field.type)};");
         }
 
         var unionInterface =
             Union_InterfaceBody
+                .Replace("{unionDoc}", Doc(union.Doc))
                 .Replace("{unionName}", union.name.Identifier)
                 .Replace("{checks}", checkBuilder.ToString())
                 .Replace("{abstractSharedFields}", absBuilder.ToString());
@@ -750,6 +801,8 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
             var fields = string.Join(", ", type.fields.Select(f => $"public {GenerateField(f)}"));
             builder.AppendLine();
             builder.AppendLine(Union_CaseBody
+                .Replace("{caseDoc}",
+                    Doc(type.Doc, "", type.fields.Select(f => new DocParam(f.name.Identifier, f.Doc)).ToList()))
                 .Replace("{fields}", fields.ToString())
                 .Replace("{caseTypeName}", type.name.Identifier)
                 .Replace("{unionName}", union.name.Identifier)
@@ -764,7 +817,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string Union_InterfaceBody =
         """
-        export abstract class I{unionName} implements IIonUnion<I{unionName}>
+        {unionDoc}export abstract class I{unionName} implements IIonUnion<I{unionName}>
         {
           abstract UnionKey: string;
           abstract UnionIndex: number;
@@ -777,7 +830,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string Union_CaseBody =
         """
-        export class {caseTypeName} extends I{unionName}
+        {caseDoc}export class {caseTypeName} extends I{unionName}
         {
           constructor({fields}) { super(); }
 

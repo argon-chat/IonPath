@@ -235,8 +235,7 @@ public sealed class GoTemplateProvider : ITemplateProvider
 
     public string ServiceClientClassTemplate =>
         """
-        // {serviceName}Client is a client for I{serviceName}.
-        type {serviceName}Client struct {
+        {serviceDoc}type {serviceName}Client struct {
         	client *ionwebcore.IonClient
         }
 
@@ -250,7 +249,7 @@ public sealed class GoTemplateProvider : ITemplateProvider
 
     public string ServiceClientMethodTemplate =>
         """
-        func (c *{serviceName}Client) {methodName}(ctx context.Context, {args}) ({returnType}, error) {
+        {methodDoc}func (c *{serviceName}Client) {methodName}(ctx context.Context, {args}) ({returnType}, error) {
         	writer := cbor.NewCborWriter()
         	_ = writer.WriteStartArray({argsCount})
         	{writeArgs}
@@ -269,7 +268,7 @@ public sealed class GoTemplateProvider : ITemplateProvider
 
     public string ServiceClientMethodVoidTemplate =>
         """
-        func (c *{serviceName}Client) {methodName}(ctx context.Context, {args}) error {
+        {methodDoc}func (c *{serviceName}Client) {methodName}(ctx context.Context, {args}) error {
         	writer := cbor.NewCborWriter()
         	_ = writer.WriteStartArray({argsCount})
         	{writeArgs}
@@ -282,7 +281,7 @@ public sealed class GoTemplateProvider : ITemplateProvider
 
     public string ServiceClientMethodStreamTemplate =>
         """
-        func (c *{serviceName}Client) {methodName}(ctx context.Context, {args}) (<-chan {returnType}, error) {
+        {methodDoc}func (c *{serviceName}Client) {methodName}(ctx context.Context, {args}) (<-chan {returnType}, error) {
         	writer := cbor.NewCborWriter()
         	_ = writer.WriteStartArray({argsCount})
         	{writeArgs}

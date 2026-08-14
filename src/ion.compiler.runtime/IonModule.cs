@@ -14,6 +14,12 @@ public sealed class IonModule
     public IonFileSyntax? Syntax { get; init; } = null;
 
     /// <summary>
+    /// File level documentation ('//!' module docs) declared at the top of the .ion source.
+    /// Lines are joined with '\n'. Null when the module is undocumented.
+    /// </summary>
+    public string? Doc { get; init; } = null;
+
+    /// <summary>
     /// If this module was loaded as an external dependency, this is the module name from ion.config.json.
     /// Null for the local project's own modules.
     /// </summary>
@@ -128,7 +134,45 @@ public interface ITypeWithName
     IonIdentifier Name { get; }
 }
 
-public record IonBase(IonIdentifier name, IReadOnlyList<IonAttributeInstance> attributes);
+public record IonBase(IonIdentifier name, IReadOnlyList<IonAttributeInstance> attributes)
+{
+    private string? _doc;
+
+    /// <summary>
+    /// Documentation comment text ('///' / '/** */') attached to this declaration in the .ion source.
+    /// Lines are joined with '\n'. Null when the declaration is undocumented.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately invisible to value equality — see the hand written <see cref="Equals(IonBase)"/> /
+    /// <see cref="GetHashCode"/> below. Documentation must never affect semantic identity.
+    /// </remarks>
+    public string? Doc
+    {
+        get => _doc;
+        set => _doc = value;
+    }
+
+    // The compiler generated record equality compares *every* instance field, which would drag
+    // the mutable `_doc` backing field into Equals/GetHashCode. That is unacceptable here:
+    //   * IonDependencyGraph keys Dictionary<IonType, ...> / HashSet<IonType> on these records;
+    //   * RestoreUnresolvedTypeStage keys Dictionary<IonType, List<IonType>> and calls Distinct().
+    // A doc-bearing type must stay equal (and hash equal) to the same type without docs, and
+    // mutating Doc after a value has been used as a hash key must not corrupt the bucket.
+    // These overrides reproduce the previously synthesized semantics exactly, minus `_doc`.
+    // Derived records keep their generated Equals/GetHashCode, which chain into these.
+    public virtual bool Equals(IonBase? other)
+    {
+        if (ReferenceEquals(this, other))
+            return true;
+        if (other is null)
+            return false;
+        return EqualityContract == other.EqualityContract
+               && EqualityComparer<IonIdentifier>.Default.Equals(name, other.name)
+               && EqualityComparer<IReadOnlyList<IonAttributeInstance>>.Default.Equals(attributes, other.attributes);
+    }
+
+    public override int GetHashCode() => HashCode.Combine(EqualityContract, name, attributes);
+}
 
 public record IonField(
     IonIdentifier name,

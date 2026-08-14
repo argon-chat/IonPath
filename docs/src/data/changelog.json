@@ -1,5 +1,18 @@
 [
   {
+    "version": "1.14.0",
+    "date": "2026-08-14",
+    "title": "Comments & Documentation Comments",
+    "changes": [
+      { "type": "added", "description": "Doc comments: /// attaches to the declaration that follows it, /** */ is the equivalent block form, and //! documents the .ion module itself" },
+      { "type": "added", "description": "Doc comments attach to messages, message fields, services, service methods, method arguments, unions, union cases, enums, flags, enum and flags members, typedefs, attribute declarations, and the #use / #import / #feature directives" },
+      { "type": "added", "description": "Doc comments are emitted as C# XML documentation, TypeScript JSDoc, Rust rustdoc and Go doc comments, including per-argument <param> and @param entries" },
+      { "type": "added", "description": "Non-nesting /* */ block comments are accepted anywhere trivia is allowed" },
+      { "type": "changed", "description": "Plain // comments are now pure trivia: they are never attached to a declaration and no longer flow into generated documentation. Use /// to document a declaration" },
+      { "type": "added", "description": "VS Code grammar highlights all five comment forms; Enter continues /// and /** */ blocks, and Ctrl+/ toggles plain // comments" }
+    ]
+  },
+  {
     "version": "1.3.0",
     "date": "2026-04-22",
     "title": "Documentation Launch",

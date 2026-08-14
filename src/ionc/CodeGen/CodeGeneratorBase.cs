@@ -152,21 +152,24 @@ public abstract class CodeGeneratorBase : IIonCodeGenerator
     {
         var members = e.members.Select(m => new EnumMember(
             m.name.Identifier,
-            FormatEnumValue(m.constantValue, m.type)
+            FormatEnumValue(m.constantValue, m.type),
+            m.Doc
         ));
-        return Emitter.EnumDeclaration(e.name.Identifier, members);
+        return Emitter.EnumDeclaration(e.name.Identifier, members, null, e.Doc);
     }
 
     protected virtual string GenerateFlags(IonFlags f)
     {
         var members = f.members.Select(m => new EnumMember(
             m.name.Identifier,
-            FormatEnumValue(m.constantValue, m.type)
+            FormatEnumValue(m.constantValue, m.type),
+            m.Doc
         ));
         return Emitter.FlagsDeclaration(
             f.name.Identifier,
             TypeResolver.ResolvePrimitive(f.baseType.name.Identifier),
-            members
+            members,
+            f.Doc
         );
     }
 
@@ -174,38 +177,49 @@ public abstract class CodeGeneratorBase : IIonCodeGenerator
     {
         var underlying = type.fields.FirstOrDefault()?.type;
         var underlyingName = underlying != null ? TypeResolver.Resolve(underlying) : "object";
-        return Emitter.TypedefDeclaration(type.name.Identifier, underlyingName);
+        return Emitter.TypedefDeclaration(type.name.Identifier, underlyingName, type.Doc);
     }
 
     protected virtual string GenerateMessage(IonType type)
     {
         var fields = type.fields.Select(f => new FieldDecl(
             f.name.Identifier,
-            TypeResolver.Resolve(f.type)
+            TypeResolver.Resolve(f.type),
+            Doc: f.Doc
         ));
-        return Emitter.MessageDeclaration(type.name.Identifier, fields);
+        return Emitter.MessageDeclaration(type.name.Identifier, fields, type.Doc);
     }
 
     protected virtual string GenerateService(IonService service)
     {
-        var methods = service.methods.Select(m => new MethodDecl(
+        var methods = BuildMethodDecls(service);
+
+        return Emitter.ServiceInterfaceDeclaration(
+            $"I{service.name.Identifier}",
+            methods,
+            "IIonService",
+            service.Doc
+        );
+    }
+
+    /// <summary>
+    /// Builds the emitter-level method models for a service, carrying documentation
+    /// from the semantic model onto the methods and their parameters.
+    /// </summary>
+    protected List<MethodDecl> BuildMethodDecls(IonService service)
+        => service.methods.Select(m => new MethodDecl(
             m.name.Identifier,
             ResolveReturnType(m),
             m.arguments.Select(a => new ParameterDecl(
                 a.name.Identifier,
                 ResolveArgumentType(a),
-                a.mod == IonArgumentModifiers.Stream
+                a.mod == IonArgumentModifiers.Stream,
+                Doc: a.Doc
             )).ToList(),
             m.IsStreamable ? MethodModifiers.Stream : MethodModifiers.Async,
-            m.attributes.Select(FormatAttribute).ToList()
+            m.attributes.Select(FormatAttribute).ToList(),
+            m.Doc
         )).ToList();
-
-        return Emitter.ServiceInterfaceDeclaration(
-            $"I{service.name.Identifier}",
-            methods,
-            "IIonService"
-        );
-    }
 
     // ═══════════════════════════════════════════════════════════════════
     // UNION GENERATION
@@ -218,13 +232,15 @@ public abstract class CodeGeneratorBase : IIonCodeGenerator
         // Generate base interface/class
         var sharedFields = union.sharedFields?.Select(f => new FieldDecl(
             f.Name.Identifier,
-            TypeResolver.Resolve(f.type)
+            TypeResolver.Resolve(f.type),
+            Doc: f.Doc
         ));
 
         sb.AppendLine(Emitter.UnionBaseDeclaration(
             union.name.Identifier,
             union.types.Select(t => t.name.Identifier),
-            sharedFields
+            sharedFields,
+            union.Doc
         ));
 
         // Generate case types
@@ -238,7 +254,8 @@ public abstract class CodeGeneratorBase : IIonCodeGenerator
                 casesForFormatters.Add(caseType);
                 var fields = caseType.fields.Select(f => new FieldDecl(
                     f.name.Identifier,
-                    TypeResolver.Resolve(f.type)
+                    TypeResolver.Resolve(f.type),
+                    Doc: f.Doc
                 ));
 
                 sb.AppendLine();
@@ -246,7 +263,8 @@ public abstract class CodeGeneratorBase : IIonCodeGenerator
                     caseType.name.Identifier,
                     union.name.Identifier,
                     index,
-                    fields
+                    fields,
+                    caseType.Doc
                 ));
             }
             index++;
@@ -330,6 +348,26 @@ public abstract class CodeGeneratorBase : IIonCodeGenerator
             ? $"({string.Join(", ", attr.arguments)})"
             : "";
         return $"{attr.name.Identifier}{args}";
+    }
+
+    /// <summary>
+    /// Collects the module ('//!') documentation for a whole compilation into one text.
+    /// <para>
+    /// <see cref="CompilationContext.ProcessedModules"/> can list the same module more than
+    /// once (rebuilt modules are appended by the restore stage), so this deduplicates by doc
+    /// text rather than by module instance. Returns <c>null</c> when nothing is documented.
+    /// </para>
+    /// </summary>
+    protected static string? CollectModuleDocs(CompilationContext context)
+    {
+        var docs = context.ProcessedModules
+            .Select(m => m.Doc)
+            .Where(d => !DocCommentFormatter.IsEmpty(d))
+            .Select(d => d!)
+            .Distinct()
+            .ToList();
+
+        return docs.Count == 0 ? null : string.Join("\n\n", docs);
     }
 
     /// <summary>

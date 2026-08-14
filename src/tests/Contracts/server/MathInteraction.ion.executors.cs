@@ -14,9 +14,18 @@
 
 namespace TestContracts;
 
+/// <summary>
+/// Integer arithmetic over a fixed left-hand operand.
+///
+/// The operand is supplied when the client is constructed, so calling Add(2)
+/// on a client created with leftOperand = 40 yields 42.
+/// </summary>
 public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope) : IServiceExecutorRouter
 {
     
+    /// <summary>
+    /// Adds rightOperand to the bound operand.
+    /// </summary>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public async Task Add_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
     {
@@ -35,6 +44,9 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
         
         IonFormatterStorage<i4>.Write(writer, result);
     }
+    /// <summary>
+    /// Multiplies the bound operand by rightOperand.
+    /// </summary>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public async Task Mul_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
     {
@@ -53,6 +65,9 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
         
         IonFormatterStorage<i4>.Write(writer, result);
     }
+    /// <summary>
+    /// Subtracts rightOperand from the bound operand.
+    /// </summary>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public async Task Sub_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
     {
@@ -71,6 +86,11 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
         
         IonFormatterStorage<i4>.Write(writer, result);
     }
+    /// <summary>
+    /// Divides the bound operand by rightOperand.
+    ///
+    /// Division by zero surfaces as an RPC fault, not as a return value.
+    /// </summary>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public async Task Div_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
     {
@@ -89,6 +109,9 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
         
         IonFormatterStorage<i4>.Write(writer, result);
     }
+    /// <summary>
+    /// Raises the bound operand to the power of rightOperand.
+    /// </summary>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public async Task Pow_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
     {
@@ -107,6 +130,11 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
         
         IonFormatterStorage<i4>.Write(writer, result);
     }
+    /// <summary>
+    /// Raises the bound operand to each power in rightOperand, elementwise.
+    ///
+    /// The result array has the same length as the input array.
+    /// </summary>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public async Task PowArray_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
     {
@@ -125,6 +153,9 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
         
         IonFormatterStorage<i4>.WriteArray(writer, result);
     }
+    /// <summary>
+    /// Returns the absolute value of rightOperand, or null when it is null.
+    /// </summary>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public async Task ToPositive_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
     {
@@ -176,9 +207,15 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
     public bool IsAllowInputStream(string methodName) => __allowedStreamingMethods.Contains(methodName);
 }
 
+/// <summary>
+/// Deterministic pseudo-random streams seeded by the caller.
+/// </summary>
 public sealed class Ion_RandomStreamInteraction_ServiceExecutor(AsyncServiceScope scope) : IServiceStreamExecutorRouter
 {
     
+    /// <summary>
+    /// Streams i pseudo-random integers derived from the seed.
+    /// </summary>
     public async IAsyncEnumerable<Memory<byte>> Integer_Execute(CborReader reader, IAsyncEnumerable<ReadOnlyMemory<byte>>? inputStream, CancellationToken ct = default)
     {
         var service = scope.ServiceProvider.GetRequiredService<IRandomStreamInteraction>();
@@ -209,6 +246,10 @@ public sealed class Ion_RandomStreamInteraction_ServiceExecutor(AsyncServiceScop
             mem.Dispose();
         }
     }
+    /// <summary>
+    /// Bidirectional stream: every f4 pushed by the client is answered with a
+    /// pseudo-random f4 derived from the seed and that input.
+    /// </summary>
     public async IAsyncEnumerable<Memory<byte>> Floats_Execute(CborReader reader, IAsyncEnumerable<ReadOnlyMemory<byte>>? inputStream, CancellationToken ct = default)
     {
         var service = scope.ServiceProvider.GetRequiredService<IRandomStreamInteraction>();

@@ -1,4 +1,4 @@
-﻿namespace ion.syntax;
+namespace ion.syntax;
 
 
 using Pidgin;
@@ -7,36 +7,34 @@ using static Pidgin.Parser<char>;
 
 public partial class IonParser
 {
-    private static readonly Parser<char, Unit> UnionKeyword =
-        String("union").Before(SkipWhitespaces).Then(Return(Unit.Value));
+    private static Parser<char, Unit> UnionKeyword =>
+        String("union").Before(SkipTrivia).Then(Return(Unit.Value));
 
-    public static Parser<char, IonUnionSyntax> Union =>
+    private static Parser<char, IonUnionSyntax> UnionCore =>
         Map(IonUnionSyntax
-                (doc, attrs, pos, name, baseFields, cases, endPos) =>
+                (pos, name, baseFields, cases, endPos) =>
                 new IonUnionSyntax(name, baseFields.GetValueOrDefault([]).ToList(), cases.ToList())
-                    .WithComments(doc)
-                    .WithAttributes(attrs)
                     .WithPos(pos, endPos),
-            LeadingDoc,
-            Attributes,
             CurrentPos,
             UnionKeyword.Then(Identifier),
             ArgList.Labelled("args").Optional(),
-            UnionCase.Separated(Char(',').Before(SkipWhitespaces)).Between(Char('{').Before(SkipWhitespaces), Char('}')),
+            UnionCase
+                .Separated(Char(',').Before(SkipTrivia))
+                .Between(Char('{').Before(SkipTrivia), SkipTriviaAll.Then(Char('}'))),
             CurrentPos
         );
 
-    public static Parser<char, IonUnionTypeCaseSyntax> UnionCase =>
+    public static Parser<char, IonUnionSyntax> Union => WithLeading(UnionCore);
+
+    private static Parser<char, IonUnionTypeCaseSyntax> UnionCaseCore =>
         Map(
-            (doc, attrs, pos, typeName, parameters) =>
+            (pos, typeName, parameters) =>
                 new IonUnionTypeCaseSyntax(typeName, parameters.GetValueOrDefault([]).ToList(), !parameters.HasValue)
-                    .WithAttributes(attrs.ToList())
-                    .WithComments(doc)
                     .WithPos(pos),
-            LeadingDoc.Labelled("doc"),
-            Attributes.Labelled("attributes"),
             CurrentPos.Labelled("currentPos"),
             Type.Labelled("identifier"),
             ArgList.Labelled("args").Optional()
         );
+
+    public static Parser<char, IonUnionTypeCaseSyntax> UnionCase => WithLeading(UnionCaseCore);
 }

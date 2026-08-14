@@ -23,34 +23,38 @@ public class IonFoldingRangeHandler(IonWorkspace workspace) : FoldingRangeHandle
         var file = workspace.ParsedFiles
             .FirstOrDefault(f => workspace.GetFileUri(f).Equals(uri, StringComparison.OrdinalIgnoreCase));
 
-        if (file is null)
+        var content = workspace.GetDocumentContent(uri)
+            ?? (File.Exists(uri) ? File.ReadAllText(uri) : null);
+
+        if (file is null && content is null)
             return Task.FromResult<Container<FoldingRange>?>(null);
 
         var ranges = new List<FoldingRange>();
 
-        // Messages
-        foreach (var msg in file.messageSyntaxes)
-            AddRange(ranges, msg, FoldingRangeKind.Region);
+        if (file is not null)
+        {
+            // Messages
+            foreach (var msg in file.messageSyntaxes)
+                AddRange(ranges, msg, FoldingRangeKind.Region);
 
-        // Services
-        foreach (var svc in file.serviceSyntaxes)
-            AddRange(ranges, svc, FoldingRangeKind.Region);
+            // Services
+            foreach (var svc in file.serviceSyntaxes)
+                AddRange(ranges, svc, FoldingRangeKind.Region);
 
-        // Enums
-        foreach (var en in file.enumSyntaxes)
-            AddRange(ranges, en, FoldingRangeKind.Region);
+            // Enums
+            foreach (var en in file.enumSyntaxes)
+                AddRange(ranges, en, FoldingRangeKind.Region);
 
-        // Flags
-        foreach (var fl in file.flagsSyntaxes)
-            AddRange(ranges, fl, FoldingRangeKind.Region);
+            // Flags
+            foreach (var fl in file.flagsSyntaxes)
+                AddRange(ranges, fl, FoldingRangeKind.Region);
 
-        // Unions
-        foreach (var un in file.unionSyntaxes)
-            AddRange(ranges, un, FoldingRangeKind.Region);
+            // Unions
+            foreach (var un in file.unionSyntaxes)
+                AddRange(ranges, un, FoldingRangeKind.Region);
+        }
 
         // Comment blocks
-        var content = workspace.GetDocumentContent(uri)
-            ?? (File.Exists(uri) ? File.ReadAllText(uri) : null);
         if (content is not null)
             AddCommentRanges(ranges, content);
 
@@ -76,62 +80,58 @@ public class IonFoldingRangeHandler(IonWorkspace workspace) : FoldingRangeHandle
         });
     }
 
+    /// <summary>
+    /// Folds comments. Driven by <see cref="IonCommentScanner"/> rather than raw
+    /// <c>Contains("//")</c> / <c>Contains("/*")</c> checks, which treat a <c>/*</c> inside a
+    /// string literal as the start of a block comment and then swallow every following line
+    /// until some unrelated line happens to contain <c>*/</c>.
+    /// </summary>
     private static void AddCommentRanges(List<FoldingRange> ranges, string content)
     {
-        var lines = content.Split('\n');
-        int? commentStart = null;
+        var scanned = IonCommentScanner.Scan(content);
+        var lineCount = scanned.Lines.Length;
 
-        for (var i = 0; i < lines.Length; i++)
+        // Block comments that actually span more than one line.
+        var coveredByBlock = new bool[lineCount];
+        foreach (var comment in scanned.Comments)
         {
-            var trimmed = lines[i].TrimStart();
-            if (trimmed.StartsWith("//"))
-            {
-                commentStart ??= i;
-            }
-            else
-            {
-                if (commentStart is not null && i - commentStart.Value >= 2)
-                {
-                    ranges.Add(new FoldingRange
-                    {
-                        StartLine = commentStart.Value,
-                        EndLine = i - 1,
-                        Kind = FoldingRangeKind.Comment
-                    });
-                }
-                commentStart = null;
-            }
-        }
+            if (!comment.IsBlock) continue;
 
-        // Trailing comment block
-        if (commentStart is not null && lines.Length - commentStart.Value >= 2)
-        {
+            for (var i = comment.StartLine; i <= comment.EndLine && i < lineCount; i++)
+                coveredByBlock[i] = true;
+
+            if (!comment.IsMultiLine) continue;
+
             ranges.Add(new FoldingRange
             {
-                StartLine = commentStart.Value,
-                EndLine = lines.Length - 1,
+                StartLine = comment.StartLine,
+                EndLine = Math.Min(comment.EndLine, lineCount - 1),
                 Kind = FoldingRangeKind.Comment
             });
         }
 
-        // Block comments /* ... */
-        for (var i = 0; i < lines.Length; i++)
+        // Runs of consecutive comment-only lines. A run of one line cannot be folded.
+        int? runStart = null;
+        for (var i = 0; i <= lineCount; i++)
         {
-            if (lines[i].Contains("/*"))
+            var isRunLine = i < lineCount && !coveredByBlock[i] && scanned.IsCommentOnly(i);
+
+            if (isRunLine)
             {
-                var start = i;
-                while (i < lines.Length && !lines[i].Contains("*/"))
-                    i++;
-                if (i > start)
-                {
-                    ranges.Add(new FoldingRange
-                    {
-                        StartLine = start,
-                        EndLine = i,
-                        Kind = FoldingRangeKind.Comment
-                    });
-                }
+                runStart ??= i;
+                continue;
             }
+
+            if (runStart is not null && i - runStart.Value >= 2)
+            {
+                ranges.Add(new FoldingRange
+                {
+                    StartLine = runStart.Value,
+                    EndLine = i - 1,
+                    Kind = FoldingRangeKind.Comment
+                });
+            }
+            runStart = null;
         }
     }
 

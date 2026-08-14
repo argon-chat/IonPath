@@ -1,16 +1,58 @@
-﻿service MathInteraction(leftOperand: i4) {
+//! Arithmetic RPC surface used by the IonPath integration tests.
+//!
+//! Every service in this module is stateless: the left-hand operand is bound
+//! once, as a service argument, and reused by every method call on that client.
+
+/// Integer arithmetic over a fixed left-hand operand.
+///
+/// The operand is supplied when the client is constructed, so calling Add(2)
+/// on a client created with leftOperand = 40 yields 42.
+service MathInteraction(
+    /// The left-hand operand shared by every method on this service.
+    leftOperand: i4
+) {
+    /// Adds rightOperand to the bound operand.
     Add(rightOperand: i4): i4;
+
+    /// Multiplies the bound operand by rightOperand.
     Mul(rightOperand: i4): i4;
+
+    /// Subtracts rightOperand from the bound operand.
     Sub(rightOperand: i4): i4;
+
+    /// Divides the bound operand by rightOperand.
+    ///
+    /// Division by zero surfaces as an RPC fault, not as a return value.
     Div(rightOperand: i4): i4;
+
+    /// Raises the bound operand to the power of rightOperand.
     Pow(rightOperand: i4): i4;
 
+    /// Raises the bound operand to each power in rightOperand, elementwise.
+    ///
+    /// The result array has the same length as the input array.
     PowArray(rightOperand: i4[]): i4[];
 
+    /// Returns the absolute value of rightOperand, or null when it is null.
     ToPositive(rightOperand: i4?): i4?;
+
+    // Plain `//` is trivia: it is not attached to anything, not even to the
+    // closing brace below.
 }
 
-service RandomStreamInteraction(seed: i4) {
+/* Streaming counterpart to MathInteraction. Ordinary block comments are trivia
+   too, and are allowed between declarations. */
+
+/// Deterministic pseudo-random streams seeded by the caller.
+service RandomStreamInteraction(
+    /// Seed for the underlying generator. The same seed always yields the
+    /// same sequence, which is what makes the streaming tests reproducible.
+    seed: i4
+) {
+    /// Streams i pseudo-random integers derived from the seed.
     stream Integer(i: i4): i4;
+
+    /// Bidirectional stream: every f4 pushed by the client is answered with a
+    /// pseudo-random f4 derived from the seed and that input.
     stream Floats(stream i: f4): f4;
 }

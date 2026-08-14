@@ -5,59 +5,288 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
 <DocsLayout title="Comments — IonPath" current="/guides/comments/">
   <div class="animate-fade-in-up">
     <h1 class="text-3xl font-bold tracking-tight mb-2">Comments</h1>
-    <p class="text-text-secondary mb-8">IonPath supports single-line documentation comments that attach to the declaration immediately following them.</p>
+    <p class="text-text-secondary mb-8">IonPath has five comment forms. Two of them are pure trivia the compiler throws away; three are <strong>doc comments</strong> that are captured by the parser and re-emitted into the generated C#, TypeScript, Rust and Go.</p>
   </div>
 
   <div class="space-y-12 animate-fade-in-up-delay-1">
 
     <section>
-      <h2 id="syntax" class="text-xl font-bold mb-4">Syntax</h2>
-      <p class="text-sm text-text-secondary mb-4">Comments use <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">//</code> and can span multiple consecutive lines:</p>
+      <h2 id="forms" class="text-xl font-bold mb-4">The Five Forms</h2>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Syntax</span>
+          <span>Meaning</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">// text</span>
+          <span class="text-[12px] text-text-secondary"><strong>Line comment.</strong> Pure trivia. Allowed anywhere whitespace is allowed. Never attached to a declaration and never emitted.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">/// text</span>
+          <span class="text-[12px] text-text-secondary"><strong>Doc comment.</strong> Attaches to the declaration or member that follows it. Consecutive <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">///</code> lines are joined into one block.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">//! text</span>
+          <span class="text-[12px] text-text-secondary"><strong>Module doc comment.</strong> Documents the <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">.ion</code> file itself rather than any single declaration.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">/* ... */</span>
+          <span class="text-[12px] text-text-secondary"><strong>Block comment.</strong> Pure trivia. Allowed anywhere. <strong>Non-nesting</strong> — the first <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">*/</code> closes it.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">/** ... */</span>
+          <span class="text-[12px] text-text-secondary"><strong>Doc block comment.</strong> Attaches to the declaration that follows it. A leading <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">*</code> on continuation lines is stripped.</span>
+        </div>
+      </div>
+      <div class="mt-4 flex items-start gap-3 rounded-xl border border-status-degraded/20 bg-status-degraded-subtle p-4">
+        <span class="text-status-degraded text-sm mt-0.5">⚠</span>
+        <p class="text-sm text-text-secondary">Because <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">/*</code> does not nest, commenting out a region that already contains a block comment ends early at the inner <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">*/</code>. Use <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">//</code> per line to comment out a block of declarations.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="doc-comments" class="text-xl font-bold mb-4">Doc Comments</h2>
+      <p class="text-sm text-text-secondary mb-4">A doc comment attaches to the <strong>next</strong> declaration or member in the file. Consecutive lines are joined, so a multi-line description is written as a run of <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">///</code> lines:</p>
       <div class="code-block text-[13px]">
-        <pre><span class="text-text-muted">// Represents a user account in the system.</span>
-<span class="text-text-muted">// Contains basic profile information.</span>
+        <pre><span class="text-accent-2">//! Identity contracts shared by the auth service and its clients.</span>
+<span class="text-accent-2">//! Every type in this module is wire-stable since v1.2.</span>
+
+<span class="text-accent-2">/// Represents a user account in the system.</span>
+<span class="text-accent-2">/// Contains basic profile information.</span>
 <span class="text-accent-3">msg</span> <span class="type-name">User</span> {'{'}
-    <span class="text-text-muted">// The unique identifier for this user.</span>
+    <span class="text-accent-2">/// The unique identifier for this user.</span>
     id: <span class="type-keyword">u4</span>;
 
-    <span class="text-text-muted">// The display name, visible to other users.</span>
+    <span class="text-accent-2">/// The display name, visible to other users.</span>
     name: <span class="type-keyword">string</span>;
 
-    <span class="text-text-muted">// Email address. Null if the user hasn't set one.</span>
+    <span class="text-accent-2">/// Email address. Null if the user has not set one.</span>
     email: <span class="type-keyword">string</span>?;
+
+    <span class="text-text-muted">// Trivia: notes for whoever edits this file. Not emitted anywhere.</span>
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">The block form is equivalent. The leading <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">*</code> on each continuation line is stripped, so these two produce identical documentation:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-2">/**
+ * Represents a user account in the system.
+ * Contains basic profile information.
+ */</span>
+<span class="text-accent-3">msg</span> <span class="type-name">User</span> {'{'} <span class="text-text-muted">/* ... */</span> {'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">Doc comments and <a href="/guides/attributes/" class="text-accent hover:underline">attributes</a> may be interleaved in any order — <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">{'@'}deprecated /// text msg X</code> and <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">/// text {'@'}deprecated msg X</code> both attach the same documentation. A dangling doc comment with no declaration after it (before a closing brace, or at end of file) is simply discarded.</p>
+    </section>
+
+    <section>
+      <h2 id="attachment" class="text-xl font-bold mb-4">What Can Be Documented</h2>
+      <p class="text-sm text-text-secondary mb-4">Doc comments attach to every named thing in the language, including members:</p>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Target</span>
+          <span>Notes</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="text-[12px] type-property">Messages</span>
+          <span class="text-[12px] text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg</code> declarations and each of their fields.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="text-[12px] type-property">Services</span>
+          <span class="text-[12px] text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">service</code> declarations, each method, and each method argument (including service base arguments).</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="text-[12px] type-property">Unions</span>
+          <span class="text-[12px] text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">union</code> declarations and each union case.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="text-[12px] type-property">Enums &amp; Flags</span>
+          <span class="text-[12px] text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">enum</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">flags</code> declarations <strong>and their individual members</strong>.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="text-[12px] type-property">Typedefs</span>
+          <span class="text-[12px] text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">typedef</code> aliases.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="text-[12px] type-property">Attribute declarations</span>
+          <span class="text-[12px] text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">attribute {'@'}name(...)</code> declarations.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="text-[12px] type-property">Directives</span>
+          <span class="text-[12px] text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#use</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#import</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#feature</code>.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="text-[12px] type-property">The file itself</span>
+          <span class="text-[12px] text-text-secondary">Via <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">//!</code> module doc comments.</span>
+        </div>
+      </div>
+      <p class="text-sm text-text-secondary mt-4">A worked example covering members and arguments:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-2">/// Lifecycle state of an account.</span>
+<span class="text-accent-3">enum</span> <span class="type-name">Status</span>: <span class="type-keyword">u1</span> {'{'}
+    <span class="text-accent-2">/// Created but not yet confirmed by the owner.</span>
+    Pending,
+    <span class="text-accent-2">/// Confirmed and usable.</span>
+    Active,
+    <span class="text-accent-2">/// Retained for audit, but not usable.</span>
+    Archived
+{'}'}
+
+<span class="text-accent-2">/// Reads and mutates user accounts.</span>
+<span class="text-accent-3">service</span> <span class="type-name">UserService</span>(
+    <span class="text-accent-2">/// Tenant the call is scoped to.</span>
+    spaceId: <span class="type-keyword">u4</span>
+) {'{'}
+    <span class="text-accent-2">/// Loads a single user by identifier.</span>
+    GetUser(
+        <span class="text-accent-2">/// Identifier of the user to load.</span>
+        id: <span class="type-keyword">u4</span>
+    ): <span class="type-name">User</span>;
 {'}'}</pre>
       </div>
     </section>
 
     <section>
-      <h2 id="attachment" class="text-xl font-bold mb-4">Comment Attachment</h2>
-      <p class="text-sm text-text-secondary mb-4">Comments attach to the <strong>next declaration</strong> in the file. They can appear before:</p>
-      <ul class="list-disc list-inside space-y-1 text-sm text-text-secondary">
-        <li>Messages, services, unions, enums, flags, typedefs</li>
-        <li>Fields within messages and unions</li>
-        <li>Methods within services</li>
-        <li>Members within enums and flags</li>
+      <h2 id="generated" class="text-xl font-bold mb-4">In Generated Code</h2>
+      <p class="text-sm text-text-secondary mb-4">Each backend renders doc comments in that language's native documentation format. Method arguments become named parameter documentation where the language has a convention for it.</p>
+
+      <h3 class="text-lg font-semibold mt-6 mb-3">C# — XML documentation</h3>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">/// &lt;summary&gt;</span>
+<span class="text-text-muted">/// Represents a user account in the system.</span>
+<span class="text-text-muted">/// Contains basic profile information.</span>
+<span class="text-text-muted">/// &lt;/summary&gt;</span>
+<span class="text-text-muted">/// &lt;param name="id"&gt;The unique identifier for this user.&lt;/param&gt;</span>
+<span class="text-text-muted">/// &lt;param name="name"&gt;The display name, visible to other users.&lt;/param&gt;</span>
+<span class="text-text-muted">/// &lt;param name="email"&gt;Email address. Null if the user has not set one.&lt;/param&gt;</span>
+<span class="text-accent-3">public sealed record</span> <span class="type-name">User</span>(<span class="type-keyword">u4</span> id, <span class="type-keyword">string</span> name, <span class="type-keyword">string</span>? email);
+
+<span class="text-text-muted">/// &lt;summary&gt;Reads and mutates user accounts.&lt;/summary&gt;</span>
+<span class="text-accent-3">public interface</span> <span class="type-name">IUserService</span> : <span class="type-name">IIonService</span>
+{'{'}
+    <span class="text-text-muted">/// &lt;summary&gt;Loads a single user by identifier.&lt;/summary&gt;</span>
+    <span class="text-text-muted">/// &lt;param name="spaceId"&gt;Tenant the call is scoped to.&lt;/param&gt;</span>
+    <span class="text-text-muted">/// &lt;param name="id"&gt;Identifier of the user to load.&lt;/param&gt;</span>
+    <span class="type-name">Task</span>&lt;<span class="type-name">User</span>&gt; GetUser(<span class="type-keyword">u4</span> spaceId, <span class="type-keyword">u4</span> id, <span class="type-name">CancellationToken</span> ct = <span class="text-accent-3">default</span>);
+{'}'}</pre>
+      </div>
+
+      <h3 class="text-lg font-semibold mt-8 mb-3">TypeScript — JSDoc</h3>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">/**</span>
+<span class="text-text-muted"> * Represents a user account in the system.</span>
+<span class="text-text-muted"> * Contains basic profile information.</span>
+<span class="text-text-muted"> */</span>
+<span class="text-accent-3">export interface</span> <span class="type-name">User</span> {'{'}
+    <span class="text-text-muted">/** The unique identifier for this user. */</span>
+    id: <span class="type-keyword">number</span>;
+    <span class="text-text-muted">/** The display name, visible to other users. */</span>
+    name: <span class="type-keyword">string</span>;
+    <span class="text-text-muted">/** Email address. Null if the user has not set one. */</span>
+    email: <span class="type-keyword">string</span> | <span class="type-keyword">null</span>;
+{'}'}
+
+<span class="text-text-muted">/**</span>
+<span class="text-text-muted"> * Loads a single user by identifier.</span>
+<span class="text-text-muted"> * {'@'}param id Identifier of the user to load.</span>
+<span class="text-text-muted"> */</span>
+getUser(id: <span class="type-keyword">number</span>): <span class="type-name">Promise</span>&lt;<span class="type-name">User</span>&gt;;</pre>
+      </div>
+
+      <h3 class="text-lg font-semibold mt-8 mb-3">Rust — rustdoc</h3>
+      <p class="text-sm text-text-secondary mb-3">Module doc comments map one-to-one: <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">//!</code> in Ion becomes <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">//!</code> at the top of the generated crate root.</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">//! Identity contracts shared by the auth service and its clients.</span>
+<span class="text-text-muted">//! Every type in this module is wire-stable since v1.2.</span>
+
+<span class="text-text-muted">/// Represents a user account in the system.</span>
+<span class="text-text-muted">/// Contains basic profile information.</span>
+#[derive(Debug, Clone, PartialEq)]
+<span class="text-accent-3">pub struct</span> <span class="type-name">User</span> {'{'}
+    <span class="text-text-muted">/// The unique identifier for this user.</span>
+    <span class="text-accent-3">pub</span> id: <span class="type-keyword">u32</span>,
+    <span class="text-text-muted">/// The display name, visible to other users.</span>
+    <span class="text-accent-3">pub</span> name: <span class="type-name">String</span>,
+    <span class="text-text-muted">/// Email address. Null if the user has not set one.</span>
+    <span class="text-accent-3">pub</span> email: <span class="type-name">Option</span>&lt;<span class="type-name">String</span>&gt;,
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">Rustdoc has no per-parameter tag, so documented arguments are rendered as a conventional markdown <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]"># Arguments</code> section:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">/// Loads a single user by identifier.</span>
+<span class="text-text-muted">///</span>
+<span class="text-text-muted">/// # Arguments</span>
+<span class="text-text-muted">///</span>
+<span class="text-text-muted">/// * `id` - Identifier of the user to load.</span>
+<span class="text-accent-3">pub async fn</span> get_user(&amp;<span class="text-accent-3">self</span>, space_id: <span class="type-keyword">u32</span>, id: <span class="type-keyword">u32</span>) -&gt; <span class="type-name">Result</span>&lt;<span class="type-name">User</span>, <span class="type-name">IonError</span>&gt;</pre>
+      </div>
+
+      <h3 class="text-lg font-semibold mt-8 mb-3">Go — doc comments</h3>
+      <p class="text-sm text-text-secondary mb-3">Go doc comments are prefixed with the identifier they document, as <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">go doc</code> expects — unless the text already starts with that identifier, in which case it is left alone. Module docs become the package comment (<code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">// Package name ...</code>).</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// User represents a user account in the system.</span>
+<span class="text-text-muted">// Contains basic profile information.</span>
+<span class="text-accent-3">type</span> <span class="type-name">User</span> <span class="text-accent-3">struct</span> {'{'}
+    <span class="text-text-muted">// Id The unique identifier for this user.</span>
+    Id <span class="type-keyword">uint32</span>
+    <span class="text-text-muted">// Name The display name, visible to other users.</span>
+    Name <span class="type-keyword">string</span>
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">Go has no per-parameter doc syntax either, so arguments become a Go 1.19 bullet list:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// GetUser loads a single user by identifier.</span>
+<span class="text-text-muted">//</span>
+<span class="text-text-muted">// Parameters:</span>
+<span class="text-text-muted">//   - id: Identifier of the user to load.</span>
+<span class="text-accent-3">func</span> (c *<span class="type-name">UserServiceClient</span>) GetUser(ctx context.<span class="type-name">Context</span>, id <span class="type-keyword">uint32</span>) (<span class="type-name">User</span>, <span class="type-keyword">error</span>)</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="normalization" class="text-xl font-bold mb-4">How Doc Text Is Normalized</h2>
+      <p class="text-sm text-text-secondary mb-4">Every backend shares the same normalization pass before emitting, so the output is identical in shape across languages:</p>
+      <ul class="list-disc list-inside space-y-2 text-sm text-text-secondary">
+        <li>Trailing whitespace is stripped, and leading/trailing blank lines are dropped. A comment that contains only whitespace produces <strong>no output at all</strong> — never an empty <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">&lt;summary&gt;</code> or a bare <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">/** */</code>.</li>
+        <li>Interior blank lines are preserved as paragraph breaks — write <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">///</code> on its own line to separate paragraphs.</li>
+        <li>Common leading indentation is removed, so indenting a doc block to match its declaration costs nothing.</li>
+        <li>Text is escaped for the target language: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">&amp;</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">&lt;</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">&gt;</code> become XML entities in C#, and a literal <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">*/</code> is neutralized in JSDoc so it cannot close the block early. You can write whatever you like in a doc comment.</li>
       </ul>
     </section>
 
     <section>
-      <h2 id="generated" class="text-xl font-bold mb-4">In Generated Code</h2>
-      <p class="text-sm text-text-secondary mb-4">Comments are preserved as XML documentation in C# and JSDoc in TypeScript:</p>
-      <div class="code-block text-[13px]">
-        <pre><span class="text-text-muted">// C# output</span>
-<span class="text-text-muted">/// &lt;summary&gt;</span>
-<span class="text-text-muted">/// Represents a user account in the system.</span>
-<span class="text-text-muted">/// Contains basic profile information.</span>
-<span class="text-text-muted">/// &lt;/summary&gt;</span>
-<span class="text-accent-3">public sealed class</span> <span class="type-name">User</span> {'{'} ... {'}'}
-
-<span class="text-text-muted">// TypeScript output</span>
-<span class="text-text-muted">/**</span>
-<span class="text-text-muted"> * Represents a user account in the system.</span>
-<span class="text-text-muted"> * Contains basic profile information.</span>
-<span class="text-text-muted"> */</span>
-<span class="text-accent-3">export interface</span> <span class="type-name">User</span> {'{'} ... {'}'}</pre>
+      <h2 id="schema-lock" class="text-xl font-bold mb-4">Comments Never Break the Schema</h2>
+      <div class="rounded-xl border border-accent/20 bg-accent-subtle p-4">
+        <p class="text-sm text-text-secondary"><strong>Editing a comment can never be a breaking change.</strong> Doc comments do not affect the wire format and are not recorded in <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ion.lock.json</code>. Adding, rewording or deleting documentation will never produce an <a href="/guides/diagnostics/#schema-lock" class="text-accent hover:underline">ION0020–ION0029</a> schema-lock violation, and never requires <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">--update-lock</code>.</p>
       </div>
+      <p class="text-sm text-text-secondary mt-4">Concretely, a doc comment has no effect on:</p>
+      <ul class="list-disc list-inside space-y-1 text-sm text-text-secondary mt-2">
+        <li>CBOR field ordering or field indices</li>
+        <li>Enum, flags or union discriminator values</li>
+        <li>Method routes and signatures</li>
+        <li>The content hash of a <a href="/guides/modules/" class="text-accent hover:underline">module</a> as recorded in the lock file</li>
+      </ul>
+      <p class="text-sm text-text-secondary mt-4">It does change the <em>generated source files</em>, so a documentation-only edit still requires re-running <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ionc</code> to refresh the emitted comments.</p>
+    </section>
+
+    <section>
+      <h2 id="migrating" class="text-xl font-bold mb-4">Migrating from <code class="font-mono">//</code> to <code class="font-mono">///</code></h2>
+      <p class="text-sm text-text-secondary mb-4">Earlier versions of IonPath treated a plain <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">//</code> line before a declaration as its documentation. That is no longer the case: <strong><code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">//</code> is now pure trivia and never flows into generated code.</strong></p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// Before — this comment used to become the XML doc / JSDoc.</span>
+<span class="text-text-muted">// It is now discarded by the compiler.</span>
+<span class="text-accent-3">msg</span> <span class="type-name">User</span> {'{'} id: <span class="type-keyword">u4</span>; {'}'}
+
+<span class="text-accent-2">/// After — add a third slash and the documentation is emitted again.</span>
+<span class="text-accent-3">msg</span> <span class="type-name">User</span> {'{'} id: <span class="type-keyword">u4</span>; {'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-4">Practical notes when migrating an existing schema:</p>
+      <ul class="list-disc list-inside space-y-2 text-sm text-text-secondary mt-2">
+        <li>Nothing breaks. Files full of <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">//</code> still compile — the comments simply stop reaching the generated code.</li>
+        <li>The symptom is missing documentation in the generated C#/TypeScript/Rust/Go, not a compiler error.</li>
+        <li>Promote only the comments that describe a declaration. Leave inline notes such as <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">// index 0</code> or <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">// TODO</code> as plain <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">//</code>.</li>
+        <li>Trailing comments on the same line as code are always trivia. <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">id: u4; /// nope</code> documents nothing — a doc comment must be on its own line, above the thing it describes.</li>
+        <li><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">////</code> and longer runs of slashes are ordinary comments, as in Rust. Only exactly three slashes mean documentation, so a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">////////</code> separator line stays trivia.</li>
+        <li>Toggling comments in the editor (<kbd class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Ctrl</kbd>+<kbd class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">/</kbd>) inserts plain <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">//</code>, so commenting code out can never accidentally attach documentation.</li>
+      </ul>
     </section>
 
   </div>

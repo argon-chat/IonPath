@@ -138,14 +138,13 @@ public class IonCompletionHandler(IonWorkspace workspace) : CompletionHandlerBas
         var modules = workspace.GetExternalModulesForFile(filePath);
         return modules
             .Where(m => m.SourceModule is not null)
-            .Select(m => m.SourceModule!)
-            .Distinct()
-            .Select(name => new CompletionItem
+            .GroupBy(m => m.SourceModule!)
+            .Select(g => IonLspHelpers.WithDoc(new CompletionItem
             {
-                Label = name,
+                Label = g.Key,
                 Kind = CompletionItemKind.Module,
                 Detail = "External module"
-            })
+            }, g.Select(m => m.Doc).FirstOrDefault(d => !string.IsNullOrWhiteSpace(d))))
             .ToList();
     }
 
@@ -155,12 +154,12 @@ public class IonCompletionHandler(IonWorkspace workspace) : CompletionHandlerBas
         return modules
             .Where(m => m.SourceModule == moduleName)
             .SelectMany(m => m.Definitions)
-            .Select(d => new CompletionItem
+            .Select(d => IonLspHelpers.WithDoc(new CompletionItem
             {
                 Label = d.name.Identifier,
                 Kind = CompletionItemKind.Class,
                 Detail = $"from \"{moduleName}\""
-            })
+            }, d.Doc))
             .ToList();
     }
 
@@ -170,12 +169,12 @@ public class IonCompletionHandler(IonWorkspace workspace) : CompletionHandlerBas
         return modules
             .Where(m => m.SourceModule is not null)
             .SelectMany(m => m.Definitions.Select(d => (Module: m.SourceModule!, Type: d)))
-            .Select(x => new CompletionItem
+            .Select(x => IonLspHelpers.WithDoc(new CompletionItem
             {
                 Label = x.Type.name.Identifier,
                 Kind = CompletionItemKind.Class,
                 Detail = $"from \"{x.Module}\""
-            })
+            }, x.Type.Doc))
             .ToList();
     }
 

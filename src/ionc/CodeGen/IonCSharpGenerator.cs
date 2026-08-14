@@ -208,10 +208,37 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         global using System.Buffers;
         """;
 
+    // ═══════════════════════════════════════════════════════════════════
+    // DOCUMENTATION HELPERS
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// XML documentation block for a declaration, or "" when undocumented.
+    /// The result already carries <paramref name="indent"/> on every line and ends with a
+    /// newline, so call sites use <c>Append</c> (never <c>AppendLine</c>) and need no branch.
+    /// </summary>
+    private static string Doc(string? doc, string indent = "", IReadOnlyList<DocParam>? parameters = null)
+        => DocCommentFormatter.CSharpDoc(doc, indent, parameters);
+
+    /// <summary>
+    /// XML documentation for a service method: summary plus one
+    /// <c>&lt;param&gt;</c> per documented argument.
+    /// </summary>
+    /// <param name="method">The method whose documentation is emitted.</param>
+    /// <param name="indent">Indent matching the surrounding member.</param>
+    /// <param name="nameOf">Maps an Ion argument to the generated C# parameter name.</param>
+    private static string MethodDoc(IonMethod method, string indent, Func<IonArgument, string>? nameOf = null)
+    {
+        nameOf ??= a => a.name.Identifier;
+        var parameters = method.arguments.Select(a => new DocParam(nameOf(a), a.Doc)).ToList();
+        return Doc(method.Doc, indent, parameters);
+    }
+
     public string GenerateModule(IonModule module)
     {
         var sb = new StringBuilder();
         sb.AppendLine(FileHeader());
+        sb.Append(DocCommentFormatter.LineComment(module.Doc));
         sb.AppendLine();
 
         foreach (var type in module.Definitions.Where(type => type is { IsUnionCase: false, IsUnion: false }))
@@ -257,11 +284,15 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     private static string GenerateEnum(IonEnum e)
     {
         var sb = new StringBuilder();
+        sb.Append(Doc(e.Doc));
         sb.AppendLine("{compileGeneratedAttributes}");
         sb.AppendLine($"public enum {e.name.Identifier}");
         sb.AppendLine("{");
         foreach (var m in e.members)
+        {
+            sb.Append(Doc(m.Doc, "    "));
             sb.AppendLine($"    {m.name.Identifier} = {m.constantValue},");
+        }
         sb.AppendLine("}");
         return sb.ToString();
     }
@@ -269,12 +300,16 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     private static string GenerateFlags(IonFlags f)
     {
         var sb = new StringBuilder();
+        sb.Append(Doc(f.Doc));
         sb.AppendLine("{compileGeneratedAttributes}");
         sb.AppendLine("[Flags]");
         sb.AppendLine($"public enum {f.name.Identifier} : {UnwrapType(f.baseType)}");
         sb.AppendLine("{");
         foreach (var m in f.members)
+        {
+            sb.Append(Doc(m.Doc, "    "));
             sb.AppendLine($"    {m.name.Identifier} = {m.constantValue},");
+        }
         sb.AppendLine("}");
         return sb.ToString();
     }
@@ -282,13 +317,16 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     private static string GenerateTypedef(IonType type)
     {
         var underlying = ResolveTypeName(type.fields.FirstOrDefault()?.type);
-        return "{compileGeneratedAttributes}" +
+        return Doc(type.Doc) +
+               "{compileGeneratedAttributes}" +
                $"public readonly record struct {type.name.Identifier}({underlying} Value);";
     }
 
     private static string GenerateMessage(IonType type)
     {
         var sb = new StringBuilder();
+        // Positional record — field docs are attached to the declaration as <param> tags.
+        sb.Append(Doc(type.Doc, "", type.fields.Select(f => new DocParam(f.name.Identifier, f.Doc)).ToList()));
         sb.AppendLine("{compileGeneratedAttributes}");
         sb.Append($"public sealed record {type.name.Identifier}(");
         sb.Append(string.Join(", ", type.fields.Select(f =>
@@ -300,12 +338,15 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     private static string GenerateService(IonService service)
     {
         var sb = new StringBuilder();
+        sb.Append(Doc(service.Doc));
         sb.AppendLine("{compileGeneratedAttributes}");
         sb.AppendLine($"public interface I{service.name.Identifier} : IIonService");
         sb.AppendLine("{");
 
         foreach (var method in service.methods)
         {
+            sb.Append(MethodDoc(method, "    "));
+
             if (method.attributes.Any())
             {
                 foreach (var attribute in method.attributes)
@@ -689,7 +730,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string ServiceExecutorTemplate =
         """
-        public sealed class Ion_{serviceTypename}_ServiceExecutor(AsyncServiceScope scope) : {routerInterfaces}
+        {serviceDoc}public sealed class Ion_{serviceTypename}_ServiceExecutor(AsyncServiceScope scope) : {routerInterfaces}
         {
             {body}
             
@@ -742,7 +783,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string ServiceStreamExecutorMethodTemplate =
         """
-            public async IAsyncEnumerable<Memory<byte>> {methodName}_Execute(CborReader reader, IAsyncEnumerable<ReadOnlyMemory<byte>>? inputStream, CancellationToken ct = default)
+        {methodDoc}    public async IAsyncEnumerable<Memory<byte>> {methodName}_Execute(CborReader reader, IAsyncEnumerable<ReadOnlyMemory<byte>>? inputStream, CancellationToken ct = default)
             {
                 var service = scope.ServiceProvider.GetRequiredService<I{serviceTypename}>();
 
@@ -775,7 +816,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string ServiceExecutorMethodNoReturnTemplate =
         """
-            {compileGeneratedAttributes}
+        {methodDoc}    {compileGeneratedAttributes}
             public async Task {methodName}_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
             {
                 var service = scope.ServiceProvider.GetRequiredService<I{serviceTypename}>();
@@ -794,7 +835,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string ServiceExecutorMethodWithReturnTemplate =
         """
-            {compileGeneratedAttributes}
+        {methodDoc}    {compileGeneratedAttributes}
             public async Task {methodName}_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
             {
                 var service = scope.ServiceProvider.GetRequiredService<I{serviceTypename}>();
@@ -840,6 +881,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         var branchStreamBuilder = new StringBuilder();
         var serviceTypename = service.name.Identifier;
         var builder = ServiceExecutorTemplate
+            .Replace("{serviceDoc}", Doc(service.Doc))
             .Replace("{serviceTypename}", serviceTypename)
             .Replace("{routerInterfaces}", interfaces)
             .Replace("{routerStreaming}",
@@ -901,6 +943,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
         var templateMethod =
             template
+                .Replace("{methodDoc}", Doc(method.Doc, "    "))
                 .Replace("{serviceTypename}", serviceTypename)
                 .Replace("{methodName}", methodName)
                 .Replace("{argSize}", argSize.ToString())
@@ -933,6 +976,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
         var templateMethod =
             template
+                .Replace("{methodDoc}", Doc(method.Doc, "    "))
                 .Replace("{serviceTypename}", serviceTypename)
                 .Replace("{methodName}", methodName)
                 .Replace("{argSize}", argSize.ToString())
@@ -955,7 +999,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string ServiceClientImplTemplate =
         """
-        {compileGeneratedAttributes}
+        {serviceDoc}{compileGeneratedAttributes}
         public sealed class Ion_{serviceTypename}_ClientImpl(IonClientContext context) : I{serviceTypename}
         {
             {MethodInfoDecls}
@@ -972,7 +1016,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string ServiceClientMethodDecl =
         """
-            {compileGeneratedAttributes}
+        {methodDoc}    {compileGeneratedAttributes}
             public async Task<{methodReturnType}> {methodName}({args})
             {
                 var req = new IonRequest(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
@@ -993,7 +1037,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string ServiceClientMethodDeclArray =
         """
-            {compileGeneratedAttributes}
+        {methodDoc}    {compileGeneratedAttributes}
             public async Task<{methodReturnType}> {methodName}({args})
             {
                 var req = new IonRequest(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
@@ -1014,7 +1058,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string ServiceClientMethodDeclNullable =
         """
-            {compileGeneratedAttributes}
+        {methodDoc}    {compileGeneratedAttributes}
             public async Task<{methodReturnType}> {methodName}({args})
             {
                 var req = new IonRequest(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
@@ -1035,7 +1079,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string ServiceClientMethodDeclNoReturn =
         """
-            {compileGeneratedAttributes}
+        {methodDoc}    {compileGeneratedAttributes}
             public async Task {methodName}({args})
             {
                 var req = new IonRequest(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
@@ -1056,7 +1100,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string ServiceClientMethodDeclStream =
         """
-            public IAsyncEnumerable<{methodReturnType}> {methodName}({args})
+        {methodDoc}    public IAsyncEnumerable<{methodReturnType}> {methodName}({args})
             {
                 var ws = new IonWsClient(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
             
@@ -1115,6 +1159,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
             var templateMethod =
                     template
+                        .Replace("{methodDoc}", MethodDoc(method, "    ", ClientArgumentDocName))
                         .Replace("{serviceTypename}", serviceTypename)
                         .Replace("{methodName}", methodName)
                         .Replace("{argSize}", argSize.ToString())
@@ -1146,6 +1191,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         }
 
         return builder
+            .Replace("{serviceDoc}", Doc(service.Doc))
             .Replace("{MethodInfoDecls}", methodInfoDecl.ToString())
             .Replace("{body}", methodsBuilder.ToString())
             .Replace("{serviceTypename}", serviceTypename);
@@ -1159,9 +1205,18 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         }
     }
 
+    /// <summary>
+    /// The generated client impl renames arguments (<c>__lowercase</c>, or <c>inputStream</c> for
+    /// the streaming argument); <c>&lt;param&gt;</c> names must match those, not the Ion names.
+    /// </summary>
+    private static string ClientArgumentDocName(IonArgument arg)
+        => arg.mod is IonArgumentModifiers.Stream
+            ? "inputStream"
+            : $"__{arg.name.Identifier.ToLowerInvariant()}";
+
     private static readonly string AttributeTemplate =
         """
-        [AttributeUsage(AttributeTargets.All)]
+        {attributeDoc}[AttributeUsage(AttributeTargets.All)]
         public sealed class {AttributeName}Attribute({args}) : System.Attribute
         {
         {argValues}
@@ -1173,10 +1228,18 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         var accessValues = new StringBuilder();
 
         foreach (var argument in type.arguments)
+        {
+            accessValues.Append(Doc(argument.Doc, "    "));
             accessValues.AppendLine(
                 $"    public {UnwrapType(argument.type)} {argument.Name.Identifier.Capitalize()} => {argument.Name.Identifier};");
+        }
+
+        var ctorParams = type.arguments
+            .Select(a => new DocParam(a.name.Identifier, a.Doc))
+            .ToList();
 
         return AttributeTemplate
+            .Replace("{attributeDoc}", Doc(type.Doc, "", ctorParams))
             .Replace("{argValues}", accessValues.ToString())
             .Replace("{args}", string.Join(", ", type.arguments.Select(GenerateArgument)))
             .Replace("{AttributeName}", type.name.Identifier);
@@ -1188,6 +1251,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
         var unionInterface =
             Union_InterfaceBody
+                .Replace("{unionDoc}", Doc(union.Doc))
                 .Replace("{checkProps}", GenerateUnionCheckProps(union))
                 .Replace("{unionName}", union.name.Identifier);
 
@@ -1249,6 +1313,8 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
             builder.AppendLine();
             builder.AppendLine(Union_CaseBody
+                .Replace("{caseDoc}",
+                    Doc(type.Doc, "", type.fields.Select(f => new DocParam(f.name.Identifier, f.Doc)).ToList()))
                 .Replace("{fields}", fields)
                 .Replace("{caseTypeName}", type.name.Identifier)
                 .Replace("{unionName}", union.name.Identifier)
@@ -1263,7 +1329,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string Union_InterfaceBody =
         """
-        {compileGeneratedAttributes}
+        {unionDoc}{compileGeneratedAttributes}
         public interface I{unionName} : IIonUnion<I{unionName}>
         {
             string UnionKey { get; }
@@ -1280,7 +1346,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string Union_CaseBody =
         """
-        {compileGeneratedAttributes}
+        {caseDoc}{compileGeneratedAttributes}
         public sealed record {caseTypeName}({fields}) : I{unionName}
         {
             public string UnionKey => nameof({caseTypeName});

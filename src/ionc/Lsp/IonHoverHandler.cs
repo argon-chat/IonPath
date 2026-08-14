@@ -88,6 +88,13 @@ public class IonHoverHandler(IonWorkspace workspace) : HoverHandlerBase
         if (string.IsNullOrEmpty(word))
             return Task.FromResult<Hover?>(null);
 
+        // 0. Exact declaration under the cursor. This resolves members that the by-name
+        //    lookups below cannot disambiguate at all — fields, enum/flags members, method
+        //    arguments, union cases, attribute declarations — and carries their doc comment.
+        var declHover = FindDeclarationHover(uri, line, col);
+        if (declHover is not null)
+            return Task.FromResult<Hover?>(Markdown(declHover));
+
         // 1. Check builtin types
         if (BuiltinTypes.TryGetValue(word, out var builtinInfo))
         {
@@ -176,9 +183,10 @@ public class IonHoverHandler(IonWorkspace workspace) : HoverHandlerBase
         "service" => "```ion\nservice ServiceName(base_args) {\n    MethodName(args): ReturnType;\n}\n```\nDefines a **service** — an RPC contract with methods.",
         "enum" => "```ion\nenum EnumName : base_type {\n    Value1,\n    Value2 = 10\n}\n```\nDefines an **enumeration** with named constants.",
         "flags" => "```ion\nflags FlagsName : base_type {\n    Flag1 = 1,\n    Flag2 = 2\n}\n```\nDefines a **flags** type — a bitfield enumeration.",
-        "union" => "```ion\nunion UnionName {\n    case CaseA(field: type),\n    case CaseB(field: type)\n}\n```\nDefines a **discriminated union** — a type that can be one of several cases.",
+        // NOTE: union cases have no `case` keyword — a case is just `Name(args)`.
+        "union" => "```ion\nunion UnionName {\n    CaseA(field: type),\n    CaseB(field: type)\n}\n```\nDefines a **discriminated union** — a type that can be one of several cases.",
         "typedef" => "```ion\ntypedef NewName = ExistingType;\n```\nDefines a **type alias** for an existing type.",
-        "attribute" => "```ion\nattribute AttrName(arg: type);\n```\nDefines a custom **attribute** that can be applied to types, fields, and methods.",
+        "attribute" => "```ion\nattribute @AttrName(arg: type);\n```\nDefines a custom **attribute** that can be applied to types, fields, and methods.",
         "stream" => "Modifier: marks a method parameter or return as a **streaming** channel.",
         "unary" => "Modifier: marks a method as **unary** (single request, single response).",
         "internal" => "Modifier: marks a method as **internal** (not exposed to external clients).",
@@ -187,7 +195,9 @@ public class IonHoverHandler(IonWorkspace workspace) : HoverHandlerBase
         _ => null
     };
 
-    private string? FindSymbolHover(string word, CompilationContext ctx, string currentUri)
+    // fallbackDoc: doc text from the syntax tree, used when the resolved semantic symbol
+    // carries none (e.g. the doc was not propagated through lowering).
+    private string? FindSymbolHover(string word, CompilationContext ctx, string currentUri, string? fallbackDoc = null)
     {
         // Search all modules (processed + global)
         var allModules = ctx.ProcessedModules
@@ -204,19 +214,19 @@ public class IonHoverHandler(IonWorkspace workspace) : HoverHandlerBase
                 if (!def.name.Identifier.Equals(word, StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                return FormatTypeHover(def, module, allDefs);
+                return FormatTypeHover(def, module, allDefs, def.Doc ?? fallbackDoc);
             }
 
             foreach (var svc in module.Services)
             {
                 if (svc.name.Identifier.Equals(word, StringComparison.OrdinalIgnoreCase))
-                    return FormatServiceHover(svc, module);
+                    return FormatServiceHover(svc, module, svc.Doc ?? fallbackDoc);
 
                 // Check methods
                 foreach (var method in svc.methods)
                 {
                     if (method.name.Identifier.Equals(word, StringComparison.OrdinalIgnoreCase))
-                        return FormatMethodHover(method, svc);
+                        return FormatMethodHover(method, svc, method.Doc ?? fallbackDoc);
                 }
             }
         }
@@ -224,18 +234,12 @@ public class IonHoverHandler(IonWorkspace workspace) : HoverHandlerBase
         return null;
     }
 
-    private static string FormatTypeHover(IonType type, IonModule module, IReadOnlyList<IonType> allDefs)
+    private static string FormatTypeHover(
+        IonType type, IonModule module, IReadOnlyList<IonType> allDefs, string? doc = null)
     {
-        var kind = type switch
-        {
-            IonEnum e => "enum",
-            IonFlags f => "flags",
-            IonUnion u => "union",
-            _ when type.isTypedef => "typedef",
-            _ => "msg"
-        };
-
         var lines = new List<string>();
+        // Everything that goes below the doc section.
+        var details = new List<string>();
 
         // Type signature
         switch (type)
@@ -246,7 +250,7 @@ public class IonHoverHandler(IonWorkspace workspace) : HoverHandlerBase
                 {
                     var members = string.Join(", ", e.members.Select(m =>
                         string.IsNullOrEmpty(m.constantValue) ? m.name.Identifier : $"{m.name.Identifier} = {m.constantValue}"));
-                    lines.Add($"Members: `{members}`");
+                    details.Add($"Members: `{members}`");
                 }
                 break;
 
@@ -256,7 +260,7 @@ public class IonHoverHandler(IonWorkspace workspace) : HoverHandlerBase
                 {
                     var members = string.Join(", ", f.members.Select(m =>
                         string.IsNullOrEmpty(m.constantValue) ? m.name.Identifier : $"{m.name.Identifier} = {m.constantValue}"));
-                    lines.Add($"Flags: `{members}`");
+                    details.Add($"Flags: `{members}`");
                 }
                 break;
 
@@ -265,12 +269,12 @@ public class IonHoverHandler(IonWorkspace workspace) : HoverHandlerBase
                 if (u.types.Count > 0)
                 {
                     var cases = string.Join(", ", u.types.Select(t => t.name.Identifier));
-                    lines.Add($"Cases: `{cases}`");
+                    details.Add($"Cases: `{cases}`");
                 }
                 if (u.sharedFields.Count > 0)
                 {
                     var shared = string.Join(", ", u.sharedFields.Select(f => $"{f.name.Identifier}: {f.type.name.Identifier}"));
-                    lines.Add($"Shared fields: `{shared}`");
+                    details.Add($"Shared fields: `{shared}`");
                 }
                 break;
 
@@ -290,10 +294,13 @@ public class IonHoverHandler(IonWorkspace workspace) : HoverHandlerBase
 
                     var sizeInfo = ComputeMessageSize(type, allDefs);
                     if (sizeInfo is not null)
-                        lines.Add(sizeInfo);
+                        details.Add(sizeInfo);
                 }
                 break;
         }
+
+        IonDocMarkdown.AppendSection(lines, doc);
+        lines.AddRange(details);
 
         if (!module.Path.StartsWith("ion://"))
             lines.Add($"*Defined in `{module.Name}`*");
@@ -301,7 +308,7 @@ public class IonHoverHandler(IonWorkspace workspace) : HoverHandlerBase
         return string.Join("\n\n", lines);
     }
 
-    private static string FormatServiceHover(IonService svc, IonModule module)
+    private static string FormatServiceHover(IonService svc, IonModule module, string? doc = null)
     {
         var methodSigs = svc.methods.Select(m =>
         {
@@ -319,9 +326,11 @@ public class IonHoverHandler(IonWorkspace workspace) : HoverHandlerBase
 
         var lines = new List<string>
         {
-            $"```ion\nservice {svc.name.Identifier} {{{body}}}\n```",
-            $"**{svc.methods.Count}** method(s)"
+            $"```ion\nservice {svc.name.Identifier} {{{body}}}\n```"
         };
+
+        IonDocMarkdown.AppendSection(lines, doc);
+        lines.Add($"**{svc.methods.Count}** method(s)");
 
         if (!module.Path.StartsWith("ion://"))
             lines.Add($"*Defined in `{module.Name}`*");
@@ -329,7 +338,7 @@ public class IonHoverHandler(IonWorkspace workspace) : HoverHandlerBase
         return string.Join("\n\n", lines);
     }
 
-    private static string FormatMethodHover(IonMethod method, IonService svc)
+    private static string FormatMethodHover(IonMethod method, IonService svc, string? doc = null)
     {
         var args = string.Join(", ", method.arguments.Select(a =>
             $"{a.name.Identifier}: {FormatTypeName(a.type)}"));
@@ -338,7 +347,11 @@ public class IonHoverHandler(IonWorkspace workspace) : HoverHandlerBase
             ? string.Join(" ", method.modifiers.Select(x => x.ToString().ToLowerInvariant())) + " "
             : "";
 
-        return $"```ion\n{mods}{method.name.Identifier}({args}){ret}\n```\n\n*Method of service `{svc.name.Identifier}`*";
+        var lines = new List<string> { $"```ion\n{mods}{method.name.Identifier}({args}){ret}\n```" };
+        IonDocMarkdown.AppendSection(lines, doc);
+        lines.Add($"*Method of service `{svc.name.Identifier}`*");
+
+        return string.Join("\n\n", lines);
     }
 
     private static string FormatTypeName(IonType type)
@@ -362,56 +375,302 @@ public class IonHoverHandler(IonWorkspace workspace) : HoverHandlerBase
         foreach (var file in workspace.ParsedFiles)
         {
             foreach (var msg in file.messageSyntaxes)
-            {
                 if (msg.Name.Identifier.Equals(word, StringComparison.OrdinalIgnoreCase))
-                {
-                    var fields = msg.Fields.Select(f => $"    {f.Name.Identifier}: {f.Type.Name.Identifier};");
-                    var body = msg.Fields.Count > 0
-                        ? "\n" + string.Join("\n", fields) + "\n"
-                        : "";
-                    return $"```ion\nmsg {msg.Name.Identifier} {{{body}}}\n```";
-                }
-            }
+                    return Compose(SyntaxMessageSignature(msg), msg.Comments);
 
             foreach (var svc in file.serviceSyntaxes)
-            {
                 if (svc.serviceName.Identifier.Equals(word, StringComparison.OrdinalIgnoreCase))
-                {
-                    var methods = svc.Methods.Select(m =>
-                    {
-                        var args = string.Join(", ", m.arguments.Select(a => $"{a.argName.Identifier}: {a.type.Name.Identifier}"));
-                        var ret = m.returnType is not null ? $": {m.returnType.Name.Identifier}" : "";
-                        return $"    {m.methodName.Identifier}({args}){ret};";
-                    });
-                    var body = svc.Methods.Count > 0
-                        ? "\n" + string.Join("\n", methods) + "\n"
-                        : "";
-                    return $"```ion\nservice {svc.serviceName.Identifier} {{{body}}}\n```";
-                }
-            }
+                    return Compose(SyntaxServiceSignature(svc), svc.Comments);
 
             foreach (var en in file.enumSyntaxes)
                 if (en.Name.Identifier.Equals(word, StringComparison.OrdinalIgnoreCase))
-                    return $"```ion\nenum {en.Name.Identifier} : {en.Type.Name.Identifier}\n```";
+                    return Compose($"```ion\nenum {en.Name.Identifier} : {FormatSyntaxTypeName(en.Type)}\n```", en.Comments);
 
             foreach (var fl in file.flagsSyntaxes)
                 if (fl.Name.Identifier.Equals(word, StringComparison.OrdinalIgnoreCase))
-                    return $"```ion\nflags {fl.Name.Identifier} : {fl.Type.Name.Identifier}\n```";
+                    return Compose($"```ion\nflags {fl.Name.Identifier} : {FormatSyntaxTypeName(fl.Type)}\n```", fl.Comments);
 
             foreach (var td in file.typedefSyntaxes)
                 if (td.TypeName.Name.Identifier.Equals(word, StringComparison.OrdinalIgnoreCase))
-                {
-                    var baseType = td.BaseType is not null ? $" = {td.BaseType.Name.Identifier}" : "";
-                    return $"```ion\ntypedef {td.TypeName.Name.Identifier}{baseType}\n```";
-                }
+                    return Compose(SyntaxTypedefSignature(td), td.Comments);
 
             foreach (var un in file.unionSyntaxes)
                 if (un.unionName.Identifier.Equals(word, StringComparison.OrdinalIgnoreCase))
-                    return $"```ion\nunion {un.unionName.Identifier}\n```";
+                    return Compose(SyntaxUnionSignature(un), un.Comments);
+
+            foreach (var attr in file.attributeDefSyntaxes)
+                if (attr.Name.Identifier.Equals(word, StringComparison.OrdinalIgnoreCase))
+                    return Compose(SyntaxAttributeSignature(attr), attr.Comments);
         }
 
         return null;
     }
+
+    // ---------------------------------------------------------------------
+    // Declaration under the cursor
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// Resolves the declaration whose identifier token covers the cursor. Unlike the
+    /// by-name lookups this is unambiguous, so it can safely surface member level symbols
+    /// (fields, enum/flags members, arguments, union cases) together with their doc comment.
+    /// </summary>
+    private string? FindDeclarationHover(string uri, int line, int col)
+    {
+        var file = workspace.FindFileByUri(uri);
+        if (file is null)
+            return null;
+
+        var ctx = workspace.GetContextForFile(uri);
+
+        // --- attribute declarations -------------------------------------
+        foreach (var attr in file.attributeDefSyntaxes)
+        {
+            if (IonLspHelpers.Covers(attr.Name, line, col))
+                return Compose(SyntaxAttributeSignature(attr), attr.Comments);
+
+            foreach (var arg in attr.Args)
+                if (IonLspHelpers.Covers(arg.argName, line, col))
+                    return Compose(
+                        $"```ion\n(attribute argument) {arg.argName.Identifier}: {FormatSyntaxTypeName(arg.type)}\n```",
+                        arg.Comments,
+                        $"*Argument of attribute `@{attr.Name.Identifier}`*");
+        }
+
+        // --- messages and their fields ----------------------------------
+        foreach (var msg in file.messageSyntaxes)
+        {
+            if (IonLspHelpers.Covers(msg.Name, line, col))
+                return TypeHover(msg.Name.Identifier, msg.Comments, ctx, uri)
+                       ?? Compose(SyntaxMessageSignature(msg), msg.Comments);
+
+            foreach (var field in msg.Fields)
+                if (IonLspHelpers.Covers(field.Name, line, col))
+                    return Compose(
+                        $"```ion\n(field) {field.Name.Identifier}: {FormatSyntaxTypeName(field.Type)}\n```",
+                        field.Comments,
+                        $"*Field of message `{msg.Name.Identifier}`*");
+        }
+
+        // --- enums / flags and their members ----------------------------
+        foreach (var en in file.enumSyntaxes)
+        {
+            if (IonLspHelpers.Covers(en.Name, line, col))
+                return TypeHover(en.Name.Identifier, en.Comments, ctx, uri)
+                       ?? Compose($"```ion\nenum {en.Name.Identifier} : {FormatSyntaxTypeName(en.Type)}\n```", en.Comments);
+
+            foreach (var entry in en.Entries)
+                if (IonLspHelpers.Covers(entry.Name, line, col))
+                    return Compose(
+                        $"```ion\n(enum member) {en.Name.Identifier}.{entry.Name.Identifier}{EntryValue(entry)}\n```",
+                        entry.Comments,
+                        $"*Member of enum `{en.Name.Identifier}`*");
+        }
+
+        foreach (var fl in file.flagsSyntaxes)
+        {
+            if (IonLspHelpers.Covers(fl.Name, line, col))
+                return TypeHover(fl.Name.Identifier, fl.Comments, ctx, uri)
+                       ?? Compose($"```ion\nflags {fl.Name.Identifier} : {FormatSyntaxTypeName(fl.Type)}\n```", fl.Comments);
+
+            foreach (var entry in fl.Entries)
+                if (IonLspHelpers.Covers(entry.Name, line, col))
+                    return Compose(
+                        $"```ion\n(flags member) {fl.Name.Identifier}.{entry.Name.Identifier}{EntryValue(entry)}\n```",
+                        entry.Comments,
+                        $"*Member of flags `{fl.Name.Identifier}`*");
+        }
+
+        // --- services, methods and arguments ----------------------------
+        foreach (var svc in file.serviceSyntaxes)
+        {
+            if (IonLspHelpers.Covers(svc.serviceName, line, col))
+                return ServiceHover(svc.serviceName.Identifier, svc.Comments, ctx, uri)
+                       ?? Compose(SyntaxServiceSignature(svc), svc.Comments);
+
+            foreach (var arg in svc.BaseArguments)
+                if (IonLspHelpers.Covers(arg.argName, line, col))
+                    return Compose(
+                        $"```ion\n(service argument) {arg.argName.Identifier}: {FormatSyntaxTypeName(arg.type)}\n```",
+                        arg.Comments,
+                        $"*Base argument of service `{svc.serviceName.Identifier}`*");
+
+            foreach (var method in svc.Methods)
+            {
+                if (IonLspHelpers.Covers(method.methodName, line, col))
+                    return MethodHover(method.methodName.Identifier, method.Comments, ctx, uri)
+                           ?? Compose(
+                               $"```ion\n{SyntaxMethodSignature(method)}\n```",
+                               method.Comments,
+                               $"*Method of service `{svc.serviceName.Identifier}`*");
+
+                foreach (var arg in method.arguments)
+                    if (IonLspHelpers.Covers(arg.argName, line, col))
+                        return Compose(
+                            $"```ion\n(parameter) {ArgModifier(arg)}{arg.argName.Identifier}: {FormatSyntaxTypeName(arg.type)}\n```",
+                            arg.Comments,
+                            $"*Parameter of `{svc.serviceName.Identifier}.{method.methodName.Identifier}`*");
+            }
+        }
+
+        // --- unions, cases and their arguments --------------------------
+        foreach (var un in file.unionSyntaxes)
+        {
+            if (IonLspHelpers.Covers(un.unionName, line, col))
+                return TypeHover(un.unionName.Identifier, un.Comments, ctx, uri)
+                       ?? Compose(SyntaxUnionSignature(un), un.Comments);
+
+            foreach (var arg in un.baseFields)
+                if (IonLspHelpers.Covers(arg.argName, line, col))
+                    return Compose(
+                        $"```ion\n(shared field) {arg.argName.Identifier}: {FormatSyntaxTypeName(arg.type)}\n```",
+                        arg.Comments,
+                        $"*Shared field of union `{un.unionName.Identifier}`*");
+
+            foreach (var c in un.cases)
+            {
+                if (IonLspHelpers.Covers(c.caseName.Name, line, col))
+                    return Compose(
+                        $"```ion\n(union case) {SyntaxUnionCaseSignature(c)}\n```",
+                        c.Comments,
+                        $"*Case of union `{un.unionName.Identifier}`*");
+
+                foreach (var arg in c.arguments)
+                    if (IonLspHelpers.Covers(arg.argName, line, col))
+                        return Compose(
+                            $"```ion\n(case field) {arg.argName.Identifier}: {FormatSyntaxTypeName(arg.type)}\n```",
+                            arg.Comments,
+                            $"*Field of union case `{c.caseName.Name.Identifier}`*");
+            }
+        }
+
+        // --- typedefs ---------------------------------------------------
+        foreach (var td in file.typedefSyntaxes)
+            if (IonLspHelpers.Covers(td.TypeName.Name, line, col))
+                return TypeHover(td.TypeName.Name.Identifier, td.Comments, ctx, uri)
+                       ?? Compose(SyntaxTypedefSignature(td), td.Comments);
+
+        return null;
+    }
+
+    private string? TypeHover(string name, string? syntaxDoc, CompilationContext? ctx, string uri)
+        => ctx is null ? null : FindSymbolHover(name, ctx, uri, syntaxDoc);
+
+    private string? ServiceHover(string name, string? syntaxDoc, CompilationContext? ctx, string uri)
+        => ctx is null ? null : FindSymbolHover(name, ctx, uri, syntaxDoc);
+
+    private string? MethodHover(string name, string? syntaxDoc, CompilationContext? ctx, string uri)
+        => ctx is null ? null : FindSymbolHover(name, ctx, uri, syntaxDoc);
+
+    // ---------------------------------------------------------------------
+    // Syntax level signature rendering
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// Assembles a hover: signature code block, then the doc as markdown below a `---`
+    /// separator, then any trailing detail lines. An empty doc emits no separator at all.
+    /// </summary>
+    private static string Compose(string signature, string? doc, params string?[] extras)
+    {
+        var sections = new List<string> { signature };
+        IonDocMarkdown.AppendSection(sections, doc);
+        foreach (var extra in extras)
+            if (!string.IsNullOrEmpty(extra))
+                sections.Add(extra);
+        return string.Join("\n\n", sections);
+    }
+
+    private static string EntryValue(IonFlagEntrySyntax entry)
+        => entry.ValueExpression.HasValue
+            ? $" = {entry.ValueExpression.Value.value.Trim()}"
+            : "";
+
+    private static string ArgModifier(IonArgumentSyntax arg)
+        => arg.modifiers == IonArgumentModifiers.None
+            ? ""
+            : arg.modifiers.ToString().ToLowerInvariant() + " ";
+
+    private static string FormatSyntaxTypeName(IonUnderlyingTypeSyntax type)
+    {
+        var name = type.Name.Identifier;
+        if (type.generics.Count > 0)
+            name += "<" + string.Join(", ", type.generics.Select(g => g.Name.Identifier)) + ">";
+        if (type.IsPartial) name = "~" + name;
+        if (type.IsArray) name += "[]";
+        if (type.IsOptional) name += "?";
+        return name;
+    }
+
+    private static string SyntaxMessageSignature(IonMessageSyntax msg)
+    {
+        var fields = msg.Fields.Select(f => $"    {f.Name.Identifier}: {FormatSyntaxTypeName(f.Type)};");
+        var body = msg.Fields.Count > 0 ? "\n" + string.Join("\n", fields) + "\n" : "";
+        return $"```ion\nmsg {msg.Name.Identifier} {{{body}}}\n```";
+    }
+
+    private static string SyntaxMethodSignature(IonMethodSyntax m)
+    {
+        var args = string.Join(", ", m.arguments.Select(a =>
+            $"{ArgModifier(a)}{a.argName.Identifier}: {FormatSyntaxTypeName(a.type)}"));
+        var ret = m.returnType is not null ? $": {FormatSyntaxTypeName(m.returnType)}" : "";
+        var mods = m.modifiers.Count > 0
+            ? string.Join(" ", m.modifiers.Select(x => x.ToString().ToLowerInvariant())) + " "
+            : "";
+        return $"{mods}{m.methodName.Identifier}({args}){ret}";
+    }
+
+    private static string SyntaxServiceSignature(IonServiceSyntax svc)
+    {
+        var methods = svc.Methods.Select(m => $"    {SyntaxMethodSignature(m)};");
+        var body = svc.Methods.Count > 0 ? "\n" + string.Join("\n", methods) + "\n" : "";
+        var baseArgs = svc.BaseArguments.Count > 0
+            ? "(" + string.Join(", ", svc.BaseArguments.Select(a =>
+                $"{a.argName.Identifier}: {FormatSyntaxTypeName(a.type)}")) + ")"
+            : "";
+        return $"```ion\nservice {svc.serviceName.Identifier}{baseArgs} {{{body}}}\n```";
+    }
+
+    private static string SyntaxUnionCaseSignature(IonUnionTypeCaseSyntax c)
+    {
+        if (c.IsTypeRef)
+            return FormatSyntaxTypeName(c.caseName);
+        var args = string.Join(", ", c.arguments.Select(a =>
+            $"{a.argName.Identifier}: {FormatSyntaxTypeName(a.type)}"));
+        return $"{FormatSyntaxTypeName(c.caseName)}({args})";
+    }
+
+    private static string SyntaxUnionSignature(IonUnionSyntax un)
+    {
+        var cases = un.cases.Select(c => $"    {SyntaxUnionCaseSignature(c)},");
+        var body = un.cases.Count > 0 ? "\n" + string.Join("\n", cases) + "\n" : "";
+        var baseArgs = un.baseFields.Count > 0
+            ? "(" + string.Join(", ", un.baseFields.Select(a =>
+                $"{a.argName.Identifier}: {FormatSyntaxTypeName(a.type)}")) + ")"
+            : "";
+        return $"```ion\nunion {un.unionName.Identifier}{baseArgs} {{{body}}}\n```";
+    }
+
+    private static string SyntaxTypedefSignature(IonTypedefSyntax td)
+    {
+        var baseType = td.BaseType is not null ? $" = {FormatSyntaxTypeName(td.BaseType)}" : "";
+        return $"```ion\ntypedef {FormatSyntaxTypeName(td.TypeName)}{baseType}\n```";
+    }
+
+    private static string SyntaxAttributeSignature(IonAttributeDefSyntax attr)
+    {
+        var args = string.Join(", ", attr.Args.Select(a =>
+            $"{a.argName.Identifier}: {FormatSyntaxTypeName(a.type)}"));
+        return $"```ion\nattribute @{attr.Name.Identifier}({args});\n```";
+    }
+
+    private static Hover Markdown(string value) => new()
+    {
+        Contents = new MarkedStringsOrMarkupContent(new MarkupContent
+        {
+            Kind = MarkupKind.Markdown,
+            Value = value
+        })
+    };
 
     private static string? ComputeMessageSize(IonType type, IReadOnlyList<IonType> allDefs)
     {

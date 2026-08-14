@@ -20,6 +20,12 @@ public record InvalidIonBlock(string block) : IonSyntaxMember
 
 }
 
+/// <summary>
+/// A run of file level <c>//!</c> documentation. Emitted by the parser as a synthetic member and
+/// lifted into <see cref="IonFileSyntax.ModuleDoc"/>; it never appears in a built file syntax.
+/// </summary>
+public record IonModuleDocSyntax(string Text) : IonSyntaxMember;
+
 public record IonIdentifier(string Identifier) : IonSyntaxBase()
 {
     public static implicit operator IonIdentifier(string val) => new(val) { StartPosition = new SourcePos(0, 0) };
@@ -32,7 +38,7 @@ public record IonFieldSyntax(IonIdentifier Name, IonUnderlyingTypeSyntax Type) :
 
 public record IonMessageSyntax(IonIdentifier Name, List<IonFieldSyntax> Fields) : IonSyntaxMember;
 
-public record IonFlagEntrySyntax(IonIdentifier Name, Maybe<IonExpression> ValueExpression) : IonSyntaxBase;
+public record IonFlagEntrySyntax(IonIdentifier Name, Maybe<IonExpression> ValueExpression) : IonSyntaxMember;
 public record IonExpression(string value) : IonSyntaxBase;
 
 public record IonFlagsSyntax(IonIdentifier Name, IonUnderlyingTypeSyntax Type, List<IonFlagEntrySyntax> Entries)
@@ -113,7 +119,8 @@ public record IonFileSyntax(
     List<IonTypedefSyntax> typedefSyntaxes,
     List<IonServiceSyntax> serviceSyntaxes,
     List<IonUnionSyntax> unionSyntaxes,
-    List<IonSyntaxMember>? allTokens = null)
+    List<IonSyntaxMember>? allTokens = null,
+    string? ModuleDoc = null)
 {
     public List<IonSyntaxMember> Definitions => attributeDefSyntaxes
         .OfType<IonSyntaxMember>()

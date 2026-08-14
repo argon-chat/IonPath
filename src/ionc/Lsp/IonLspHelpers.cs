@@ -40,6 +40,33 @@ public static class IonLspHelpers
     public static bool IsWordChar(char c) => char.IsLetterOrDigit(c) || c == '_';
 
     /// <summary>
+    /// True when the 0-based position sits inside a comment or a string literal.
+    /// Handlers that resolve the symbol under the cursor from raw text must bail out on
+    /// those positions, otherwise a word that merely *appears* in prose gets treated as a
+    /// real reference (and, for rename, rewrites every genuine declaration of that name).
+    /// </summary>
+    public static bool IsInCommentOrString(string content, int line, int character)
+        => IonCommentScanner.Scan(content).IsCommentOrString(line, character);
+
+    /// <summary>
+    /// True when an identifier token covers the given 0-based position.
+    /// <see cref="IonIdentifier"/> carries an exact start/end from the parser.
+    /// </summary>
+    public static bool Covers(IonIdentifier id, int line, int character)
+    {
+        var start = id.StartPosition;
+        if (start.Line <= 0) return false;
+        if (line != start.Line - 1) return false;
+
+        var startCol = start.Col - 1;
+        var endCol = id.EndPosition is { } ep && ep.Line == start.Line
+            ? ep.Col - 1
+            : startCol + id.Identifier.Length;
+
+        return character >= startCol && character < endCol;
+    }
+
+    /// <summary>
     /// Convert a 1-based Pidgin SourcePos to a 0-based LSP Position.
     /// </summary>
     public static Position ToLspPosition(SourcePos pos)
@@ -268,70 +295,155 @@ public static class IonLspHelpers
             }
         }
 
-        // User-defined types
+        // User-defined types. Members live in their own namespace so that a field named
+        // like a type does not get swallowed by the type-name dedupe set.
+        var seenMembers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var file in workspace.ParsedFiles)
         {
             foreach (var msg in file.messageSyntaxes)
+            {
                 if (seen.Add(msg.Name.Identifier))
-                    items.Add(new CompletionItem
+                    items.Add(WithDoc(new CompletionItem
                     {
                         Label = msg.Name.Identifier,
                         Kind = CompletionItemKind.Struct,
                         Detail = $"msg (in {file.Name})",
                         SortText = $"2_{msg.Name.Identifier}"
-                    });
+                    }, msg.Comments));
+
+                foreach (var field in msg.Fields)
+                    if (seenMembers.Add($"field:{field.Name.Identifier}"))
+                        items.Add(WithDoc(new CompletionItem
+                        {
+                            Label = field.Name.Identifier,
+                            Kind = CompletionItemKind.Field,
+                            Detail = $"field of {msg.Name.Identifier}: {field.Type.Name.Identifier}",
+                            SortText = $"3_{field.Name.Identifier}"
+                        }, field.Comments));
+            }
 
             foreach (var svc in file.serviceSyntaxes)
+            {
                 if (seen.Add(svc.serviceName.Identifier))
-                    items.Add(new CompletionItem
+                    items.Add(WithDoc(new CompletionItem
                     {
                         Label = svc.serviceName.Identifier,
                         Kind = CompletionItemKind.Interface,
                         Detail = $"service (in {file.Name})",
                         SortText = $"2_{svc.serviceName.Identifier}"
-                    });
+                    }, svc.Comments));
+
+                foreach (var method in svc.Methods)
+                    if (seenMembers.Add($"method:{method.methodName.Identifier}"))
+                        items.Add(WithDoc(new CompletionItem
+                        {
+                            Label = method.methodName.Identifier,
+                            Kind = CompletionItemKind.Method,
+                            Detail = $"method of {svc.serviceName.Identifier}",
+                            SortText = $"3_{method.methodName.Identifier}"
+                        }, method.Comments));
+            }
 
             foreach (var en in file.enumSyntaxes)
+            {
                 if (seen.Add(en.Name.Identifier))
-                    items.Add(new CompletionItem
+                    items.Add(WithDoc(new CompletionItem
                     {
                         Label = en.Name.Identifier,
                         Kind = CompletionItemKind.Enum,
                         Detail = $"enum (in {file.Name})",
                         SortText = $"2_{en.Name.Identifier}"
-                    });
+                    }, en.Comments));
+
+                foreach (var entry in en.Entries)
+                    if (seenMembers.Add($"member:{en.Name.Identifier}.{entry.Name.Identifier}"))
+                        items.Add(WithDoc(new CompletionItem
+                        {
+                            Label = entry.Name.Identifier,
+                            Kind = CompletionItemKind.EnumMember,
+                            Detail = $"{en.Name.Identifier} member",
+                            SortText = $"3_{entry.Name.Identifier}"
+                        }, entry.Comments));
+            }
 
             foreach (var fl in file.flagsSyntaxes)
+            {
                 if (seen.Add(fl.Name.Identifier))
-                    items.Add(new CompletionItem
+                    items.Add(WithDoc(new CompletionItem
                     {
                         Label = fl.Name.Identifier,
                         Kind = CompletionItemKind.Enum,
                         Detail = $"flags (in {file.Name})",
                         SortText = $"2_{fl.Name.Identifier}"
-                    });
+                    }, fl.Comments));
+
+                foreach (var entry in fl.Entries)
+                    if (seenMembers.Add($"member:{fl.Name.Identifier}.{entry.Name.Identifier}"))
+                        items.Add(WithDoc(new CompletionItem
+                        {
+                            Label = entry.Name.Identifier,
+                            Kind = CompletionItemKind.EnumMember,
+                            Detail = $"{fl.Name.Identifier} flag",
+                            SortText = $"3_{entry.Name.Identifier}"
+                        }, entry.Comments));
+            }
 
             foreach (var un in file.unionSyntaxes)
+            {
                 if (seen.Add(un.unionName.Identifier))
-                    items.Add(new CompletionItem
+                    items.Add(WithDoc(new CompletionItem
                     {
                         Label = un.unionName.Identifier,
                         Kind = CompletionItemKind.Class,
                         Detail = $"union (in {file.Name})",
                         SortText = $"2_{un.unionName.Identifier}"
-                    });
+                    }, un.Comments));
+
+                foreach (var c in un.cases)
+                    if (seenMembers.Add($"case:{un.unionName.Identifier}.{c.caseName.Name.Identifier}"))
+                        items.Add(WithDoc(new CompletionItem
+                        {
+                            Label = c.caseName.Name.Identifier,
+                            Kind = CompletionItemKind.EnumMember,
+                            Detail = $"case of union {un.unionName.Identifier}",
+                            SortText = $"3_{c.caseName.Name.Identifier}"
+                        }, c.Comments));
+            }
 
             foreach (var td in file.typedefSyntaxes)
                 if (seen.Add(td.TypeName.Name.Identifier))
-                    items.Add(new CompletionItem
+                    items.Add(WithDoc(new CompletionItem
                     {
                         Label = td.TypeName.Name.Identifier,
                         Kind = CompletionItemKind.TypeParameter,
                         Detail = $"typedef (in {file.Name})",
                         SortText = $"2_{td.TypeName.Name.Identifier}"
-                    });
+                    }, td.Comments));
+
+            foreach (var attr in file.attributeDefSyntaxes)
+                if (seenMembers.Add($"attr:{attr.Name.Identifier}"))
+                    items.Add(WithDoc(new CompletionItem
+                    {
+                        Label = $"@{attr.Name.Identifier}",
+                        FilterText = attr.Name.Identifier,
+                        InsertText = attr.Name.Identifier,
+                        Kind = CompletionItemKind.Property,
+                        Detail = $"attribute (in {file.Name})",
+                        SortText = $"3_{attr.Name.Identifier}"
+                    }, attr.Comments));
         }
 
         return items;
+    }
+
+    /// <summary>
+    /// Attaches the symbol's doc comment as markdown documentation.
+    /// A null / empty doc leaves the item exactly as it was.
+    /// </summary>
+    public static CompletionItem WithDoc(CompletionItem item, string? doc)
+    {
+        var markup = IonDocMarkdown.ToMarkupContent(doc);
+        return markup is null ? item : item with { Documentation = markup };
     }
 }

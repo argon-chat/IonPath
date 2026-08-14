@@ -25,6 +25,10 @@ public class IonReferencesHandler(IonWorkspace workspace) : ReferencesHandlerBas
         if (content is null)
             return Task.FromResult(new LocationContainer());
 
+        // Identifiers that only appear inside a comment or a string literal are not references.
+        if (IonLspHelpers.IsInCommentOrString(content, request.Position.Line, request.Position.Character))
+            return Task.FromResult(new LocationContainer());
+
         var word = IonLspHelpers.GetWordAtPosition(content, request.Position.Line, request.Position.Character);
         if (string.IsNullOrEmpty(word))
             return Task.FromResult(new LocationContainer());

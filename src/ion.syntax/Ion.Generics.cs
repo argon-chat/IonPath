@@ -1,4 +1,4 @@
-﻿namespace ion.syntax;
+namespace ion.syntax;
 
 using Pidgin;
 using static Pidgin.Parser;
@@ -8,15 +8,18 @@ public partial class IonParser
 {
     public static Parser<char, IReadOnlyList<IonTypeParameterSyntax>> GenericParameterList =>
         Char('<')
-            .Then(TypeParameterSyntax.Separated(Char(',').Then(SkipWhitespaces)))
-            .Before(Char('>')).Select(x => x.ToList()).OfType<IReadOnlyList<IonTypeParameterSyntax>>();
+            .Before(SkipTrivia)
+            .Then(TypeParameterSyntax.Separated(Char(',').Then(SkipTrivia)))
+            .Before(SkipTriviaAll)
+            .Before(Char('>').Before(SkipTrivia))
+            .Select(x => x.ToList()).OfType<IReadOnlyList<IonTypeParameterSyntax>>();
 
     public static Parser<char, IonTypeParameterSyntax> TypeParameterSyntax =>
         from startPos in CurrentPos
-        from name in Identifier.Before(SkipWhitespaces)
+        from name in Identifier.Before(SkipTrivia)
         from constraints in Char(':')
-            .Then(SkipWhitespaces)
-            .Then(Type.Separated(Char(',').Then(SkipWhitespaces)))
+            .Then(SkipTrivia)
+            .Then(Type.Separated(Char(',').Then(SkipTrivia)))
             .Optional()
         from endPos in CurrentPos
         select new IonTypeParameterSyntax(name).WithPos(startPos, endPos);

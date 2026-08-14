@@ -41,57 +41,71 @@ public sealed class RustEmitter : ICodeEmitter
     // TYPE DECLARATIONS
     // ═══════════════════════════════════════════════════════════════════
 
-    public string EnumDeclaration(string name, IEnumerable<EnumMember> members, EnumOptions? options = null)
+    public string EnumDeclaration(string name, IEnumerable<EnumMember> members, EnumOptions? options = null, string? doc = null)
     {
         var baseType = options?.BaseType ?? "i32";
         var sb = new StringBuilder();
+        sb.Append(DocComment(doc));
         sb.AppendLine($"#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]");
         sb.AppendLine($"#[repr({baseType})]");
         sb.AppendLine($"pub enum {name} {{");
         foreach (var m in members)
+        {
+            sb.Append(DocComment(m.Doc, Indent(1)));
             sb.AppendLine($"    {m.Name} = {m.Value},");
+        }
         sb.AppendLine("}");
         return sb.ToString();
     }
 
-    public string FlagsDeclaration(string name, string? baseType, IEnumerable<EnumMember> members)
+    public string FlagsDeclaration(string name, string? baseType, IEnumerable<EnumMember> members, string? doc = null)
     {
         var sb = new StringBuilder();
+        sb.Append(DocComment(doc));
         sb.AppendLine($"#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]");
         sb.AppendLine($"pub struct {name}(pub {baseType ?? "u32"});");
         sb.AppendLine();
         sb.AppendLine($"impl {name} {{");
         foreach (var m in members)
+        {
+            sb.Append(DocComment(m.Doc, Indent(1)));
             sb.AppendLine($"    pub const {m.Name}: Self = Self({m.Value});");
+        }
         sb.AppendLine("}");
         return sb.ToString();
     }
 
-    public string MessageDeclaration(string name, IEnumerable<FieldDecl> fields)
+    public string MessageDeclaration(string name, IEnumerable<FieldDecl> fields, string? doc = null)
     {
         var sb = new StringBuilder();
+        sb.Append(DocComment(doc));
         sb.AppendLine("#[derive(Debug, Clone, PartialEq)]");
         sb.AppendLine($"pub struct {name} {{");
         foreach (var f in fields)
+        {
+            sb.Append(DocComment(f.Doc, Indent(1)));
             sb.AppendLine($"    pub {FormatIdentifier(f.Name)}: {f.Type},");
+        }
         sb.AppendLine("}");
         return sb.ToString();
     }
 
-    public string TypedefDeclaration(string name, string underlyingType)
+    public string TypedefDeclaration(string name, string underlyingType, string? doc = null)
     {
-        return $"pub type {name} = {underlyingType};";
+        return $"{DocComment(doc)}pub type {name} = {underlyingType};";
     }
 
-    public string ServiceInterfaceDeclaration(string name, IEnumerable<MethodDecl> methods, string? baseInterface = null)
+    public string ServiceInterfaceDeclaration(string name, IEnumerable<MethodDecl> methods, string? baseInterface = null, string? doc = null)
     {
         var sb = new StringBuilder();
+        sb.Append(DocComment(doc));
         sb.AppendLine("#[async_trait::async_trait]");
         sb.AppendLine($"pub trait {name}: Send + Sync {{");
         foreach (var m in methods)
         {
             var args = string.Join(", ", m.Parameters.Select(p => $"{FormatIdentifier(p.Name)}: {p.Type}"));
             var selfArg = "&self";
+            sb.Append(DocComment(m.Doc, Indent(1), m.DocParams));
             sb.AppendLine($"    async fn {FormatIdentifier(m.Name)}({selfArg}, {args}) -> Result<{m.ReturnType}, ion_rustcore::IonError>;");
         }
         sb.AppendLine("}");
@@ -102,11 +116,15 @@ public sealed class RustEmitter : ICodeEmitter
     {
         // Rust doesn't have classes; we generate struct + impl
         var sb = new StringBuilder();
+        sb.Append(DocComment(decl.Doc));
         sb.AppendLine($"pub struct {decl.Name} {{");
         if (decl.Fields != null)
         {
             foreach (var f in decl.Fields)
+            {
+                sb.Append(DocComment(f.Doc, Indent(1)));
                 sb.AppendLine($"    pub {FormatIdentifier(f.Name)}: {f.Type},");
+            }
         }
         sb.AppendLine("}");
         return sb.ToString();
@@ -116,9 +134,10 @@ public sealed class RustEmitter : ICodeEmitter
     // UNION TYPES
     // ═══════════════════════════════════════════════════════════════════
 
-    public string UnionBaseDeclaration(string name, IEnumerable<string> caseNames, IEnumerable<FieldDecl>? sharedFields = null)
+    public string UnionBaseDeclaration(string name, IEnumerable<string> caseNames, IEnumerable<FieldDecl>? sharedFields = null, string? doc = null)
     {
         var sb = new StringBuilder();
+        sb.Append(DocComment(doc));
         sb.AppendLine("#[derive(Debug, Clone, PartialEq)]");
         sb.AppendLine($"pub enum {name} {{");
         foreach (var caseName in caseNames)
@@ -142,14 +161,18 @@ public sealed class RustEmitter : ICodeEmitter
         return sb.ToString();
     }
 
-    public string UnionCaseDeclaration(string caseName, string unionName, int caseIndex, IEnumerable<FieldDecl> fields)
+    public string UnionCaseDeclaration(string caseName, string unionName, int caseIndex, IEnumerable<FieldDecl> fields, string? doc = null)
     {
         // Union cases are standalone structs in Rust
         var sb = new StringBuilder();
+        sb.Append(DocComment(doc));
         sb.AppendLine("#[derive(Debug, Clone, PartialEq)]");
         sb.AppendLine($"pub struct {caseName} {{");
         foreach (var f in fields)
+        {
+            sb.Append(DocComment(f.Doc, Indent(1)));
             sb.AppendLine($"    pub {FormatIdentifier(f.Name)}: {f.Type},");
+        }
         sb.AppendLine("}");
         return sb.ToString();
     }
@@ -205,4 +228,18 @@ public sealed class RustEmitter : ICodeEmitter
     }
 
     public string FormatEnumValue(string value, int? bits = null) => value;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // DOCUMENTATION
+    // ═══════════════════════════════════════════════════════════════════
+
+    public string DocComment(
+        string? doc,
+        string indent = "",
+        IReadOnlyList<DocParam>? parameters = null,
+        string? identifier = null)
+        => DocCommentFormatter.RustDoc(doc, indent, parameters);
+
+    public string ModuleDocComment(string? doc, string? name = null)
+        => DocCommentFormatter.RustModuleDoc(doc);
 }

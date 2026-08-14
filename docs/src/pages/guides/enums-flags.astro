@@ -14,13 +14,19 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
       <h2 id="enums" class="text-xl font-bold mb-4">Enums</h2>
       <p class="text-sm text-text-secondary mb-4">Enums define a set of named constants with auto-incrementing values:</p>
       <div class="code-block text-[13px]">
-        <pre><span class="text-accent-3">enum</span> <span class="type-name">Status</span>: <span class="type-keyword">u1</span> {'{'}
+        <pre><span class="text-accent-2">/// Lifecycle state of an account.</span>
+<span class="text-accent-3">enum</span> <span class="type-name">Status</span>: <span class="type-keyword">u1</span> {'{'}
+    <span class="text-accent-2">/// Created but not yet confirmed by the owner.</span>
     Pending,        <span class="text-text-muted">// = 0</span>
+    <span class="text-accent-2">/// Confirmed and usable.</span>
     Active,         <span class="text-text-muted">// = 1</span>
+    <span class="text-accent-2">/// Suspended by an administrator.</span>
     Inactive = 5,   <span class="text-text-muted">// = 5 (explicit)</span>
+    <span class="text-accent-2">/// Retained for audit only.</span>
     Archived        <span class="text-text-muted">// = 6 (auto-increment from 5)</span>
 {'}'}</pre>
       </div>
+      <p class="text-sm text-text-secondary mt-3">Individual members take <a href="/guides/comments/" class="text-accent hover:underline">doc comments</a> just like the enum itself; the inline <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">//</code> notes above are plain trivia and are discarded.</p>
       <p class="text-sm text-text-secondary mt-3">The base type (after the colon) determines the wire encoding size. Can be any unsigned integer: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">u1</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">u2</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">u4</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">u8</code>.</p>
     </section>
 
@@ -28,8 +34,10 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
       <h2 id="flags" class="text-xl font-bold mb-4">Flags</h2>
       <p class="text-sm text-text-secondary mb-4">Flags are bitfield enums — their values can be combined with bitwise OR. Use the bit-shift syntax for clarity:</p>
       <div class="code-block text-[13px]">
-        <pre><span class="text-accent-3">flags</span> <span class="type-name">Permissions</span>: <span class="type-keyword">u4</span> {'{'}
+        <pre><span class="text-accent-2">/// Capabilities granted to a principal on a resource.</span>
+<span class="text-accent-3">flags</span> <span class="type-name">Permissions</span>: <span class="type-keyword">u4</span> {'{'}
     None = 0,
+    <span class="text-accent-2">/// May read the resource.</span>
     Read = 1 &lt;&lt; 0,       <span class="text-text-muted">// = 1</span>
     Write = 1 &lt;&lt; 1,      <span class="text-text-muted">// = 2</span>
     Execute = 1 &lt;&lt; 2,    <span class="text-text-muted">// = 4</span>

@@ -35,7 +35,11 @@ public class IonSemanticTokensHandler(IonWorkspace workspace) : SemanticTokensFu
         "definition",     // 1
         "deprecated",     // 2
         "readonly",       // 3
+        "documentation",  // 4 - `///`, `//!` and `/** */` comments
     ];
+
+    private const int TokenTypeComment = 6;
+    private const int ModifierDocumentation = 1 << 4;
 
     public static SemanticTokensLegend Legend => new()
     {
@@ -60,10 +64,22 @@ public class IonSemanticTokensHandler(IonWorkspace workspace) : SemanticTokensFu
         var file = workspace.ParsedFiles
             .FirstOrDefault(f => workspace.GetFileUri(f).Equals(uri, StringComparison.OrdinalIgnoreCase));
 
-        if (file is null)
+        var content = workspace.GetDocumentContent(uri)
+            ?? (File.Exists(uri) ? File.ReadAllText(uri) : null);
+
+        if (file is null && content is null)
             return Task.FromResult<SemanticTokens?>(null);
 
         var builder = new SemanticTokensBuilder();
+
+        // Comments. Scanned from the raw text rather than the syntax tree so that they are
+        // still highlighted while the file does not parse, and so that a `//` or `/*` that
+        // occurs inside a string literal is never mistaken for a comment.
+        if (content is not null)
+            EmitComments(builder, content);
+
+        if (file is null)
+            return Task.FromResult<SemanticTokens?>(new SemanticTokens { Data = builder.Build() });
 
         // Directives
         foreach (var use in file.useSyntaxes)
@@ -190,6 +206,34 @@ public class IonSemanticTokensHandler(IonWorkspace workspace) : SemanticTokensFu
         "Maybe", "Array", "Partial",
         "vec2f", "vec3f", "vec4f", "vec2d", "vec3d", "vec4d", "vec2h", "vec3h", "vec4h"
     };
+
+    /// <summary>
+    /// Emits one `comment` token per line covered by each comment. Doc comments
+    /// (<c>///</c>, <c>//!</c>, <c>/** */</c>) additionally carry the `documentation` modifier,
+    /// so a theme can colour API docs differently from ordinary commentary.
+    /// </summary>
+    private static void EmitComments(SemanticTokensBuilder builder, string content)
+    {
+        var scanned = IonCommentScanner.Scan(content);
+
+        foreach (var comment in scanned.Comments)
+        {
+            var modifiers = comment.IsDoc ? ModifierDocumentation : 0;
+
+            for (var line = comment.StartLine; line <= comment.EndLine; line++)
+            {
+                if (line >= scanned.Lines.Length) break;
+
+                var lineEnd = scanned.VisualLength(line);
+                var start = line == comment.StartLine ? comment.StartChar : 0;
+                var end = line == comment.EndLine ? Math.Min(comment.EndChar, lineEnd) : lineEnd;
+
+                if (end <= start) continue;
+
+                builder.Push(line, start, end - start, TokenTypeComment, modifiers);
+            }
+        }
+    }
 
     private static void EmitTypeRef(SemanticTokensBuilder builder, IonUnderlyingTypeSyntax type)
     {

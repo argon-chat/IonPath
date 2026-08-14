@@ -3,7 +3,6 @@
   "name": "IonPath",
   "scopeName": "source.ion",
   "patterns": [
-    { "include": "#blockComments" },
     { "include": "#comments" },
     { "include": "#directives" },
     { "include": "#keywords" },
@@ -25,25 +24,70 @@
     { "include": "#typeReference" }
   ],
   "repository": {
-    "blockComments": {
+    "comments": {
+      "comment": "Order matters: the most specific marker must be listed first so that /** wins over /*, and //! and /// win over //.",
+      "patterns": [
+        { "include": "#docBlockComment" },
+        { "include": "#blockComment" },
+        { "include": "#moduleDocComment" },
+        { "include": "#docLineComment" },
+        { "include": "#lineComment" }
+      ]
+    },
+    "docBlockComment": {
+      "comment": "/** ... */ doc block comment. The (?!/) guard keeps the empty /**/ out of this rule so it falls through to #blockComment.",
+      "name": "comment.block.documentation.ion",
+      "begin": "/\\*\\*(?!/)",
+      "end": "\\*/",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.comment.begin.ion" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.comment.end.ion" }
+      },
       "patterns": [
         {
-          "name": "comment.block.ionpath",
-          "begin": "/\\*",
-          "end": "\\*/",
-          "captures": {
-            "0": { "name": "punctuation.definition.comment.ionpath" }
-          }
+          "comment": "Leading * on continuation lines is stripped by the compiler; scope it as punctuation.",
+          "name": "punctuation.definition.comment.ion",
+          "match": "^\\s*\\*(?!/)"
         }
       ]
     },
-    "comments": {
-      "patterns": [
-        {
-          "name": "comment.line.double-slash.ionpath",
-          "match": "//.*$"
-        }
-      ]
+    "blockComment": {
+      "comment": "/* ... */ ordinary block comment. Non-nesting: the first */ closes it.",
+      "name": "comment.block.ion",
+      "begin": "/\\*",
+      "end": "\\*/",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.comment.begin.ion" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.comment.end.ion" }
+      }
+    },
+    "moduleDocComment": {
+      "comment": "//! module-level doc comment.",
+      "name": "comment.line.documentation.ion",
+      "match": "(//!).*$",
+      "captures": {
+        "1": { "name": "punctuation.definition.comment.documentation.ion" }
+      }
+    },
+    "docLineComment": {
+      "comment": "/// doc comment attached to the following declaration. The (?!/) guard keeps //// an ordinary line comment, matching the compiler.",
+      "name": "comment.line.documentation.ion",
+      "match": "(///)(?!/).*$",
+      "captures": {
+        "1": { "name": "punctuation.definition.comment.documentation.ion" }
+      }
+    },
+    "lineComment": {
+      "comment": "// ordinary line comment (pure trivia).",
+      "name": "comment.line.double-slash.ion",
+      "match": "(//).*$",
+      "captures": {
+        "1": { "name": "punctuation.definition.comment.ion" }
+      }
     },
     "directives": {
       "patterns": [

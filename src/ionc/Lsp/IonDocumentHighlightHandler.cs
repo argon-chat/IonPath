@@ -27,6 +27,11 @@ public class IonDocumentHighlightHandler(IonWorkspace workspace) : DocumentHighl
         if (content is null)
             return Task.FromResult<DocumentHighlightContainer?>(null);
 
+        // Do not light up a symbol just because its name is mentioned in a comment or a
+        // string literal — that position is prose, not a reference.
+        if (IonLspHelpers.IsInCommentOrString(content, (int)request.Position.Line, (int)request.Position.Character))
+            return Task.FromResult<DocumentHighlightContainer?>(null);
+
         var word = IonLspHelpers.GetWordAtPosition(content, (int)request.Position.Line, (int)request.Position.Character);
         if (string.IsNullOrEmpty(word))
             return Task.FromResult<DocumentHighlightContainer?>(null);

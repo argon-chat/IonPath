@@ -26,4 +26,12 @@ public static class NumberBitEx
 }
 
 
+/// <summary>
+/// A user declared 'attribute' definition.
+/// </summary>
+/// <remarks>
+/// Derives from <see cref="IonBase"/>, so <c>Doc</c> (the '///' documentation of the attribute
+/// declaration) is inherited — it is intentionally NOT redeclared here, a shadowing member would
+/// hide the base property and break polymorphic doc lookups.
+/// </remarks>
 public record IonAttributeType(IonIdentifier name, List<IonArgument> arguments) : IonBase(name, []);

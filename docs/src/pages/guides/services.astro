@@ -13,8 +13,11 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
     <section>
       <h2 id="basic-syntax" class="text-xl font-bold mb-4">Basic Syntax</h2>
       <div class="code-block text-[13px]">
-        <pre><span class="text-accent-3">service</span> <span class="type-name">MathInteraction</span>(leftOperand: <span class="type-keyword">i4</span>) {'{'}
+        <pre><span class="text-accent-2">/// Integer arithmetic over a fixed left-hand operand.</span>
+<span class="text-accent-3">service</span> <span class="type-name">MathInteraction</span>(leftOperand: <span class="type-keyword">i4</span>) {'{'}
+    <span class="text-accent-2">/// Adds rightOperand to the bound operand.</span>
     Add(rightOperand: <span class="type-keyword">i4</span>): <span class="type-keyword">i4</span>;
+    <span class="text-accent-2">/// Multiplies the bound operand by rightOperand.</span>
     Mul(rightOperand: <span class="type-keyword">i4</span>): <span class="type-keyword">i4</span>;
 {'}'}</pre>
       </div>
@@ -30,12 +33,17 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
       <h2 id="base-arguments" class="text-xl font-bold mb-4">Base Arguments</h2>
       <p class="text-sm text-text-secondary mb-4">Base arguments are declared in the service header and are automatically prepended to every method call. They act like a constructor or context that applies to all methods:</p>
       <div class="code-block text-[13px]">
-        <pre><span class="text-accent-3">service</span> <span class="type-name">UserService</span>(spaceId: <span class="type-keyword">u4</span>, auth: <span class="type-keyword">string</span>) {'{'}
+        <pre><span class="text-accent-3">service</span> <span class="type-name">UserService</span>(
+    <span class="text-accent-2">/// Tenant the call is scoped to.</span>
+    spaceId: <span class="type-keyword">u4</span>,
+    <span class="text-accent-2">/// Bearer token for the calling principal.</span>
+    auth: <span class="type-keyword">string</span>
+) {'{'}
     GetUser(userId: <span class="type-keyword">u4</span>): <span class="type-name">User</span>;
     <span class="text-text-muted">// On the wire, GetUser actually sends: [spaceId, auth, userId]</span>
 {'}'}</pre>
       </div>
-      <p class="text-sm text-text-secondary mt-3">In C#, base arguments become constructor parameters. In TypeScript, they are passed when creating the service client.</p>
+      <p class="text-sm text-text-secondary mt-3">In C#, base arguments become constructor parameters. In TypeScript, they are passed when creating the service client. Arguments accept <a href="/guides/comments/" class="text-accent hover:underline">doc comments</a> of their own, which become <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">&lt;param&gt;</code> / <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}param</code> entries in the generated code.</p>
     </section>
 
     <section>

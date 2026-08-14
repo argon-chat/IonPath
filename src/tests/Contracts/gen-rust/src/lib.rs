@@ -8,6 +8,16 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 #![allow(dead_code, unused_imports, non_camel_case_types)]
+//! Binary payload round-trip contracts.
+//!
+//! These services exist to exercise the `bytes` primitive across every method
+//! shape the runtime supports: void return, single round-trip, and repeated
+//! round-trips over the same connection.
+//!
+//! Arithmetic RPC surface used by the IonPath integration tests.
+//!
+//! Every service in this module is stateless: the left-hand operand is bound
+//! once, as a service argument, and reused by every method call on that client.
 
 use ion_rustcore::formatter::IonFormat;
 use ion_rustcore::{Decoder, Encoder, IonError};
@@ -99,6 +109,10 @@ impl IonFormat for VectorOfVectorOfVector {
 
 // ═══════════════ Service Clients ═══════════════
 
+/// Blob echo service used by the transport tests.
+///
+/// Nothing here interprets the payload; the methods only prove that a byte
+/// buffer survives serialization, transport and deserialization unchanged.
 pub struct TestBlobsClient {
     ctx: ion_rustcore::IonClientContext,
 }
@@ -110,7 +124,8 @@ impl ion_rustcore::FromContext for TestBlobsClient {
 }
 
 impl TestBlobsClient {
-        pub async fn r#do(&self, data: &ion_rustcore::IonBytes) -> Result<(), ion_rustcore::IonError> {
+        /// Accepts a payload and returns nothing. Exercises the void-return path.
+    pub async fn r#do(&self, data: &ion_rustcore::IonBytes) -> Result<(), ion_rustcore::IonError> {
         let mut e = ion_rustcore::Encoder::new(Vec::new());
         e.array(1)?;
         data.ion_write(&mut e)?;
@@ -118,6 +133,7 @@ impl TestBlobsClient {
         let req = ion_rustcore::IonRequest::new(&self.ctx, "ITestBlobs", "Do");
         req.call_void(&buf).await
     }
+    /// Echoes the payload back to the caller.
     pub async fn do_it(&self, data: &ion_rustcore::IonBytes) -> Result<ion_rustcore::IonBytes, ion_rustcore::IonError> {
         let mut e = ion_rustcore::Encoder::new(Vec::new());
         e.array(1)?;
@@ -126,6 +142,8 @@ impl TestBlobsClient {
         let req = ion_rustcore::IonRequest::new(&self.ctx, "ITestBlobs", "DoIt");
         req.call::<ion_rustcore::IonBytes>(&buf).await
     }
+    /// Second echo overload. The duplicate methods let the tests issue several
+    /// distinct calls over one connection without reusing a method name.
     pub async fn do_it2(&self, data: &ion_rustcore::IonBytes) -> Result<ion_rustcore::IonBytes, ion_rustcore::IonError> {
         let mut e = ion_rustcore::Encoder::new(Vec::new());
         e.array(1)?;
@@ -134,6 +152,7 @@ impl TestBlobsClient {
         let req = ion_rustcore::IonRequest::new(&self.ctx, "ITestBlobs", "DoIt2");
         req.call::<ion_rustcore::IonBytes>(&buf).await
     }
+    /// Third echo overload. See DoIt2.
     pub async fn do_it3(&self, data: &ion_rustcore::IonBytes) -> Result<ion_rustcore::IonBytes, ion_rustcore::IonError> {
         let mut e = ion_rustcore::Encoder::new(Vec::new());
         e.array(1)?;
@@ -145,6 +164,10 @@ impl TestBlobsClient {
 
 }
 
+/// Integer arithmetic over a fixed left-hand operand.
+///
+/// The operand is supplied when the client is constructed, so calling Add(2)
+/// on a client created with leftOperand = 40 yields 42.
 pub struct MathInteractionClient {
     ctx: ion_rustcore::IonClientContext,
 }
@@ -156,7 +179,12 @@ impl ion_rustcore::FromContext for MathInteractionClient {
 }
 
 impl MathInteractionClient {
-        pub async fn add(&self, left_operand: i32, right_operand: i32) -> Result<i32, ion_rustcore::IonError> {
+        /// Adds rightOperand to the bound operand.
+    ///
+    /// # Arguments
+    ///
+    /// * `left_operand` - The left-hand operand shared by every method on this service.
+    pub async fn add(&self, left_operand: i32, right_operand: i32) -> Result<i32, ion_rustcore::IonError> {
         let mut e = ion_rustcore::Encoder::new(Vec::new());
         e.array(2)?;
         left_operand.ion_write(&mut e)?;
@@ -165,6 +193,11 @@ impl MathInteractionClient {
         let req = ion_rustcore::IonRequest::new(&self.ctx, "IMathInteraction", "Add");
         req.call::<i32>(&buf).await
     }
+    /// Multiplies the bound operand by rightOperand.
+    ///
+    /// # Arguments
+    ///
+    /// * `left_operand` - The left-hand operand shared by every method on this service.
     pub async fn mul(&self, left_operand: i32, right_operand: i32) -> Result<i32, ion_rustcore::IonError> {
         let mut e = ion_rustcore::Encoder::new(Vec::new());
         e.array(2)?;
@@ -174,6 +207,11 @@ impl MathInteractionClient {
         let req = ion_rustcore::IonRequest::new(&self.ctx, "IMathInteraction", "Mul");
         req.call::<i32>(&buf).await
     }
+    /// Subtracts rightOperand from the bound operand.
+    ///
+    /// # Arguments
+    ///
+    /// * `left_operand` - The left-hand operand shared by every method on this service.
     pub async fn sub(&self, left_operand: i32, right_operand: i32) -> Result<i32, ion_rustcore::IonError> {
         let mut e = ion_rustcore::Encoder::new(Vec::new());
         e.array(2)?;
@@ -183,6 +221,13 @@ impl MathInteractionClient {
         let req = ion_rustcore::IonRequest::new(&self.ctx, "IMathInteraction", "Sub");
         req.call::<i32>(&buf).await
     }
+    /// Divides the bound operand by rightOperand.
+    ///
+    /// Division by zero surfaces as an RPC fault, not as a return value.
+    ///
+    /// # Arguments
+    ///
+    /// * `left_operand` - The left-hand operand shared by every method on this service.
     pub async fn div(&self, left_operand: i32, right_operand: i32) -> Result<i32, ion_rustcore::IonError> {
         let mut e = ion_rustcore::Encoder::new(Vec::new());
         e.array(2)?;
@@ -192,6 +237,11 @@ impl MathInteractionClient {
         let req = ion_rustcore::IonRequest::new(&self.ctx, "IMathInteraction", "Div");
         req.call::<i32>(&buf).await
     }
+    /// Raises the bound operand to the power of rightOperand.
+    ///
+    /// # Arguments
+    ///
+    /// * `left_operand` - The left-hand operand shared by every method on this service.
     pub async fn pow(&self, left_operand: i32, right_operand: i32) -> Result<i32, ion_rustcore::IonError> {
         let mut e = ion_rustcore::Encoder::new(Vec::new());
         e.array(2)?;
@@ -201,6 +251,13 @@ impl MathInteractionClient {
         let req = ion_rustcore::IonRequest::new(&self.ctx, "IMathInteraction", "Pow");
         req.call::<i32>(&buf).await
     }
+    /// Raises the bound operand to each power in rightOperand, elementwise.
+    ///
+    /// The result array has the same length as the input array.
+    ///
+    /// # Arguments
+    ///
+    /// * `left_operand` - The left-hand operand shared by every method on this service.
     pub async fn pow_array(&self, left_operand: i32, right_operand: &Vec<i32>) -> Result<Vec<i32>, ion_rustcore::IonError> {
         let mut e = ion_rustcore::Encoder::new(Vec::new());
         e.array(2)?;
@@ -210,6 +267,11 @@ impl MathInteractionClient {
         let req = ion_rustcore::IonRequest::new(&self.ctx, "IMathInteraction", "PowArray");
         req.call::<Vec<i32>>(&buf).await
     }
+    /// Returns the absolute value of rightOperand, or null when it is null.
+    ///
+    /// # Arguments
+    ///
+    /// * `left_operand` - The left-hand operand shared by every method on this service.
     pub async fn to_positive(&self, left_operand: i32, right_operand: &Option<i32>) -> Result<Option<i32>, ion_rustcore::IonError> {
         let mut e = ion_rustcore::Encoder::new(Vec::new());
         e.array(2)?;
@@ -222,6 +284,7 @@ impl MathInteractionClient {
 
 }
 
+/// Deterministic pseudo-random streams seeded by the caller.
 pub struct RandomStreamInteractionClient {
     ctx: ion_rustcore::IonClientContext,
 }
@@ -233,7 +296,13 @@ impl ion_rustcore::FromContext for RandomStreamInteractionClient {
 }
 
 impl RandomStreamInteractionClient {
-        pub async fn integer(&self, seed: i32, i: i32) -> Result<ion_rustcore::IonWsStream<i32>, ion_rustcore::IonError> {
+        /// Streams i pseudo-random integers derived from the seed.
+    ///
+    /// # Arguments
+    ///
+    /// * `seed` - Seed for the underlying generator. The same seed always yields the
+    ///   same sequence, which is what makes the streaming tests reproducible.
+    pub async fn integer(&self, seed: i32, i: i32) -> Result<ion_rustcore::IonWsStream<i32>, ion_rustcore::IonError> {
         let mut e = ion_rustcore::Encoder::new(Vec::new());
         e.array(2)?;
         seed.ion_write(&mut e)?;
@@ -241,6 +310,13 @@ impl RandomStreamInteractionClient {
         let buf = e.into_writer();
         ion_rustcore::IonWsStream::open(&self.ctx, "IRandomStreamInteraction", "Integer", &buf).await
     }
+    /// Bidirectional stream: every f4 pushed by the client is answered with a
+    /// pseudo-random f4 derived from the seed and that input.
+    ///
+    /// # Arguments
+    ///
+    /// * `seed` - Seed for the underlying generator. The same seed always yields the
+    ///   same sequence, which is what makes the streaming tests reproducible.
     pub async fn floats(&self, seed: i32) -> Result<ion_rustcore::IonWsDuplexStream<f32, f32>, ion_rustcore::IonError> {
         let mut e = ion_rustcore::Encoder::new(Vec::new());
         e.array(1)?;

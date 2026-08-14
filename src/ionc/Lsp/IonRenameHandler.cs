@@ -27,6 +27,12 @@ public class IonRenameHandler(IonWorkspace workspace) : RenameHandlerBase
         if (content is null)
             return Task.FromResult<WorkspaceEdit?>(null);
 
+        // A word that merely appears inside a comment or a string literal is not a symbol.
+        // Renaming from such a position would silently rewrite every real declaration with
+        // that name while leaving the prose the user was pointing at untouched.
+        if (IonLspHelpers.IsInCommentOrString(content, request.Position.Line, request.Position.Character))
+            return Task.FromResult<WorkspaceEdit?>(null);
+
         var word = IonLspHelpers.GetWordAtPosition(content, request.Position.Line, request.Position.Character);
         if (string.IsNullOrEmpty(word))
             return Task.FromResult<WorkspaceEdit?>(null);

@@ -1,0 +1,433 @@
+namespace ion.compiler.CodeGen;
+
+using System.Text;
+
+/// <summary>
+/// A single documented parameter (method argument, record positional field, ...).
+/// </summary>
+/// <param name="Name">Identifier exactly as it appears in the generated signature.</param>
+/// <param name="Doc">Raw documentation text, or <c>null</c> when undocumented.</param>
+public readonly record struct DocParam(string Name, string? Doc);
+
+/// <summary>
+/// Shared normalization and escaping for the documentation comments emitted by every Ion
+/// code generator (C#, TypeScript, Rust, Go).
+/// <para>
+/// Every formatter here obeys the same contract: a <c>null</c>, empty or whitespace-only
+/// document produces the empty string — never a blank line, never an empty comment marker.
+/// A non-empty document produces a block in which <em>every</em> line carries the requested
+/// indent and which is terminated by a newline, so call sites can simply
+/// <c>sb.Append(...)</c> the result without branching.
+/// </para>
+/// </summary>
+public static class DocCommentFormatter
+{
+    private static readonly string[] LineSeparators = ["\r\n", "\n", "\r"];
+
+    // ═══════════════════════════════════════════════════════════════════
+    // NORMALIZATION
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Splits raw doc text into display lines: handles CRLF/LF/CR, strips trailing
+    /// whitespace, drops leading and trailing blank lines (interior blank lines are
+    /// preserved as paragraph breaks) and removes the common leading indentation.
+    /// Returns <c>null</c> when nothing would be emitted.
+    /// </summary>
+    public static IReadOnlyList<string>? Normalize(string? doc)
+    {
+        if (string.IsNullOrWhiteSpace(doc))
+            return null;
+
+        var raw = doc.Split(LineSeparators, StringSplitOptions.None);
+        var lines = new List<string>(raw.Length);
+        foreach (var line in raw)
+            lines.Add(line.TrimEnd());
+
+        var start = 0;
+        var end = lines.Count - 1;
+        while (start <= end && lines[start].Length == 0) start++;
+        while (end >= start && lines[end].Length == 0) end--;
+        if (start > end)
+            return null;
+
+        var slice = lines.GetRange(start, end - start + 1);
+        Dedent(slice);
+        return slice;
+    }
+
+    /// <summary>
+    /// True when <paramref name="doc"/> would produce no output at all.
+    /// </summary>
+    public static bool IsEmpty(string? doc) => Normalize(doc) is null;
+
+    private static void Dedent(List<string> lines)
+    {
+        var common = int.MaxValue;
+
+        foreach (var line in lines)
+        {
+            if (line.Length == 0)
+                continue;
+
+            var n = 0;
+            while (n < line.Length && (line[n] == ' ' || line[n] == '\t'))
+                n++;
+
+            if (n < common)
+                common = n;
+            if (common == 0)
+                return;
+        }
+
+        if (common is 0 or int.MaxValue)
+            return;
+
+        for (var i = 0; i < lines.Count; i++)
+        {
+            if (lines[i].Length != 0)
+                lines[i] = lines[i][common..];
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ESCAPING
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Escapes the three characters that would otherwise break a C# XML doc comment.
+    /// </summary>
+    public static string XmlEscape(string text)
+        => text.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+
+    /// <summary>
+    /// Neutralizes any <c>*/</c> inside doc text so it cannot terminate a JSDoc block early.
+    /// </summary>
+    public static string JsDocEscape(string text)
+        => text.Replace("*/", "*\\/");
+
+    // ═══════════════════════════════════════════════════════════════════
+    // C# — XML DOCUMENTATION
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Builds a C# XML documentation block:
+    /// <c>&lt;summary&gt;</c>, then <c>&lt;param&gt;</c> for every documented parameter,
+    /// then <c>&lt;returns&gt;</c> when return documentation is supplied.
+    /// </summary>
+    public static string CSharpDoc(
+        string? doc,
+        string indent = "",
+        IReadOnlyList<DocParam>? parameters = null,
+        string? returns = null)
+    {
+        var summary = Normalize(doc);
+        var documentedParams = CollectDocumented(parameters);
+        var returnLines = Normalize(returns);
+
+        if (summary is null && documentedParams is null && returnLines is null)
+            return string.Empty;
+
+        var sb = new StringBuilder();
+
+        if (summary is not null)
+        {
+            sb.AppendLine($"{indent}/// <summary>");
+            foreach (var line in summary)
+                sb.AppendLine(line.Length == 0 ? $"{indent}///" : $"{indent}/// {XmlEscape(line)}");
+            sb.AppendLine($"{indent}/// </summary>");
+        }
+
+        if (documentedParams is not null)
+        {
+            foreach (var (name, lines) in documentedParams)
+                AppendXmlTag(sb, indent, $"param name=\"{XmlEscape(name)}\"", "param", lines);
+        }
+
+        if (returnLines is not null)
+            AppendXmlTag(sb, indent, "returns", "returns", returnLines);
+
+        return sb.ToString();
+    }
+
+    private static void AppendXmlTag(
+        StringBuilder sb,
+        string indent,
+        string openTag,
+        string closeTag,
+        IReadOnlyList<string> lines)
+    {
+        if (lines.Count == 1)
+        {
+            sb.AppendLine($"{indent}/// <{openTag}>{XmlEscape(lines[0])}</{closeTag}>");
+            return;
+        }
+
+        for (var i = 0; i < lines.Count; i++)
+        {
+            var text = XmlEscape(lines[i]);
+            if (i == 0)
+                sb.AppendLine($"{indent}/// <{openTag}>{text}");
+            else if (i == lines.Count - 1)
+                sb.AppendLine($"{indent}/// {text}</{closeTag}>");
+            else
+                sb.AppendLine(text.Length == 0 ? $"{indent}///" : $"{indent}/// {text}");
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // TYPESCRIPT — JSDOC
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Builds a JSDoc block with an optional <c>@param</c> tag per documented parameter.
+    /// </summary>
+    public static string JsDoc(
+        string? doc,
+        string indent = "",
+        IReadOnlyList<DocParam>? parameters = null,
+        string? returns = null)
+    {
+        var summary = Normalize(doc);
+        var documentedParams = CollectDocumented(parameters);
+        var returnLines = Normalize(returns);
+
+        if (summary is null && documentedParams is null && returnLines is null)
+            return string.Empty;
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"{indent}/**");
+
+        if (summary is not null)
+        {
+            foreach (var line in summary)
+                AppendJsDocLine(sb, indent, line);
+        }
+
+        if (documentedParams is not null || returnLines is not null)
+        {
+            if (summary is not null)
+                sb.AppendLine($"{indent} *");
+
+            if (documentedParams is not null)
+            {
+                foreach (var (name, lines) in documentedParams)
+                    AppendJsDocTag(sb, indent, $"@param {name}", lines);
+            }
+
+            if (returnLines is not null)
+                AppendJsDocTag(sb, indent, "@returns", returnLines);
+        }
+
+        sb.AppendLine($"{indent} */");
+        return sb.ToString();
+    }
+
+    private static void AppendJsDocLine(StringBuilder sb, string indent, string line)
+        => sb.AppendLine(line.Length == 0 ? $"{indent} *" : $"{indent} * {JsDocEscape(line)}");
+
+    private static void AppendJsDocTag(StringBuilder sb, string indent, string tag, IReadOnlyList<string> lines)
+    {
+        sb.AppendLine($"{indent} * {tag} {JsDocEscape(lines[0])}");
+        for (var i = 1; i < lines.Count; i++)
+            sb.AppendLine(lines[i].Length == 0 ? $"{indent} *" : $"{indent} *   {JsDocEscape(lines[i])}");
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // RUST — RUSTDOC
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Builds a rustdoc <c>///</c> block. Rustdoc is markdown, so the text is emitted
+    /// verbatim; documented parameters become a standard <c># Arguments</c> section.
+    /// </summary>
+    public static string RustDoc(
+        string? doc,
+        string indent = "",
+        IReadOnlyList<DocParam>? parameters = null)
+    {
+        var summary = Normalize(doc);
+        var documentedParams = CollectDocumented(parameters);
+
+        if (summary is null && documentedParams is null)
+            return string.Empty;
+
+        var sb = new StringBuilder();
+
+        if (summary is not null)
+        {
+            foreach (var line in summary)
+                AppendPrefixed(sb, indent, "///", line);
+        }
+
+        if (documentedParams is not null)
+        {
+            if (summary is not null)
+                sb.AppendLine($"{indent}///");
+
+            sb.AppendLine($"{indent}/// # Arguments");
+            sb.AppendLine($"{indent}///");
+
+            foreach (var (name, lines) in documentedParams)
+            {
+                sb.AppendLine($"{indent}/// * `{name}` - {lines[0]}");
+                for (var i = 1; i < lines.Count; i++)
+                    sb.AppendLine(lines[i].Length == 0 ? $"{indent}///" : $"{indent}///   {lines[i]}");
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Builds an inner rustdoc block (<c>//!</c>) for module/crate level documentation.
+    /// </summary>
+    public static string RustModuleDoc(string? doc, string indent = "")
+    {
+        var lines = Normalize(doc);
+        if (lines is null)
+            return string.Empty;
+
+        var sb = new StringBuilder();
+        foreach (var line in lines)
+            AppendPrefixed(sb, indent, "//!", line);
+        return sb.ToString();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // GO — DOC COMMENTS
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Builds a Go doc comment. Following the Go convention the first line is prefixed with
+    /// the declared identifier unless the text already starts with it. Documented parameters
+    /// are rendered as a Go 1.19 bullet list under a <c>Parameters:</c> heading, because Go
+    /// has no per-parameter doc syntax.
+    /// </summary>
+    public static string GoDoc(
+        string? doc,
+        string indent = "",
+        string? identifier = null,
+        IReadOnlyList<DocParam>? parameters = null)
+    {
+        var summary = Normalize(doc);
+        var documentedParams = CollectDocumented(parameters);
+
+        if (summary is null && documentedParams is null)
+            return string.Empty;
+
+        var sb = new StringBuilder();
+
+        if (summary is not null)
+        {
+            for (var i = 0; i < summary.Count; i++)
+            {
+                var line = summary[i];
+                if (i == 0 && identifier is { Length: > 0 } && !StartsWithIdentifier(line, identifier))
+                    sb.AppendLine($"{indent}// {identifier} {line}");
+                else
+                    AppendPrefixed(sb, indent, "//", line);
+            }
+        }
+        else if (identifier is { Length: > 0 })
+        {
+            // Parameters documented but the declaration itself is not: still anchor the block.
+            sb.AppendLine($"{indent}// {identifier}");
+        }
+
+        if (documentedParams is not null)
+        {
+            sb.AppendLine($"{indent}//");
+            sb.AppendLine($"{indent}// Parameters:");
+
+            foreach (var (name, lines) in documentedParams)
+            {
+                sb.AppendLine($"{indent}//   - {name}: {lines[0]}");
+                for (var i = 1; i < lines.Count; i++)
+                    sb.AppendLine(lines[i].Length == 0 ? $"{indent}//" : $"{indent}//     {lines[i]}");
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Builds a Go package doc comment (<c>// Package name ...</c>).
+    /// </summary>
+    public static string GoPackageDoc(string? doc, string packageName)
+    {
+        var lines = Normalize(doc);
+        if (lines is null)
+            return string.Empty;
+
+        var sb = new StringBuilder();
+        var head = $"Package {packageName}";
+
+        for (var i = 0; i < lines.Count; i++)
+        {
+            if (i == 0 && !StartsWithIdentifier(lines[0], "Package"))
+                sb.AppendLine($"// {head} {lines[0]}");
+            else
+                AppendPrefixed(sb, string.Empty, "//", lines[i]);
+        }
+
+        return sb.ToString();
+    }
+
+    private static bool StartsWithIdentifier(string line, string identifier)
+    {
+        if (!line.StartsWith(identifier, StringComparison.Ordinal))
+            return false;
+        if (line.Length == identifier.Length)
+            return true;
+        var next = line[identifier.Length];
+        return !char.IsLetterOrDigit(next) && next != '_';
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // PLAIN LINE COMMENTS (file/module banners)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Builds a plain <c>//</c> comment block — used for file level documentation in
+    /// languages where no declaration exists to attach a doc comment to.
+    /// </summary>
+    public static string LineComment(string? doc, string indent = "")
+    {
+        var lines = Normalize(doc);
+        if (lines is null)
+            return string.Empty;
+
+        var sb = new StringBuilder();
+        foreach (var line in lines)
+            AppendPrefixed(sb, indent, "//", line);
+        return sb.ToString();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // INTERNALS
+    // ═══════════════════════════════════════════════════════════════════
+
+    private static void AppendPrefixed(StringBuilder sb, string indent, string marker, string line)
+        => sb.AppendLine(line.Length == 0 ? $"{indent}{marker}" : $"{indent}{marker} {line}");
+
+    private static List<(string Name, IReadOnlyList<string> Lines)>? CollectDocumented(
+        IReadOnlyList<DocParam>? parameters)
+    {
+        if (parameters is null || parameters.Count == 0)
+            return null;
+
+        List<(string, IReadOnlyList<string>)>? result = null;
+
+        foreach (var p in parameters)
+        {
+            var lines = Normalize(p.Doc);
+            if (lines is null)
+                continue;
+            result ??= [];
+            result.Add((p.Name, lines));
+        }
+
+        return result;
+    }
+}

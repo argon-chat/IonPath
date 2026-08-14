@@ -13,13 +13,17 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
     <section>
       <h2 id="basic-syntax" class="text-xl font-bold mb-4">Basic Syntax</h2>
       <div class="code-block text-[13px]">
-        <pre><span class="text-accent-3">union</span> <span class="type-name">Shape</span> {'{'}
+        <pre><span class="text-accent-2">/// A 2D shape, tagged by its variant.</span>
+<span class="text-accent-3">union</span> <span class="type-name">Shape</span> {'{'}
+    <span class="text-accent-2">/// A circle defined by its radius.</span>
     Circle(radius: <span class="type-keyword">f4</span>),
+    <span class="text-accent-2">/// An axis-aligned rectangle.</span>
     Rectangle(width: <span class="type-keyword">f4</span>, height: <span class="type-keyword">f4</span>),
+    <span class="text-accent-2">/// A triangle given by its three side lengths.</span>
     Triangle(a: <span class="type-keyword">f4</span>, b: <span class="type-keyword">f4</span>, c: <span class="type-keyword">f4</span>)
 {'}'}</pre>
       </div>
-      <p class="text-sm text-text-secondary mt-3">Each case is assigned a sequential index: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Circle = 0</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Rectangle = 1</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Triangle = 2</code>.</p>
+      <p class="text-sm text-text-secondary mt-3">Union cases take <a href="/guides/comments/" class="text-accent hover:underline">doc comments</a> individually. Each case is assigned a sequential index: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Circle = 0</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Rectangle = 1</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Triangle = 2</code>.</p>
     </section>
 
     <section>

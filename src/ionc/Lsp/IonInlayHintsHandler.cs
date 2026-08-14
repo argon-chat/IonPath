@@ -43,7 +43,7 @@ public class IonInlayHintsHandler(IonWorkspace workspace) : InlayHintsHandlerBas
         if (content is null)
             return Task.FromResult<InlayHintContainer?>(null);
 
-        var lines = content.Split('\n');
+        var lines = IonCommentScanner.Scan(content);
         var hints = new List<InlayHint>();
         var allDefs = GetAllDefs();
 
@@ -101,9 +101,15 @@ public class IonInlayHintsHandler(IonWorkspace workspace) : InlayHintsHandlerBas
     public override Task<InlayHint> Handle(InlayHint request, CancellationToken cancellationToken)
         => Task.FromResult(request);
 
-    private static InlayHint MakeEolHint(string[] lines, int line, string label)
+    /// <summary>
+    /// Places the hint immediately after the last code character of the line rather than at
+    /// the very end, so a trailing comment stays the right-most thing on the line
+    /// (<c>id: guid;  8 bytes  // stable identity</c>, not <c>... // stable identity  8 bytes</c>).
+    /// </summary>
+    private static InlayHint MakeEolHint(IonScannedDocument lines, int line, string label)
     {
-        var col = line < lines.Length ? lines[line].TrimEnd('\r').Length : 0;
+        var lastCode = lines.LastCodeChar(line);
+        var col = lastCode >= 0 ? lastCode + 1 : lines.VisualLength(line);
         return new InlayHint
         {
             Position = new Position(line, col),

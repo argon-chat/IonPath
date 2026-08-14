@@ -28,7 +28,8 @@ public class IonDocumentLinkHandler(IonWorkspace workspace) : DocumentLinkHandle
             return Task.FromResult(new DocumentLinkContainer());
 
         var links = new List<DocumentLink>();
-        var lines = content.Split('\n');
+        var scanned = IonCommentScanner.Scan(content);
+        var lines = scanned.Lines;
         var rootDir = Path.GetDirectoryName(uri) ?? "";
 
         for (var i = 0; i < lines.Length; i++)
@@ -37,6 +38,11 @@ public class IonDocumentLinkHandler(IonWorkspace workspace) : DocumentLinkHandle
             var trimmed = line.TrimStart();
 
             if (!trimmed.StartsWith("#use"))
+                continue;
+
+            // A `#use` that lives inside a comment (or a string literal) is not a directive.
+            var directiveStart = line.Length - trimmed.Length;
+            if (scanned.IsCommentOrString(i, directiveStart))
                 continue;
 
             // Find the quoted path: #use "path/to/module"
@@ -58,7 +64,9 @@ public class IonDocumentLinkHandler(IonWorkspace workspace) : DocumentLinkHandle
                 Range = new Range(
                     new Position(i, quoteStart),
                     new Position(i, quoteEnd + 1)),
-                Target = new Uri($"file:///{resolvedPath.Replace('\\', '/')}")
+                Target = new Uri($"file:///{resolvedPath.Replace('\\', '/')}"),
+                // `//!` module doc of the target file, when it has one.
+                Tooltip = IonDocMarkdown.ToSingleLine(workspace.FindFileByUri(resolvedPath)?.ModuleDoc)
             });
         }
 

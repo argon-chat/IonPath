@@ -1,6 +1,28 @@
+//! Binary payload round-trip contracts.
+//!
+//! These services exist to exercise the `bytes` primitive across every method
+//! shape the runtime supports: void return, single round-trip, and repeated
+//! round-trips over the same connection.
+
+/**
+ * Blob echo service used by the transport tests.
+ *
+ * Nothing here interprets the payload; the methods only prove that a byte
+ * buffer survives serialization, transport and deserialization unchanged.
+ */
 service TestBlobs() {
+    /// Accepts a payload and returns nothing. Exercises the void-return path.
     Do(data: bytes);
+
+    /// Echoes the payload back to the caller.
     DoIt(data: bytes): bytes;
+
+    /// Second echo overload. The duplicate methods let the tests issue several
+    /// distinct calls over one connection without reusing a method name.
     DoIt2(data: bytes): bytes;
+
+    /// Third echo overload. See DoIt2.
     DoIt3(data: bytes): bytes;
+
+    // Trivia in an awkward spot: directly before the closing brace.
 }

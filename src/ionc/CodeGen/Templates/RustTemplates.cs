@@ -121,7 +121,7 @@ public sealed class RustTemplateProvider : ITemplateProvider
 
     public string ServiceClientClassTemplate =>
         """
-        pub struct {serviceName}Client {
+        {serviceDoc}pub struct {serviceName}Client {
             ctx: ion_rustcore::IonClientContext,
         }
 
@@ -138,7 +138,7 @@ public sealed class RustTemplateProvider : ITemplateProvider
 
     public string ServiceClientMethodTemplate =>
         """
-            pub async fn {methodName}(&self, {args}) -> Result<{returnType}, ion_rustcore::IonError> {
+        {methodDoc}    pub async fn {methodName}(&self, {args}) -> Result<{returnType}, ion_rustcore::IonError> {
                 let mut e = ion_rustcore::Encoder::new(Vec::new());
                 e.array({argsCount})?;
                 {writeArgs}
@@ -150,7 +150,7 @@ public sealed class RustTemplateProvider : ITemplateProvider
 
     public string ServiceClientMethodVoidTemplate =>
         """
-            pub async fn {methodName}(&self, {args}) -> Result<(), ion_rustcore::IonError> {
+        {methodDoc}    pub async fn {methodName}(&self, {args}) -> Result<(), ion_rustcore::IonError> {
                 let mut e = ion_rustcore::Encoder::new(Vec::new());
                 e.array({argsCount})?;
                 {writeArgs}
@@ -162,7 +162,7 @@ public sealed class RustTemplateProvider : ITemplateProvider
 
     public string? ServiceClientMethodNullableTemplate =>
         """
-            pub async fn {methodName}(&self, {args}) -> Result<Option<{returnTypeInner}>, ion_rustcore::IonError> {
+        {methodDoc}    pub async fn {methodName}(&self, {args}) -> Result<Option<{returnTypeInner}>, ion_rustcore::IonError> {
                 let mut e = ion_rustcore::Encoder::new(Vec::new());
                 e.array({argsCount})?;
                 {writeArgs}
@@ -176,7 +176,7 @@ public sealed class RustTemplateProvider : ITemplateProvider
 
     public string ServiceClientMethodStreamTemplate =>
         """
-            pub async fn {methodName}(&self, {args}) -> Result<ion_rustcore::IonWsStream<{returnType}>, ion_rustcore::IonError> {
+        {methodDoc}    pub async fn {methodName}(&self, {args}) -> Result<ion_rustcore::IonWsStream<{returnType}>, ion_rustcore::IonError> {
                 let mut e = ion_rustcore::Encoder::new(Vec::new());
                 e.array({argsCount})?;
                 {writeArgs}
@@ -187,7 +187,7 @@ public sealed class RustTemplateProvider : ITemplateProvider
 
     public string ServiceClientMethodDuplexStreamTemplate =>
         """
-            pub async fn {methodName}(&self, {args}) -> Result<ion_rustcore::IonWsDuplexStream<{inputType}, {returnType}>, ion_rustcore::IonError> {
+        {methodDoc}    pub async fn {methodName}(&self, {args}) -> Result<ion_rustcore::IonWsDuplexStream<{inputType}, {returnType}>, ion_rustcore::IonError> {
                 let mut e = ion_rustcore::Encoder::new(Vec::new());
                 e.array({argsCount})?;
                 {writeArgs}

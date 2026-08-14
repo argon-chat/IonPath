@@ -14,6 +14,12 @@
 
 namespace TestContracts;
 
+/// <summary>
+/// Blob echo service used by the transport tests.
+///
+/// Nothing here interprets the payload; the methods only prove that a byte
+/// buffer survives serialization, transport and deserialization unchanged.
+/// </summary>
 [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
 public sealed class Ion_TestBlobs_ClientImpl(IonClientContext context) : ITestBlobs
 {
@@ -22,9 +28,16 @@ public sealed class Ion_TestBlobs_ClientImpl(IonClientContext context) : ITestBl
         typeof(ITestBlobs).GetMethod(nameof(Do), BindingFlags.Public | BindingFlags.Instance)!);
     private static readonly Lazy<MethodInfo> DoIt_Ref = new(() =>
         typeof(ITestBlobs).GetMethod(nameof(DoIt), BindingFlags.Public | BindingFlags.Instance)!);
+    private static readonly Lazy<MethodInfo> DoIt2_Ref = new(() =>
+        typeof(ITestBlobs).GetMethod(nameof(DoIt2), BindingFlags.Public | BindingFlags.Instance)!);
+    private static readonly Lazy<MethodInfo> DoIt3_Ref = new(() =>
+        typeof(ITestBlobs).GetMethod(nameof(DoIt3), BindingFlags.Public | BindingFlags.Instance)!);
 
 
     
+    /// <summary>
+    /// Accepts a payload and returns nothing. Exercises the void-return path.
+    /// </summary>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public async Task Do(bytes __data, CancellationToken ct = default)
     {
@@ -42,10 +55,54 @@ public sealed class Ion_TestBlobs_ClientImpl(IonClientContext context) : ITestBl
 
         await req.CallAsync(writer.Encode(), ct: ct);
     }
+    /// <summary>
+    /// Echoes the payload back to the caller.
+    /// </summary>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public async Task<bytes> DoIt(bytes __data, CancellationToken ct = default)
     {
         var req = new IonRequest(context, typeof(ITestBlobs), DoIt_Ref.Value);
+    
+        var writer = new CborWriter();
+        
+        const int argsSize = 1;
+    
+        writer.WriteStartArray(argsSize);
+        
+        IonFormatterStorage<bytes>.Write(writer, __data);
+        
+        writer.WriteEndArray();
+    
+        return await req.CallAsync<bytes>(writer.Encode(), ct: ct);
+    }
+    /// <summary>
+    /// Second echo overload. The duplicate methods let the tests issue several
+    /// distinct calls over one connection without reusing a method name.
+    /// </summary>
+    [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+    public async Task<bytes> DoIt2(bytes __data, CancellationToken ct = default)
+    {
+        var req = new IonRequest(context, typeof(ITestBlobs), DoIt2_Ref.Value);
+    
+        var writer = new CborWriter();
+        
+        const int argsSize = 1;
+    
+        writer.WriteStartArray(argsSize);
+        
+        IonFormatterStorage<bytes>.Write(writer, __data);
+        
+        writer.WriteEndArray();
+    
+        return await req.CallAsync<bytes>(writer.Encode(), ct: ct);
+    }
+    /// <summary>
+    /// Third echo overload. See DoIt2.
+    /// </summary>
+    [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+    public async Task<bytes> DoIt3(bytes __data, CancellationToken ct = default)
+    {
+        var req = new IonRequest(context, typeof(ITestBlobs), DoIt3_Ref.Value);
     
         var writer = new CborWriter();
         

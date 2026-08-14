@@ -1,4 +1,4 @@
-﻿namespace ion.syntax;
+namespace ion.syntax;
 
 using Pidgin;
 using static Pidgin.Parser;
@@ -7,7 +7,7 @@ using static Pidgin.Parser<char>;
 public partial class IonParser
 {
     private static Parser<char, string> MsgKeyword =>
-        String("msg").Before(SkipWhitespaces);
+        String("msg").Before(SkipTrivia);
 
     private static Parser<char, IonIdentifier> Identifier =>
         Map(
@@ -16,7 +16,7 @@ public partial class IonParser
             Letter.Or(Char('_')),
             LetterOrDigit.Or(Char('_')).ManyString(),
             CurrentPos
-        ).Before(SkipWhitespaces);
+        ).Before(SkipTrivia);
 
     private static readonly Parser<char, IonUnderlyingTypeSyntax> Type =
         Map(
@@ -31,7 +31,7 @@ public partial class IonParser
                     .WithPos(pos);
             },
             CurrentPos,
-            Identifier.Before(SkipWhitespaces),
+            Identifier.Before(SkipTrivia),
             GenericParameterList.Optional(),
             ModifierOfType.Many().Select(m => m.ToArray())
         );
@@ -41,7 +41,7 @@ public partial class IonParser
             Char('?').Select(_ => "?"),
             Try(String("[]")).Select(_ => "[]"),
             Char('~').Select(_ => "~")
-        ).Before(SkipWhitespaces);
+        ).Before(SkipTrivia);
 
     public static Parser<char, Maybe<Unit>> ForbidNext(char c, string message) =>
         Lookahead(
@@ -50,33 +50,32 @@ public partial class IonParser
 
     private static Parser<char, IonFieldSyntax> Field =>
         Map(
-            (doc, attrs, pos, name, _, _, type, __) => new IonFieldSyntax(name, type)
-                .WithComments(doc)
-                .WithAttributes(attrs)
+            (lead, pos, name, _, _, type, __) => new IonFieldSyntax(name, type)
+                .WithComments(lead.Doc)
+                .WithAttributes(lead.Attributes)
                 .WithPos(pos),
-            LeadingDoc,
-            Attributes,
+            LeadingSection,
             CurrentPos,
-            Identifier.Labelled("field name").Before(SkipWhitespaces),
+            Identifier.Labelled("field name").Before(SkipTrivia),
             ForbidNext('?', "'?' is not allowed after field name"),
-            Char(':').Labelled("':' after field name").Before(SkipWhitespaces),
+            Char(':').Labelled("':' after field name").Before(SkipTrivia),
             Type,
-            Char(';').Before(SkipWhitespaces)
+            Char(';').Before(SkipTrivia)
         );
 
     private static Parser<char, IEnumerable<IonFieldSyntax>> FieldList =>
-        Field.ManyBetween(Char('{').Before(SkipWhitespaces), Char('}'));
+        Field.ManyBetween(Char('{').Before(SkipTrivia), SkipTriviaAll.Then(Char('}')));
 
 
-    public static Parser<char, IonSyntaxMember> Message =>
+    private static Parser<char, IonSyntaxMember> MessageCore =>
         Map(IonSyntaxMember
-                (doc, attrs, pos, msgName, fields, endPos) =>
-                new IonMessageSyntax(msgName, fields.ToList()).WithComments(doc).WithAttributes(attrs).WithPos(pos, endPos),
-            LeadingDoc,
-            Attributes,
+                (pos, msgName, fields, endPos) =>
+                new IonMessageSyntax(msgName, fields.ToList()).WithPos(pos, endPos),
             CurrentPos,
             MsgKeyword.Then(Identifier),
             FieldList,
             CurrentPos
         );
+
+    public static Parser<char, IonSyntaxMember> Message => WithLeading(MessageCore);
 }

@@ -13,12 +13,38 @@
 
 
 namespace TestContracts;
+// Binary payload round-trip contracts.
+//
+// These services exist to exercise the `bytes` primitive across every method
+// shape the runtime supports: void return, single round-trip, and repeated
+// round-trips over the same connection.
 
+/// <summary>
+/// Blob echo service used by the transport tests.
+///
+/// Nothing here interprets the payload; the methods only prove that a byte
+/// buffer survives serialization, transport and deserialization unchanged.
+/// </summary>
 [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
 public interface ITestBlobs : IIonService
 {
+    /// <summary>
+    /// Accepts a payload and returns nothing. Exercises the void-return path.
+    /// </summary>
     Task Do(bytes data, CancellationToken ct = default);
+    /// <summary>
+    /// Echoes the payload back to the caller.
+    /// </summary>
     Task<bytes> DoIt(bytes data, CancellationToken ct = default);
+    /// <summary>
+    /// Second echo overload. The duplicate methods let the tests issue several
+    /// distinct calls over one connection without reusing a method name.
+    /// </summary>
+    Task<bytes> DoIt2(bytes data, CancellationToken ct = default);
+    /// <summary>
+    /// Third echo overload. See DoIt2.
+    /// </summary>
+    Task<bytes> DoIt3(bytes data, CancellationToken ct = default);
 }
 
 

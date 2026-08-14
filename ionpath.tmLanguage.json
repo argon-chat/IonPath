@@ -1,6 +1,7 @@
 {
   "scopeName": "source.ionpath",
   "name": "IonPath",
+  "comment": "DEPRECATED duplicate. The grammar that actually ships is extensions/ionpath-toolkit/syntaxes/ionpath.tmLanguage.json (scopeName source.ion). Kept in sync only for the comment, keyword and type rules; see docs/src/pages/guides/comments.astro.",
   "patterns": [
     {
       "include": "#comments"
@@ -26,18 +27,90 @@
   ],
   "repository": {
     "comments": {
+      "comment": "Order matters: the most specific marker must be listed first so that /** wins over /*, and //! and /// win over //.",
       "patterns": [
         {
-          "name": "comment.line.double-slash.ionpath",
-          "match": "//.*$"
+          "include": "#docBlockComment"
+        },
+        {
+          "include": "#blockComment"
+        },
+        {
+          "include": "#moduleDocComment"
+        },
+        {
+          "include": "#docLineComment"
+        },
+        {
+          "include": "#lineComment"
         }
       ]
+    },
+    "docBlockComment": {
+      "comment": "/** ... */ doc block comment. The (?!/) guard keeps the empty /**/ out of this rule so it falls through to #blockComment.",
+      "name": "comment.block.documentation.ion",
+      "begin": "/\\*\\*(?!/)",
+      "end": "\\*/",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.comment.begin.ion" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.comment.end.ion" }
+      },
+      "patterns": [
+        {
+          "comment": "Leading * on continuation lines is stripped by the compiler; scope it as punctuation.",
+          "name": "punctuation.definition.comment.ion",
+          "match": "^\\s*\\*(?!/)"
+        }
+      ]
+    },
+    "blockComment": {
+      "comment": "/* ... */ ordinary block comment. Non-nesting: the first */ closes it.",
+      "name": "comment.block.ion",
+      "begin": "/\\*",
+      "end": "\\*/",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.comment.begin.ion" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.comment.end.ion" }
+      }
+    },
+    "moduleDocComment": {
+      "comment": "//! module-level doc comment.",
+      "name": "comment.line.documentation.ion",
+      "match": "(//!).*$",
+      "captures": {
+        "1": { "name": "punctuation.definition.comment.documentation.ion" }
+      }
+    },
+    "docLineComment": {
+      "comment": "/// doc comment attached to the following declaration. The (?!/) guard keeps //// an ordinary line comment, matching the compiler.",
+      "name": "comment.line.documentation.ion",
+      "match": "(///)(?!/).*$",
+      "captures": {
+        "1": { "name": "punctuation.definition.comment.documentation.ion" }
+      }
+    },
+    "lineComment": {
+      "comment": "// ordinary line comment (pure trivia).",
+      "name": "comment.line.double-slash.ion",
+      "match": "(//).*$",
+      "captures": {
+        "1": { "name": "punctuation.definition.comment.ion" }
+      }
     },
     "keywords": {
       "patterns": [
         {
           "name": "keyword.control.ionpath",
-          "match": "\\b(msg|flags|enum|typedef|service|attribute|#use|#feature)\\b"
+          "match": "\\b(msg|flags|enum|typedef|service|union|attribute)\\b"
+        },
+        {
+          "comment": "Directives start with '#', so they cannot use a leading \\b word boundary.",
+          "name": "keyword.control.directive.ionpath",
+          "match": "#(?:use|import|feature)\\b"
         }
       ]
     },
@@ -53,7 +126,15 @@
       "patterns": [
         {
           "name": "storage.type.ionpath",
-          "match": "\\b(i8|i16|i32|i64|u8|u16|u32|u64|f32|f64|bool|string|guid)\\b"
+          "match": "\\b(i1|i2|i4|i8|i16|u1|u2|u4|u8|u16|f2|f4|f8|void|bool|string|bytes|guid|datetime|dateonly|timeonly|duration|uri|bigint)\\b"
+        },
+        {
+          "name": "support.type.ionpath",
+          "match": "\\b(Maybe|Array|Partial)\\b"
+        },
+        {
+          "name": "support.type.vector.ionpath",
+          "match": "\\b(vec2f|vec3f|vec4f|vec2d|vec3d|vec4d|vec2h|vec3h|vec4h)\\b"
         }
       ]
     },

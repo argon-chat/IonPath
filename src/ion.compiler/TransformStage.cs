@@ -34,9 +34,37 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
             Imports = [],
             Features = [],
             Definitions = [],
-            Services = []
+            Services = [],
+            Doc = GetModuleDoc(file)
         };
     }
+
+    #region Documentation plumbing
+
+    /// <summary>
+    /// Reads the doc comment attached to a syntax node.
+    /// </summary>
+    /// <remarks>
+    /// Takes <see cref="IonSyntaxBase"/> rather than <see cref="IonSyntaxMember"/> on purpose:
+    /// <see cref="IonFlagEntrySyntax"/> (enum / flags members) is being migrated in ion.syntax to
+    /// derive from <see cref="IonSyntaxMember"/>. This accessor yields null for entries today and
+    /// starts returning real documentation the moment that change lands — no edit needed here.
+    /// </remarks>
+    private static string? DocOf(IonSyntaxBase? node) => (node as IonSyntaxMember)?.Comments;
+
+    // TODO: collapse to a direct `file.ModuleDoc` read once ion.syntax exposes the property.
+    // Resolved reflectively so ion.compiler keeps building while that change is in flight;
+    // the lookup is cached statically and evaluated once per file.
+    private static readonly System.Reflection.PropertyInfo? ModuleDocProperty =
+        typeof(IonFileSyntax).GetProperty("ModuleDoc",
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+
+    /// <summary>
+    /// File level '//!' documentation for the module, or null when absent.
+    /// </summary>
+    private static string? GetModuleDoc(IonFileSyntax file) => ModuleDocProperty?.GetValue(file) as string;
+
+    #endregion
 
     private void GenerateAttributes(IonFileSyntax file, IonModule module)
     {
@@ -71,10 +99,10 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
                 if (t is null)
                     Error(IonAnalyticCodes.ION0003_TypeNotFoundOrNotBuiltin, arg, arg.type.Name);
                 else
-                    args.Add(new IonArgument(arg.argName, t, [], arg.modifiers));
+                    args.Add(new IonArgument(arg.argName, t, [], arg.modifiers) { Doc = arg.Comments });
             }
 
-            var attr = new IonAttributeType(syntax.Name, args);
+            var attr = new IonAttributeType(syntax.Name, args) { Doc = syntax.Comments };
 
             attributes.Add(attr);
         }
@@ -95,8 +123,10 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
 
         BigInteger nextValue = 0;
 
-        foreach (var (name, valueExpression) in syntax.Entries)
+        foreach (var entry in syntax.Entries)
         {
+            var (name, valueExpression) = entry;
+
             if (!usedNames.Add(name.Identifier))
             {
                 Error(IonAnalyticCodes.ION0006_DuplicateEnumName, name, name.Identifier);
@@ -146,10 +176,10 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
                 baseType,
                 value.ToString(),
                 []
-            ));
+            ) { Doc = DocOf(entry) });
         }
 
-        return new IonFlags(syntax.Name, [], constants, baseType);
+        return new IonFlags(syntax.Name, [], constants, baseType) { Doc = syntax.Comments };
 
         static bool valueHasOverlap(BigInteger value, List<BigInteger> existing)
             => existing.Any(e => (e & value) != 0);
@@ -235,7 +265,8 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
                 attributes.Add(attr);
             }
 
-            types.Add(new IonEnum(syntax.Name, attributes, CompileFlags(syntax), baseType));
+            types.Add(new IonEnum(syntax.Name, attributes, CompileFlags(syntax), baseType)
+                { Doc = syntax.Comments });
         }
 
         return types.AsReadOnly();
@@ -300,56 +331,72 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
                     baseType,
                     value.ToString(),
                     []
-                ));
+                ) { Doc = DocOf(e) });
             }
 
             return constants;
         }
     }
 
+    // TODO(roadmap): typedefs are discarded here; docs cannot flow until this is implemented.
+    // `IonTypedefSyntax.Comments` is parsed and available, but no IonType is ever produced for a
+    // typedef, so there is nothing to hang the documentation on. When typedef compilation lands,
+    // set `Doc = syntax.Comments` on the emitted IonType.
     public IReadOnlyList<IonType> CompileTypedefs(IonFileSyntax file) => [];
 
     public IReadOnlyList<IonType> CompileMessages(IonFileSyntax file) =>
         (from syntax in file.messageSyntaxes
             let attributes = CompileAttributeInstancesFor(syntax)
-            select new IonType(syntax.Name, attributes, PrepareFields(syntax))).ToList().AsReadOnly();
+            select new IonType(syntax.Name, attributes, PrepareFields(syntax))
+                { Doc = syntax.Comments }).ToList().AsReadOnly();
 
     private IReadOnlyList<IonField> PrepareFields(IonMessageSyntax syntax) =>
         (from field in syntax.Fields.OfType<IonFieldSyntax>() // ← Skip InvalidFieldSyntax
             let fieldType = context.ResolveTypeFor(syntax, field.Type, true)
-            select new IonField(field.Name, fieldType!, CompileAttributeInstancesFor(field))).ToList().AsReadOnly();
+            select new IonField(field.Name, fieldType!, CompileAttributeInstancesFor(field))
+                { Doc = field.Comments }).ToList().AsReadOnly();
 
     private IReadOnlyList<IonField> PrependFields(IonUnionSyntax union, IonUnionTypeCaseSyntax syntax) =>
+        // NOTE: `union.baseFields` are shared *syntax* nodes across every case, but a fresh IonField
+        // is materialised per case, so the (mutable) Doc of one case's copy cannot leak into another.
         (from field in union.baseFields.Concat(syntax.arguments)
             let fieldType = context.ResolveTypeFor(syntax, field.type, true)
-            select new IonField(field.argName, fieldType!, CompileAttributeInstancesFor(field))).ToList().AsReadOnly();
+            select new IonField(field.argName, fieldType!, CompileAttributeInstancesFor(field))
+                { Doc = field.Comments }).ToList().AsReadOnly();
 
     private IReadOnlyList<IonMethod> PrependMethods(IonServiceSyntax syntax) =>
         (from methodSyntax in syntax.Methods.OfType<IonMethodSyntax>() // ← Skip InvalidMethodSyntax
             let combinedArgs = syntax.BaseArguments.Concat(methodSyntax.arguments).ToList()
+            // NOTE: `syntax.BaseArguments` are shared syntax nodes prepended to *every* method, but
+            // this projection allocates a distinct IonArgument per method (existing behaviour), so
+            // the base-argument docs are copied per method rather than shared. Keep it that way —
+            // Doc is mutable, and sharing instances would let one method's edit leak into siblings.
             let parsedArgs = (from argSyntax in combinedArgs
                 let type = context.ResolveTypeFor(argSyntax, argSyntax.type, true)
                 let attrs = CompileAttributeInstancesFor(argSyntax)
-                select new IonArgument(argSyntax.argName, type!, attrs, argSyntax.modifiers)).ToList()
+                select new IonArgument(argSyntax.argName, type!, attrs, argSyntax.modifiers)
+                    { Doc = argSyntax.Comments }).ToList()
             let returnType = methodSyntax.returnType is not null
                 ? context.ResolveTypeFor(methodSyntax, methodSyntax.returnType, true) ?? context.Void
                 : context.Void
             let methodAttributes = CompileAttributeInstancesFor(methodSyntax)
             select new IonMethod(methodSyntax.methodName, parsedArgs, returnType, methodSyntax.modifiers,
-                methodAttributes)).ToList();
+                methodAttributes) { Doc = methodSyntax.Comments }).ToList();
 
     public List<IonService> CompileService(IonFileSyntax file)
         => file.serviceSyntaxes.Select(serviceSyntax =>
             new IonService(serviceSyntax.serviceName, PrependMethods(serviceSyntax),
-                CompileAttributeInstancesFor(serviceSyntax))).ToList();
+                CompileAttributeInstancesFor(serviceSyntax)) { Doc = serviceSyntax.Comments }).ToList();
 
     public List<IonUnion> CompileUnions(IonFileSyntax file) =>
         file.unionSyntaxes
             .Select(x => new IonUnion(x.unionName, PrependUnionTypes(x),
                 x.baseFields
-                    .Select(fq => new IonArgument(fq.argName, context.ResolveTypeFor(x, fq.type, true)!, [], fq.modifiers))
+                    .Select(fq => new IonArgument(fq.argName, context.ResolveTypeFor(x, fq.type, true)!, [],
+                        fq.modifiers) { Doc = fq.Comments })
                     .ToList(),
-                [..CompileAttributeInstancesFor(x), new IonUnionAttributeInstance()])).ToList();
+                [..CompileAttributeInstancesFor(x), new IonUnionAttributeInstance()])
+                { Doc = x.Comments }).ToList();
 
     private List<IonType> PrependUnionTypes(IonUnionSyntax syntax)
     {
@@ -366,10 +413,13 @@ public class TransformStage(CompilationContext context) : CompilationStage(conte
 
     private IonType PrependUnionType(IonUnionSyntax syntax, IonUnionTypeCaseSyntax @case) =>
         @case.IsTypeRef
+            // A `case Foo` reference resolves to the *declaration* of Foo, an instance shared with
+            // whoever else references it. Its Doc belongs to that declaration — do not overwrite it
+            // with the doc written at the union case site.
             ? context.ResolveTypeFor(syntax, @case.caseName, true)!
             : new IonType(@case.caseName.Name,
                 [..CompileAttributeInstancesFor(@case), new IonUnionCaseAttributeInstance()],
-                PrependFields(syntax, @case));
+                PrependFields(syntax, @case)) { Doc = @case.Comments };
 
     private IReadOnlyList<IonAttributeInstance> CompileAttributeInstancesFor(IonSyntaxMember member)
     {

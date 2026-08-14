@@ -14,9 +14,18 @@
 
 namespace TestContracts;
 
+/// <summary>
+/// Blob echo service used by the transport tests.
+///
+/// Nothing here interprets the payload; the methods only prove that a byte
+/// buffer survives serialization, transport and deserialization unchanged.
+/// </summary>
 public sealed class Ion_TestBlobs_ServiceExecutor(AsyncServiceScope scope) : IServiceExecutorRouter
 {
     
+    /// <summary>
+    /// Accepts a payload and returns nothing. Exercises the void-return path.
+    /// </summary>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public async Task Do_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
     {
@@ -32,6 +41,9 @@ public sealed class Ion_TestBlobs_ServiceExecutor(AsyncServiceScope scope) : ISe
     
         await service.Do(__data);
     }
+    /// <summary>
+    /// Echoes the payload back to the caller.
+    /// </summary>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public async Task DoIt_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
     {
@@ -49,6 +61,47 @@ public sealed class Ion_TestBlobs_ServiceExecutor(AsyncServiceScope scope) : ISe
         
         IonFormatterStorage<bytes>.Write(writer, result);
     }
+    /// <summary>
+    /// Second echo overload. The duplicate methods let the tests issue several
+    /// distinct calls over one connection without reusing a method name.
+    /// </summary>
+    [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+    public async Task DoIt2_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
+    {
+        var service = scope.ServiceProvider.GetRequiredService<ITestBlobs>();
+    
+        const int argumentSize = 1;
+    
+        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+    
+        var __data = IonFormatterStorage<bytes>.Read(reader);
+    
+        reader.ReadEndArrayAndSkip(arraySize - argumentSize);
+    
+        var result = await service.DoIt2(__data);
+        
+        IonFormatterStorage<bytes>.Write(writer, result);
+    }
+    /// <summary>
+    /// Third echo overload. See DoIt2.
+    /// </summary>
+    [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+    public async Task DoIt3_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
+    {
+        var service = scope.ServiceProvider.GetRequiredService<ITestBlobs>();
+    
+        const int argumentSize = 1;
+    
+        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+    
+        var __data = IonFormatterStorage<bytes>.Read(reader);
+    
+        reader.ReadEndArrayAndSkip(arraySize - argumentSize);
+    
+        var result = await service.DoIt3(__data);
+        
+        IonFormatterStorage<bytes>.Write(writer, result);
+    }
 
     
     
@@ -60,6 +113,10 @@ public sealed class Ion_TestBlobs_ServiceExecutor(AsyncServiceScope scope) : ISe
             return Do_Execute(reader, writer, ct);
         if (methodName.Equals("DoIt", StringComparison.InvariantCultureIgnoreCase))
             return DoIt_Execute(reader, writer, ct);
+        if (methodName.Equals("DoIt2", StringComparison.InvariantCultureIgnoreCase))
+            return DoIt2_Execute(reader, writer, ct);
+        if (methodName.Equals("DoIt3", StringComparison.InvariantCultureIgnoreCase))
+            return DoIt3_Execute(reader, writer, ct);
 
         
         throw new InvalidOperationException("no method defined");

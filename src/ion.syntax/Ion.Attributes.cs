@@ -1,4 +1,4 @@
-﻿namespace ion.syntax;
+namespace ion.syntax;
 
 using Pidgin;
 using static Pidgin.Parser;
@@ -10,28 +10,62 @@ public partial class IonParser
         Map(
             (pos, name, args) => new IonAttributeSyntax(name, args.Where(x => !string.IsNullOrEmpty(x)).ToList()).WithPos(pos),
             CurrentPos,
-            Char('@').Then(Identifier).Before(SkipWhitespaces),
+            Char('@').Then(Identifier).Before(SkipTrivia),
             Try(
                 Char('(')
-                    .Then(
-                        AnyCharExcept(')')
-                            .ManyString()
-                            .Select(s => s.Split(',').Select(a => a.Trim()).ToList())
-                    )
+                    .Then(AttributeArgSpan.Select(SplitAttributeArgs))
                     .Before(Char(')'))
             ).Optional().Select(opt => opt.HasValue ? opt.Value : [])
-        ).Before(SkipWhitespaces);
+        ).Before(SkipTrivia);
 
-    private static Parser<char, IEnumerable<IonAttributeSyntax>> Attributes =>
-        Attribute.Many().Before(SkipWhitespaces);
+    /// <summary>
+    /// The raw text between an attribute's parentheses. Comments and string literals are consumed
+    /// whole, so a <c>)</c> that only occurs inside one — <c>@a(/* ) */ x)</c>, <c>@a("a)b")</c> —
+    /// no longer terminates the argument list early.
+    /// </summary>
+    private static Parser<char, string> AttributeArgSpan =>
+        OneOf(
+            RawComment,
+            RawStringLiteral,
+            AnyCharExcept(')', '"', '/').AtLeastOnceString(),
+            Char('/').ThenReturn("/")
+        ).ManyString();
 
-    public static Parser<char, IonAttributeDefSyntax> AttributeDef =>
+    /// <summary>
+    /// Attribute arguments are still a raw, comma split character span (typed argument lexing is a
+    /// separate work item — see roadmap 0.5). Comments are stripped first, and the split skips
+    /// over string literals so that <c>@a(x /* y */, "a,b")</c> yields two arguments, not three.
+    /// </summary>
+    private static List<string> SplitAttributeArgs(string raw)
+    {
+        var span = StripComments(raw);
+        var args = new List<string>();
+        var start = 0;
+        var inString = false;
+
+        for (var i = 0; i < span.Length; i++)
+        {
+            if (span[i] == '"')
+                inString = !inString;
+            else if (span[i] == ',' && !inString)
+            {
+                args.Add(span[start..i].Trim());
+                start = i + 1;
+            }
+        }
+
+        args.Add(span[start..].Trim());
+        return args;
+    }
+
+    private static Parser<char, IonAttributeDefSyntax> AttributeDefCore =>
         Map(
-            (doc, pos, _, name, args) => new IonAttributeDefSyntax(name, args.ToList()).WithPos(pos).WithComments(doc),
-            DocComment.Optional(),
+            (pos, _, name, args) => new IonAttributeDefSyntax(name, args.ToList()).WithPos(pos),
             CurrentPos,
-            String("attribute").Before(SkipWhitespaces),
-            Char('@').Then(Identifier).Before(SkipWhitespaces),
+            String("attribute").Before(SkipTrivia),
+            Char('@').Then(Identifier).Before(SkipTrivia),
             ArgList.Before(Char(';'))
         );
+
+    public static Parser<char, IonAttributeDefSyntax> AttributeDef => WithLeading(AttributeDefCore);
 }

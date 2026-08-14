@@ -98,6 +98,10 @@ public class BytesTest : ITestBlobs
         blob.Reverse();
         return new IonBytes(blob);
     }
+
+    public Task<IonBytes> DoIt2(IonBytes data, CancellationToken ct = default) => DoIt(data, ct);
+
+    public Task<IonBytes> DoIt3(IonBytes data, CancellationToken ct = default) => DoIt(data, ct);
 }
 
 public class RandomStreamImpl : IRandomStreamInteraction

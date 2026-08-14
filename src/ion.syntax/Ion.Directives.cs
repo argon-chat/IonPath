@@ -1,4 +1,4 @@
-﻿namespace ion.syntax;
+namespace ion.syntax;
 
 using Pidgin;
 using static Pidgin.Parser;
@@ -6,76 +6,83 @@ using static Pidgin.Parser<char>;
 
 public partial class IonParser
 {
-    private static Parser<char, IonSyntaxMember> UseDirective =>
+    private static Parser<char, IonSyntaxMember> UseDirectiveCore =>
         Map(IonSyntaxMember
-            (doc, pos, path) => new IonUseSyntax(path).WithPos(pos).WithComments(doc),
-            DocComment.Optional(),
+            (pos, path) => new IonUseSyntax(path).WithPos(pos),
             CurrentPos,
             Try(
                 String("#use")
-                    .Before(SkipWhitespaces)
+                    .Before(SkipTrivia)
                     .Then(StringLiteral)
-                    .Before(SkipWhitespaces)
+                    .Before(SkipTrivia)
             )
         );
 
+    public static Parser<char, IonSyntaxMember> UseDirective => WithLeading(UseDirectiveCore);
+
     private static Parser<char, (IEnumerable<string> Types, string Module, SourcePos ModStart, SourcePos ModEnd)> ImportBody =>
         String("#import")
-            .Before(SkipWhitespaces)
+            .Before(SkipTrivia)
             .Then(
                 Map((types, _, modStart, module, modEnd) => (Types: types, Module: module, ModStart: modStart, ModEnd: modEnd),
-                    ImportTypeList.Before(SkipWhitespaces),
-                    String("from").Before(SkipWhitespaces),
+                    ImportTypeList.Before(SkipTrivia),
+                    String("from").Before(SkipTrivia),
                     CurrentPos,
                     StringLiteral,
                     CurrentPos
                 )
             )
-            .Before(SkipWhitespaces)
+            .Before(SkipTrivia)
             .Before(Try(Char(';')).Optional());
 
-    private static Parser<char, IonSyntaxMember> ImportDirective =>
+    private static Parser<char, IonSyntaxMember> ImportDirectiveCore =>
         Map(IonSyntaxMember
-            (doc, pos, body, endPos) =>
+            (pos, body, endPos) =>
             {
                 var import = new IonImportSyntax(body.Types.ToList(), body.Module);
                 import.ModuleNameStart = body.ModStart;
                 import.ModuleNameEnd = body.ModEnd;
-                return import.WithPos(pos, endPos).WithComments(doc);
+                return import.WithPos(pos, endPos);
             },
-            DocComment.Optional(),
             CurrentPos,
             Try(ImportBody),
             CurrentPos
         );
 
+    public static Parser<char, IonSyntaxMember> ImportDirective => WithLeading(ImportDirectiveCore);
+
     private static Parser<char, IEnumerable<string>> ImportTypeList =>
         Char('{')
-            .Before(SkipWhitespaces)
+            .Before(SkipTrivia)
             .Then(
-                ImportIdentifier.Before(SkipWhitespaces)
-                    .Separated(Char(',').Before(SkipWhitespaces))
+                ImportIdentifier.Before(SkipTrivia)
+                    .Separated(Char(',').Before(SkipTrivia))
             )
-            .Before(SkipWhitespaces)
+            .Before(SkipTriviaAll)
             .Before(Char('}'));
 
     private static Parser<char, string> ImportIdentifier =>
         Token(c => char.IsLetterOrDigit(c) || c == '_')
             .AtLeastOnceString();
 
+    /// <summary>
+    /// A double quoted string literal. Deliberately atomic: the trivia skipper is never entered
+    /// from inside a literal, so <c>//</c> and <c>*/</c> inside a string are plain characters.
+    /// </summary>
     private static Parser<char, string> StringLiteral =>
         Char('"').Then(AnyCharExcept('"').ManyString()).Before(Char('"'));
 
-    private static Parser<char, IonSyntaxMember> FeatureDirective =>
+    private static Parser<char, IonSyntaxMember> FeatureDirectiveCore =>
         Map(IonSyntaxMember
-                (doc, pos, path) => new IonFeatureSyntax(path).WithPos(pos).WithComments(doc),
-            DocComment.Optional(),
+                (pos, path) => new IonFeatureSyntax(path).WithPos(pos),
             CurrentPos,
             Try(
                 String("#feature")
-                    .Before(SkipWhitespaces)
+                    .Before(SkipTrivia)
                     .Then(StringLiteral)
-                    .Before(SkipWhitespaces)
+                    .Before(SkipTrivia)
             )
         );
+
+    public static Parser<char, IonSyntaxMember> FeatureDirective => WithLeading(FeatureDirectiveCore);
 }

@@ -14,13 +14,17 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
       <h2 id="basic-syntax" class="text-xl font-bold mb-4">Basic Syntax</h2>
       <p class="text-sm text-text-secondary mb-4">Declare a message with the <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">msg</code> keyword:</p>
       <div class="code-block text-[13px]">
-        <pre><span class="text-accent-3">msg</span> <span class="type-name">User</span> {'{'}
+        <pre><span class="text-accent-2">/// A registered user account.</span>
+<span class="text-accent-3">msg</span> <span class="type-name">User</span> {'{'}
+    <span class="text-accent-2">/// Stable identifier, unique per tenant.</span>
     id: <span class="type-keyword">u4</span>;
+    <span class="text-accent-2">/// Display name shown to other users.</span>
     name: <span class="type-keyword">string</span>;
+    <span class="text-accent-2">/// Primary contact address.</span>
     email: <span class="type-keyword">string</span>;
 {'}'}</pre>
       </div>
-      <p class="text-sm text-text-secondary mt-3">Each field has a <strong>name</strong> and a <strong>type</strong>, separated by a colon and terminated with a semicolon.</p>
+      <p class="text-sm text-text-secondary mt-3">Each field has a <strong>name</strong> and a <strong>type</strong>, separated by a colon and terminated with a semicolon. The <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">///</code> lines are <a href="/guides/comments/" class="text-accent hover:underline">doc comments</a> — they attach to the declaration below them and are re-emitted as XML docs, JSDoc, rustdoc and Go doc comments. Plain <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">//</code> comments (used for the inline notes elsewhere on this page) are discarded.</p>
     </section>
 
     <section>

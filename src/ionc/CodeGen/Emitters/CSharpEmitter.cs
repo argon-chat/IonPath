@@ -3,8 +3,8 @@ namespace ion.compiler.CodeGen.Emitters;
 using System.Text;
 
 /// <summary>
-/// C# реализация ICodeEmitter.
-/// Генерирует синтаксические конструкции C#.
+/// C# пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ ICodeEmitter.
+/// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ C#.
 /// </summary>
 public sealed class CSharpEmitter : ICodeEmitter
 {
@@ -54,9 +54,10 @@ public sealed class CSharpEmitter : ICodeEmitter
     // TYPE DECLARATIONS
     // ???????????????????????????????????????????????????????????????????
 
-    public string EnumDeclaration(string name, IEnumerable<EnumMember> members, EnumOptions? options = null)
+    public string EnumDeclaration(string name, IEnumerable<EnumMember> members, EnumOptions? options = null, string? doc = null)
     {
         var sb = new StringBuilder();
+        sb.Append(DocComment(doc));
         sb.AppendLine(GeneratedCodeAttribute);
 
         if (options?.IsFlags == true)
@@ -69,21 +70,26 @@ public sealed class CSharpEmitter : ICodeEmitter
 
         sb.AppendLine("{");
         foreach (var m in members)
+        {
+            sb.Append(DocComment(m.Doc, Indent(1)));
             sb.AppendLine($"    {m.Name} = {m.Value},");
+        }
         sb.AppendLine("}");
 
         return sb.ToString();
     }
 
-    public string FlagsDeclaration(string name, string? baseType, IEnumerable<EnumMember> members)
+    public string FlagsDeclaration(string name, string? baseType, IEnumerable<EnumMember> members, string? doc = null)
     {
-        return EnumDeclaration(name, members, new EnumOptions(baseType, IsFlags: true));
+        return EnumDeclaration(name, members, new EnumOptions(baseType, IsFlags: true), doc);
     }
 
-    public string MessageDeclaration(string name, IEnumerable<FieldDecl> fields)
+    public string MessageDeclaration(string name, IEnumerable<FieldDecl> fields, string? doc = null)
     {
         var fieldsList = fields.ToList();
         var sb = new StringBuilder();
+        // Positional record: field docs belong on the declaration as <param> tags.
+        sb.Append(DocComment(doc, parameters: fieldsList.ToDocParams()));
         sb.AppendLine(GeneratedCodeAttribute);
         sb.Append($"public sealed record {name}(");
         sb.Append(string.Join(", ", fieldsList.Select(f => $"{f.Type} {f.Name}")));
@@ -91,17 +97,18 @@ public sealed class CSharpEmitter : ICodeEmitter
         return sb.ToString();
     }
 
-    public string TypedefDeclaration(string name, string underlyingType)
+    public string TypedefDeclaration(string name, string underlyingType, string? doc = null)
     {
         return $"""
-                {GeneratedCodeAttribute}
+                {DocComment(doc)}{GeneratedCodeAttribute}
                 public readonly record struct {name}({underlyingType} Value);
                 """;
     }
 
-    public string ServiceInterfaceDeclaration(string name, IEnumerable<MethodDecl> methods, string? baseInterface = null)
+    public string ServiceInterfaceDeclaration(string name, IEnumerable<MethodDecl> methods, string? baseInterface = null, string? doc = null)
     {
         var sb = new StringBuilder();
+        sb.Append(DocComment(doc));
         sb.AppendLine(GeneratedCodeAttribute);
 
         var extends = baseInterface != null ? $" : {baseInterface}" : "";
@@ -110,6 +117,8 @@ public sealed class CSharpEmitter : ICodeEmitter
 
         foreach (var method in methods)
         {
+            sb.Append(DocComment(method.Doc, Indent(1), method.DocParams));
+
             // Attributes
             if (method.Attributes != null)
             {
@@ -132,6 +141,7 @@ public sealed class CSharpEmitter : ICodeEmitter
     public string ClassDeclaration(ClassDecl decl)
     {
         var sb = new StringBuilder();
+        sb.Append(DocComment(decl.Doc, parameters: decl.ConstructorParams?.ToDocParams()));
         sb.AppendLine(GeneratedCodeAttribute);
 
         var modifiers = "public";
@@ -156,14 +166,20 @@ public sealed class CSharpEmitter : ICodeEmitter
         if (decl.Fields != null)
         {
             foreach (var field in decl.Fields)
+            {
+                sb.Append(DocComment(field.Doc, Indent(1)));
                 sb.AppendLine($"    public {field.Type} {field.Name} {{ get; set; }}");
+            }
         }
 
         // Methods
         if (decl.Methods != null)
         {
             foreach (var method in decl.Methods)
+            {
+                sb.Append(DocComment(method.Doc, Indent(1), method.DocParams));
                 sb.AppendLine($"    // Method: {method.Name}");
+            }
         }
 
         sb.AppendLine("}");
@@ -174,9 +190,10 @@ public sealed class CSharpEmitter : ICodeEmitter
     // UNION TYPES
     // ???????????????????????????????????????????????????????????????????
 
-    public string UnionBaseDeclaration(string name, IEnumerable<string> caseNames, IEnumerable<FieldDecl>? sharedFields = null)
+    public string UnionBaseDeclaration(string name, IEnumerable<string> caseNames, IEnumerable<FieldDecl>? sharedFields = null, string? doc = null)
     {
         var sb = new StringBuilder();
+        sb.Append(DocComment(doc));
         sb.AppendLine(GeneratedCodeAttribute);
         sb.AppendLine($"public interface I{name} : IIonUnion<I{name}>");
         sb.AppendLine("{");
@@ -194,12 +211,13 @@ public sealed class CSharpEmitter : ICodeEmitter
         return sb.ToString();
     }
 
-    public string UnionCaseDeclaration(string caseName, string unionName, int caseIndex, IEnumerable<FieldDecl> fields)
+    public string UnionCaseDeclaration(string caseName, string unionName, int caseIndex, IEnumerable<FieldDecl> fields, string? doc = null)
     {
         var fieldsList = fields.ToList();
         var fieldsStr = string.Join(", ", fieldsList.Select(f => $"{f.Type} {f.Name}"));
 
         var sb = new StringBuilder();
+        sb.Append(DocComment(doc, parameters: fieldsList.ToDocParams()));
         sb.AppendLine(GeneratedCodeAttribute);
         sb.AppendLine($"public sealed record {caseName}({fieldsStr}) : I{unionName}");
         sb.AppendLine("{");
@@ -267,4 +285,18 @@ public sealed class CSharpEmitter : ICodeEmitter
     {
         return $"{p.Type} {p.Name}";
     }
+
+    // ???????????????????????????????????????????????????????????????????
+    // DOCUMENTATION
+    // ???????????????????????????????????????????????????????????????????
+
+    public string DocComment(
+        string? doc,
+        string indent = "",
+        IReadOnlyList<DocParam>? parameters = null,
+        string? identifier = null)
+        => DocCommentFormatter.CSharpDoc(doc, indent, parameters);
+
+    public string ModuleDocComment(string? doc, string? name = null)
+        => DocCommentFormatter.LineComment(doc);
 }

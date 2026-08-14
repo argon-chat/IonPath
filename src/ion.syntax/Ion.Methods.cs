@@ -1,4 +1,4 @@
-﻿namespace ion.syntax;
+namespace ion.syntax;
 
 using Pidgin;
 using static Pidgin.Parser;
@@ -8,26 +8,25 @@ public partial class IonParser
 {
     private static Parser<char, IonArgumentSyntax> ArgEntry =>
         Map(
-            (doc, attr, pos, mod, name, type) => new IonArgumentSyntax(name, type, mod.GetValueOrDefault())
+            (lead, pos, mod, name, type) => new IonArgumentSyntax(name, type, mod.GetValueOrDefault())
                 .WithPos(pos)
-                .WithAttributes(attr)
-                .WithComments(doc),
-            LeadingDoc,
-            Attributes,
+                .WithAttributes(lead.Attributes)
+                .WithComments(lead.Doc),
+            LeadingSection,
             CurrentPos,
             ArgumentModifierOne.Optional(),
-            Identifier.Before(SkipWhitespaces),
-            Char(':').Before(SkipWhitespaces).Then(Type).Before(SkipWhitespaces)
+            Identifier.Before(SkipTrivia),
+            Char(':').Before(SkipTrivia).Then(Type).Before(SkipTrivia)
         );
 
     private static Parser<char, IonArgumentModifiers> ArgumentModifierOne =>
         Try(String("stream").ThenReturn(IonArgumentModifiers.Stream))
-            .Before(SkipWhitespaces);
+            .Before(SkipTrivia);
 
     private static Parser<char, IEnumerable<IonArgumentSyntax>> ArgList =>
         ArgEntry
             .Separated(Char(',')
-            .Before(SkipWhitespaces))
-            .Between(Char('(').Before(SkipWhitespaces), Char(')')
-            .Before(SkipWhitespaces));
+            .Before(SkipTrivia))
+            .Between(Char('(').Before(SkipTrivia), SkipTriviaAll.Then(Char(')'))
+            .Before(SkipTrivia));
 }

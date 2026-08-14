@@ -14,6 +14,12 @@
 
 namespace TestContracts;
 
+/// <summary>
+/// Integer arithmetic over a fixed left-hand operand.
+///
+/// The operand is supplied when the client is constructed, so calling Add(2)
+/// on a client created with leftOperand = 40 yields 42.
+/// </summary>
 [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
 public sealed class Ion_MathInteraction_ClientImpl(IonClientContext context) : IMathInteraction
 {
@@ -35,6 +41,10 @@ public sealed class Ion_MathInteraction_ClientImpl(IonClientContext context) : I
 
 
     
+    /// <summary>
+    /// Adds rightOperand to the bound operand.
+    /// </summary>
+    /// <param name="__leftoperand">The left-hand operand shared by every method on this service.</param>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public async Task<i4> Add(i4 __leftoperand, i4 __rightoperand, CancellationToken ct = default)
     {
@@ -53,6 +63,10 @@ public sealed class Ion_MathInteraction_ClientImpl(IonClientContext context) : I
     
         return await req.CallAsync<i4>(writer.Encode(), ct: ct);
     }
+    /// <summary>
+    /// Multiplies the bound operand by rightOperand.
+    /// </summary>
+    /// <param name="__leftoperand">The left-hand operand shared by every method on this service.</param>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public async Task<i4> Mul(i4 __leftoperand, i4 __rightoperand, CancellationToken ct = default)
     {
@@ -71,6 +85,10 @@ public sealed class Ion_MathInteraction_ClientImpl(IonClientContext context) : I
     
         return await req.CallAsync<i4>(writer.Encode(), ct: ct);
     }
+    /// <summary>
+    /// Subtracts rightOperand from the bound operand.
+    /// </summary>
+    /// <param name="__leftoperand">The left-hand operand shared by every method on this service.</param>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public async Task<i4> Sub(i4 __leftoperand, i4 __rightoperand, CancellationToken ct = default)
     {
@@ -89,6 +107,12 @@ public sealed class Ion_MathInteraction_ClientImpl(IonClientContext context) : I
     
         return await req.CallAsync<i4>(writer.Encode(), ct: ct);
     }
+    /// <summary>
+    /// Divides the bound operand by rightOperand.
+    ///
+    /// Division by zero surfaces as an RPC fault, not as a return value.
+    /// </summary>
+    /// <param name="__leftoperand">The left-hand operand shared by every method on this service.</param>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public async Task<i4> Div(i4 __leftoperand, i4 __rightoperand, CancellationToken ct = default)
     {
@@ -107,6 +131,10 @@ public sealed class Ion_MathInteraction_ClientImpl(IonClientContext context) : I
     
         return await req.CallAsync<i4>(writer.Encode(), ct: ct);
     }
+    /// <summary>
+    /// Raises the bound operand to the power of rightOperand.
+    /// </summary>
+    /// <param name="__leftoperand">The left-hand operand shared by every method on this service.</param>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public async Task<i4> Pow(i4 __leftoperand, i4 __rightoperand, CancellationToken ct = default)
     {
@@ -125,6 +153,12 @@ public sealed class Ion_MathInteraction_ClientImpl(IonClientContext context) : I
     
         return await req.CallAsync<i4>(writer.Encode(), ct: ct);
     }
+    /// <summary>
+    /// Raises the bound operand to each power in rightOperand, elementwise.
+    ///
+    /// The result array has the same length as the input array.
+    /// </summary>
+    /// <param name="__leftoperand">The left-hand operand shared by every method on this service.</param>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public async Task<IonArray<i4>> PowArray(i4 __leftoperand, IonArray<i4> __rightoperand, CancellationToken ct = default)
     {
@@ -143,6 +177,10 @@ public sealed class Ion_MathInteraction_ClientImpl(IonClientContext context) : I
     
         return await req.CallAsyncWithArray<i4>(writer.Encode(), ct: ct);
     }
+    /// <summary>
+    /// Returns the absolute value of rightOperand, or null when it is null.
+    /// </summary>
+    /// <param name="__leftoperand">The left-hand operand shared by every method on this service.</param>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public async Task<i4?> ToPositive(i4 __leftoperand, i4? __rightoperand, CancellationToken ct = default)
     {
@@ -164,6 +202,9 @@ public sealed class Ion_MathInteraction_ClientImpl(IonClientContext context) : I
 
 }
 
+/// <summary>
+/// Deterministic pseudo-random streams seeded by the caller.
+/// </summary>
 [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
 public sealed class Ion_RandomStreamInteraction_ClientImpl(IonClientContext context) : IRandomStreamInteraction
 {
@@ -175,6 +216,11 @@ public sealed class Ion_RandomStreamInteraction_ClientImpl(IonClientContext cont
 
 
     
+    /// <summary>
+    /// Streams i pseudo-random integers derived from the seed.
+    /// </summary>
+    /// <param name="__seed">Seed for the underlying generator. The same seed always yields the
+    /// same sequence, which is what makes the streaming tests reproducible.</param>
     public IAsyncEnumerable<i4> Integer(i4 __seed, i4 __i, CancellationToken ct = default)
     {
         var ws = new IonWsClient(context, typeof(IRandomStreamInteraction), Integer_Ref.Value);
@@ -192,6 +238,12 @@ public sealed class Ion_RandomStreamInteraction_ClientImpl(IonClientContext cont
     
         return ws.CallServerStreamingAsync<i4>(writer.Encode(), ct: ct);
     }
+    /// <summary>
+    /// Bidirectional stream: every f4 pushed by the client is answered with a
+    /// pseudo-random f4 derived from the seed and that input.
+    /// </summary>
+    /// <param name="__seed">Seed for the underlying generator. The same seed always yields the
+    /// same sequence, which is what makes the streaming tests reproducible.</param>
     public IAsyncEnumerable<f4> Floats(i4 __seed, IAsyncEnumerable<f4> inputStream, CancellationToken ct = default)
     {
         var ws = new IonWsClient(context, typeof(IRandomStreamInteraction), Floats_Ref.Value);

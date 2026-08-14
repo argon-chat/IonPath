@@ -41,51 +41,59 @@ public sealed class TypeScriptEmitter : ICodeEmitter
     // TYPE DECLARATIONS
     // ═══════════════════════════════════════════════════════════════════
 
-    public string EnumDeclaration(string name, IEnumerable<EnumMember> members, EnumOptions? options = null)
+    public string EnumDeclaration(string name, IEnumerable<EnumMember> members, EnumOptions? options = null, string? doc = null)
     {
         var sb = new StringBuilder();
+        sb.Append(DocComment(doc));
         sb.AppendLine($"export enum {name}");
         sb.AppendLine("{");
         foreach (var m in members)
+        {
+            sb.Append(DocComment(m.Doc, Indent(1)));
             sb.AppendLine($"  {m.Name} = {m.Value},");
+        }
         sb.AppendLine("}");
         return sb.ToString();
     }
 
-    public string FlagsDeclaration(string name, string? baseType, IEnumerable<EnumMember> members)
+    public string FlagsDeclaration(string name, string? baseType, IEnumerable<EnumMember> members, string? doc = null)
     {
         // TypeScript doesn't have a special flags enum, same as regular enum
-        return EnumDeclaration(name, members);
+        return EnumDeclaration(name, members, null, doc);
     }
 
-    public string MessageDeclaration(string name, IEnumerable<FieldDecl> fields)
+    public string MessageDeclaration(string name, IEnumerable<FieldDecl> fields, string? doc = null)
     {
         var sb = new StringBuilder();
+        sb.Append(DocComment(doc));
         sb.AppendLine($"export interface {name} {{");
         foreach (var f in fields)
         {
             var optional = f.IsOptional ? "?" : "";
+            sb.Append(DocComment(f.Doc, Indent(1)));
             sb.AppendLine($"  {f.Name}{optional}: {f.Type};");
         }
         sb.AppendLine("};");
         return sb.ToString();
     }
 
-    public string TypedefDeclaration(string name, string underlyingType)
+    public string TypedefDeclaration(string name, string underlyingType, string? doc = null)
     {
-        return $"export type {name} = {underlyingType};";
+        return $"{DocComment(doc)}export type {name} = {underlyingType};";
     }
 
-    public string ServiceInterfaceDeclaration(string name, IEnumerable<MethodDecl> methods, string? baseInterface = null)
+    public string ServiceInterfaceDeclaration(string name, IEnumerable<MethodDecl> methods, string? baseInterface = null, string? doc = null)
     {
         var sb = new StringBuilder();
         var extends = baseInterface != null ? $" extends {baseInterface}" : "";
+        sb.Append(DocComment(doc));
         sb.AppendLine($"export interface {name}{extends}");
         sb.AppendLine("{");
 
         foreach (var method in methods)
         {
             var parameters = method.Parameters.Select(FormatParameter);
+            sb.Append(DocComment(method.Doc, Indent(1), method.DocParams));
             sb.AppendLine($"  {method.Name}({string.Join(", ", parameters)}): {method.ReturnType};");
         }
 
@@ -96,6 +104,7 @@ public sealed class TypeScriptEmitter : ICodeEmitter
     public string ClassDeclaration(ClassDecl decl)
     {
         var sb = new StringBuilder();
+        sb.Append(DocComment(decl.Doc, parameters: decl.ConstructorParams?.ToDocParams()));
 
         var exportStr = decl.Modifiers.HasFlag(ClassModifiers.Export) ? "export " : "";
         var abstractStr = decl.Modifiers.HasFlag(ClassModifiers.Abstract) ? "abstract " : "";
@@ -123,7 +132,10 @@ public sealed class TypeScriptEmitter : ICodeEmitter
         if (decl.Fields != null)
         {
             foreach (var field in decl.Fields)
+            {
+                sb.Append(DocComment(field.Doc, Indent(1)));
                 sb.AppendLine($"  {field.Name}: {field.Type};");
+            }
         }
 
         sb.AppendLine("}");
@@ -134,9 +146,10 @@ public sealed class TypeScriptEmitter : ICodeEmitter
     // UNION TYPES
     // ═══════════════════════════════════════════════════════════════════
 
-    public string UnionBaseDeclaration(string name, IEnumerable<string> caseNames, IEnumerable<FieldDecl>? sharedFields = null)
+    public string UnionBaseDeclaration(string name, IEnumerable<string> caseNames, IEnumerable<FieldDecl>? sharedFields = null, string? doc = null)
     {
         var sb = new StringBuilder();
+        sb.Append(DocComment(doc));
         sb.AppendLine($"export abstract class I{name} implements IIonUnion<I{name}>");
         sb.AppendLine("{");
         sb.AppendLine("  abstract UnionKey: string;");
@@ -147,7 +160,10 @@ public sealed class TypeScriptEmitter : ICodeEmitter
         if (sharedFields != null)
         {
             foreach (var field in sharedFields)
+            {
+                sb.Append(DocComment(field.Doc, Indent(1)));
                 sb.AppendLine($"  abstract {field.Name}: {field.Type};");
+            }
             sb.AppendLine();
         }
 
@@ -163,12 +179,13 @@ public sealed class TypeScriptEmitter : ICodeEmitter
         return sb.ToString();
     }
 
-    public string UnionCaseDeclaration(string caseName, string unionName, int caseIndex, IEnumerable<FieldDecl> fields)
+    public string UnionCaseDeclaration(string caseName, string unionName, int caseIndex, IEnumerable<FieldDecl> fields, string? doc = null)
     {
         var fieldsList = fields.ToList();
         var ctorParams = string.Join(", ", fieldsList.Select(f => $"public {f.Name}: {f.Type}"));
 
         var sb = new StringBuilder();
+        sb.Append(DocComment(doc, parameters: fieldsList.ToDocParams()));
         sb.AppendLine($"export class {caseName} extends I{unionName}");
         sb.AppendLine("{");
         sb.AppendLine($"  constructor({ctorParams}) " + "{ super(); }");
@@ -240,4 +257,18 @@ public sealed class TypeScriptEmitter : ICodeEmitter
     {
         return $"{p.Name}: {p.Type}";
     }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // DOCUMENTATION
+    // ═══════════════════════════════════════════════════════════════════
+
+    public string DocComment(
+        string? doc,
+        string indent = "",
+        IReadOnlyList<DocParam>? parameters = null,
+        string? identifier = null)
+        => DocCommentFormatter.JsDoc(doc, indent, parameters);
+
+    public string ModuleDocComment(string? doc, string? name = null)
+        => DocCommentFormatter.JsDoc(doc);
 }

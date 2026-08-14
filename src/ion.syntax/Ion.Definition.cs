@@ -1,4 +1,4 @@
-﻿namespace ion.syntax;
+namespace ion.syntax;
 
 using Pidgin;
 using static Pidgin.Parser;
@@ -6,48 +6,99 @@ using static Pidgin.Parser<char>;
 
 public partial class IonParser
 {
-    public static Parser<char, IonSyntaxMember> Definition =>
+    /// <summary>
+    /// The bare declaration forms, without their leading doc comment / attribute section.
+    /// The leading section is hoisted into <see cref="Definition"/> so that it is parsed exactly
+    /// once, before the <c>OneOf</c> dispatch. (Parsing it inside the first alternative
+    /// made Pidgin commit to that alternative as soon as a comment was consumed, which turned
+    /// every documented top level declaration into a parse error.)
+    /// </summary>
+    private static Parser<char, IonSyntaxMember> DefinitionCore =>
         OneOf(
-            AttributeDef.OfType<IonSyntaxMember>(),
-            Service.OfType<IonSyntaxMember>(),
-            ImportDirective.OfType<IonSyntaxMember>(),
-            UseDirective.OfType<IonSyntaxMember>(),
-            FeatureDirective.OfType<IonSyntaxMember>(),
-            Message.OfType<IonSyntaxMember>(),
-            Flags.OfType<IonSyntaxMember>(),
-            Enums.OfType<IonSyntaxMember>(),
-            Typedef.OfType<IonSyntaxMember>(),
-            Union.OfType<IonSyntaxMember>()
-        ).Before(SkipWhitespaces);
+            AttributeDefCore.OfType<IonSyntaxMember>(),
+            ServiceCore.OfType<IonSyntaxMember>(),
+            ImportDirectiveCore,
+            UseDirectiveCore,
+            FeatureDirectiveCore,
+            MessageCore,
+            FlagsCore,
+            EnumsCore,
+            TypedefCore.OfType<IonSyntaxMember>(),
+            UnionCore.OfType<IonSyntaxMember>()
+        );
+
+    public static Parser<char, IonSyntaxMember> Definition =>
+        WithLeading(DefinitionCore).Before(SkipTopLevelTrivia);
+
+    /// <summary>
+    /// One or more consecutive <c>//!</c> lines, materialised as a synthetic member so that
+    /// <see cref="BuildFileSyntax"/> can lift them into <see cref="IonFileSyntax.ModuleDoc"/>.
+    /// </summary>
+    private static Parser<char, IonSyntaxMember> ModuleDocDeclaration =>
+        Map(
+            IonSyntaxMember (pos, docs) => new IonModuleDocSyntax(string.Join("\n", docs)).WithPos(pos),
+            CurrentPos,
+            ModuleDocLine.AtLeastOnce());
+
+    /// <summary>A module doc block or a definition.</summary>
+    private static Parser<char, IonSyntaxMember> TopLevelItem =>
+        OneOf(
+            Try(SkipTopLevelTrivia.Then(ModuleDocDeclaration)),
+            Definition);
 
     /// <summary>
     /// Keywords that start a definition. Used for error recovery to skip
     /// past invalid input to the next recognizable definition.
     /// </summary>
     private static readonly string[] DefinitionKeywords =
-        ["msg", "service", "#import", "#use", "#feature", "flags", "enum", "typedef", "union", "attr"];
+        ["msg", "service", "#import", "#use", "#feature", "flags", "enum", "typedef", "union", "attribute", "attr"];
 
     /// <summary>
     /// Attempts to parse a Definition, and on failure skips to the next definition keyword
     /// producing an <see cref="InvalidIonBlock"/>.
     /// </summary>
     public static Parser<char, IonSyntaxMember> DefinitionOrRecover =>
-        Try(Definition).Or(RecoverToNextDefinition);
+        Try(TopLevelItem).Or(RecoverToNextDefinition);
+
+    /// <summary>A definition keyword at the beginning of a line (leading indentation allowed).</summary>
+    private static Parser<char, Unit> DefinitionKeywordAtLineStart =>
+        CurrentPos.Assert(p => p.Col == 1)
+            .Then(OneOf(Char(' '), Char('\t')).SkipMany())
+            .Then(OneOf(DefinitionKeywords.Select(kw =>
+                Try(String(kw).Then(OneOf(Whitespace.ThenReturn(Unit.Value), End))))))
+            .ThenReturn(Unit.Value);
 
     /// <summary>
-    /// Consumes characters until a definition keyword is found at the start of a line (or at current position),
+    /// A position at which error recovery re-synchronises: a definition keyword at the start
+    /// of a line, or end of input.
+    /// </summary>
+    private static Parser<char, Unit> ResyncPoint =>
+        Try(Lookahead(DefinitionKeywordAtLineStart)).ThenReturn(Unit.Value).Or(End);
+
+    /// <summary>
+    /// One unit of skipped-over source. Comments and string literals are consumed whole so that
+    /// a definition keyword that only appears inside them can never be mistaken for a resync point.
+    /// </summary>
+    private static Parser<char, string> RecoverUnit =>
+        OneOf(
+            RawComment,
+            RawStringLiteral,
+            Any.Select(c => c.ToString()));
+
+    /// <summary>
+    /// Consumes characters until a definition keyword is found at the start of a line,
     /// and returns the consumed text as an <see cref="InvalidIonBlock"/>.
+    /// Fails without consuming when only trivia is left, so that trailing comments are not
+    /// reported as invalid blocks.
     /// </summary>
     private static Parser<char, IonSyntaxMember> RecoverToNextDefinition =>
-        Any.AtLeastOnceUntil(
-            Try(Lookahead(OneOf(DefinitionKeywords.Select(kw => Try(String(kw))))))
-                .ThenReturn(Unit.Value)
-            .Or(End)
-        ).Select(chars => (IonSyntaxMember)new InvalidIonBlock(new string(chars.ToArray())));
+        Try(Not(Try(SkipTriviaAll.Then(End))))
+            .Then(RecoverUnit.AtLeastOnceUntil(ResyncPoint))
+            .Select(chunks => (IonSyntaxMember)new InvalidIonBlock(string.Concat(chunks)));
 
     public static Parser<char, IEnumerable<IonSyntaxMember>> IonFile =>
-        SkipWhitespaces
-            .Then(Definition.Many(), (_, defs) => defs)
+        TopLevelItem.Many()
+            .Before(SkipTriviaAll)
             .Before(End);
 
     /// <summary>
@@ -55,8 +106,8 @@ public partial class IonParser
     /// between definitions, collecting them as <see cref="InvalidIonBlock"/>.
     /// </summary>
     public static Parser<char, IEnumerable<IonSyntaxMember>> IonFileRecovery =>
-        SkipWhitespaces
-            .Then(DefinitionOrRecover.Many(), (_, defs) => defs)
+        DefinitionOrRecover.Many()
+            .Before(SkipTriviaAll)
             .Before(End);
 
 
@@ -94,7 +145,13 @@ public partial class IonParser
 
     private static IonFileSyntax BuildFileSyntax(string name, FileInfo fileInfo, IEnumerable<IonSyntaxMember> members)
     {
-        var membersList = members.ToList();
+        var all = members.ToList();
+
+        var moduleDocs = all.OfType<IonModuleDocSyntax>().Select(x => x.Text).ToList();
+        var moduleDoc = moduleDocs.Count == 0 ? null : string.Join("\n", moduleDocs);
+
+        var membersList = all.Where(x => x is not IonModuleDocSyntax).ToList();
+
         return new IonFileSyntax(name, fileInfo,
             membersList.OfType<IonUseSyntax>().ToList(),
             membersList.OfType<IonImportSyntax>().ToList(),
@@ -106,7 +163,8 @@ public partial class IonParser
             membersList.OfType<IonTypedefSyntax>().ToList(),
             membersList.OfType<IonServiceSyntax>().ToList(),
             membersList.OfType<IonUnionSyntax>().ToList(),
-            membersList
+            membersList,
+            moduleDoc
         );
     }
 }

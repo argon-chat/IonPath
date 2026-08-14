@@ -7,6 +7,14 @@ using ion.syntax;
 /// Generates an <see cref="IonSchemaLock"/> snapshot from compiled modules,
 /// capturing the wire-level layout of every definition.
 /// </summary>
+/// <remarks>
+/// Documentation is intentionally excluded from the lock. The snapshot records only wire-relevant
+/// structure (names, indices, canonical type names, enum values, method signatures); it carries no
+/// digest of the model, so nothing here reads <c>IonBase.Doc</c> / <c>IonModule.Doc</c> and no
+/// <c>IonLocked*</c> record has a doc field. Editing a '///' comment must therefore never change
+/// ion.lock.json nor raise an ION0020-ION0029 diagnostic from <see cref="SchemaLockValidationStage"/>.
+/// Keep it that way: docs are not part of the wire contract.
+/// </remarks>
 public static class SchemaLockGenerator
 {
     public static IonSchemaLock Generate(string moduleName, IReadOnlyList<IonModule> modules)

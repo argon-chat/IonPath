@@ -89,15 +89,58 @@
 				</dict>
 			</array>
 		</dict>
+		<key>blockComment</key>
+		<dict>
+			<key>begin</key>
+			<string>/\*</string>
+			<key>beginCaptures</key>
+			<dict>
+				<key>0</key>
+				<dict>
+					<key>name</key>
+					<string>punctuation.definition.comment.begin.ion</string>
+				</dict>
+			</dict>
+			<key>comment</key>
+			<string>/* ... */ ordinary block comment. Non-nesting: the first */ closes it.</string>
+			<key>end</key>
+			<string>\*/</string>
+			<key>endCaptures</key>
+			<dict>
+				<key>0</key>
+				<dict>
+					<key>name</key>
+					<string>punctuation.definition.comment.end.ion</string>
+				</dict>
+			</dict>
+			<key>name</key>
+			<string>comment.block.ion</string>
+		</dict>
 		<key>comments</key>
 		<dict>
+			<key>comment</key>
+			<string>Order matters: the most specific marker must be listed first so that /** wins over /*, and //! and /// win over //.</string>
 			<key>patterns</key>
 			<array>
 				<dict>
-					<key>match</key>
-					<string>//.*$</string>
-					<key>name</key>
-					<string>comment.line.double-slash.ionpath</string>
+					<key>include</key>
+					<string>#docBlockComment</string>
+				</dict>
+				<dict>
+					<key>include</key>
+					<string>#blockComment</string>
+				</dict>
+				<dict>
+					<key>include</key>
+					<string>#moduleDocComment</string>
+				</dict>
+				<dict>
+					<key>include</key>
+					<string>#docLineComment</string>
+				</dict>
+				<dict>
+					<key>include</key>
+					<string>#lineComment</string>
 				</dict>
 			</array>
 		</dict>
@@ -107,11 +150,64 @@
 			<array>
 				<dict>
 					<key>match</key>
-					<string>#\b(use|feature)\b</string>
+					<string>#(?:use|import|feature)\b</string>
 					<key>name</key>
 					<string>keyword.control.directive.ionpath</string>
 				</dict>
 			</array>
+		</dict>
+		<key>docBlockComment</key>
+		<dict>
+			<key>begin</key>
+			<string>/\*\*(?!/)</string>
+			<key>beginCaptures</key>
+			<dict>
+				<key>0</key>
+				<dict>
+					<key>name</key>
+					<string>punctuation.definition.comment.begin.ion</string>
+				</dict>
+			</dict>
+			<key>comment</key>
+			<string>/** ... */ doc block comment. The (?!/) guard keeps the empty /**/ out of this rule so it falls through to #blockComment.</string>
+			<key>end</key>
+			<string>\*/</string>
+			<key>endCaptures</key>
+			<dict>
+				<key>0</key>
+				<dict>
+					<key>name</key>
+					<string>punctuation.definition.comment.end.ion</string>
+				</dict>
+			</dict>
+			<key>name</key>
+			<string>comment.block.documentation.ion</string>
+			<key>patterns</key>
+			<array>
+				<dict>
+					<key>match</key>
+					<string>^\s*\*(?!/)</string>
+					<key>name</key>
+					<string>punctuation.definition.comment.ion</string>
+				</dict>
+			</array>
+		</dict>
+		<key>docLineComment</key>
+		<dict>
+			<key>captures</key>
+			<dict>
+				<key>1</key>
+				<dict>
+					<key>name</key>
+					<string>punctuation.definition.comment.documentation.ion</string>
+				</dict>
+			</dict>
+			<key>comment</key>
+			<string>/// doc comment attached to the following declaration. The (?!/) guard keeps //// an ordinary line comment, matching the compiler.</string>
+			<key>match</key>
+			<string>(///)(?!/).*$</string>
+			<key>name</key>
+			<string>comment.line.documentation.ion</string>
 		</dict>
 		<key>entityNames</key>
 		<dict>
@@ -179,11 +275,45 @@
 			<array>
 				<dict>
 					<key>match</key>
-					<string>\b(msg|flags|enum|typedef|service|union|attribute|#use|#feature)\b</string>
+					<string>\b(msg|flags|enum|typedef|service|union|attribute)\b</string>
 					<key>name</key>
 					<string>keyword.control.ionpath</string>
 				</dict>
 			</array>
+		</dict>
+		<key>lineComment</key>
+		<dict>
+			<key>captures</key>
+			<dict>
+				<key>1</key>
+				<dict>
+					<key>name</key>
+					<string>punctuation.definition.comment.ion</string>
+				</dict>
+			</dict>
+			<key>comment</key>
+			<string>// ordinary line comment (pure trivia).</string>
+			<key>match</key>
+			<string>(//).*$</string>
+			<key>name</key>
+			<string>comment.line.double-slash.ion</string>
+		</dict>
+		<key>moduleDocComment</key>
+		<dict>
+			<key>captures</key>
+			<dict>
+				<key>1</key>
+				<dict>
+					<key>name</key>
+					<string>punctuation.definition.comment.documentation.ion</string>
+				</dict>
+			</dict>
+			<key>comment</key>
+			<string>//! module-level doc comment.</string>
+			<key>match</key>
+			<string>(//!).*$</string>
+			<key>name</key>
+			<string>comment.line.documentation.ion</string>
 		</dict>
 		<key>modifiers</key>
 		<dict>
@@ -261,9 +391,21 @@
 			<array>
 				<dict>
 					<key>match</key>
-					<string>\b(i8|i16|i32|i64|u8|u16|u32|u64|f32|f64|bool|string|guid)\b</string>
+					<string>\b(i1|i2|i4|i8|i16|u1|u2|u4|u8|u16|f2|f4|f8|void|bool|string|bytes|guid|datetime|dateonly|timeonly|duration|uri|bigint)\b</string>
 					<key>name</key>
 					<string>storage.type.ionpath</string>
+				</dict>
+				<dict>
+					<key>match</key>
+					<string>\b(Maybe|Array|Partial)\b</string>
+					<key>name</key>
+					<string>support.type.ionpath</string>
+				</dict>
+				<dict>
+					<key>match</key>
+					<string>\b(vec2f|vec3f|vec4f|vec2d|vec3d|vec4d|vec2h|vec3h|vec4h)\b</string>
+					<key>name</key>
+					<string>support.type.vector.ionpath</string>
 				</dict>
 			</array>
 		</dict>

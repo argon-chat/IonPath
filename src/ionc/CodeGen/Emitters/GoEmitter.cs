@@ -44,13 +44,18 @@ public sealed class GoEmitter : ICodeEmitter
     // TYPE DECLARATIONS
     // ═══════════════════════════════════════════════════════════════════
 
-    public string EnumDeclaration(string name, IEnumerable<EnumMember> members, EnumOptions? options = null)
+    public string EnumDeclaration(string name, IEnumerable<EnumMember> members, EnumOptions? options = null, string? doc = null)
     {
         var sb = new StringBuilder();
         var baseType = options?.BaseType ?? "int32";
 
-        // Type declaration
-        sb.AppendLine($"// {name} represents an enumeration.");
+        // Type declaration — a real doc comment replaces the placeholder banner.
+        var typeDoc = DocComment(doc, identifier: name);
+        if (typeDoc.Length > 0)
+            sb.Append(typeDoc);
+        else
+            sb.AppendLine($"// {name} represents an enumeration.");
+
         sb.AppendLine($"type {name} {baseType}");
         sb.AppendLine();
 
@@ -58,6 +63,7 @@ public sealed class GoEmitter : ICodeEmitter
         sb.AppendLine("const (");
         foreach (var m in members)
         {
+            sb.Append(DocComment(m.Doc, Indent(1), identifier: $"{name}_{m.Name}"));
             sb.AppendLine($"\t{name}_{m.Name} {name} = {m.Value}");
         }
         sb.AppendLine(")");
@@ -65,22 +71,29 @@ public sealed class GoEmitter : ICodeEmitter
         return sb.ToString();
     }
 
-    public string FlagsDeclaration(string name, string? baseType, IEnumerable<EnumMember> members)
+    public string FlagsDeclaration(string name, string? baseType, IEnumerable<EnumMember> members, string? doc = null)
     {
         // Go doesn't have a special flags type, same as enum
-        return EnumDeclaration(name, members, new EnumOptions(baseType ?? "uint32", IsFlags: true));
+        return EnumDeclaration(name, members, new EnumOptions(baseType ?? "uint32", IsFlags: true), doc);
     }
 
-    public string MessageDeclaration(string name, IEnumerable<FieldDecl> fields)
+    public string MessageDeclaration(string name, IEnumerable<FieldDecl> fields, string? doc = null)
     {
         var sb = new StringBuilder();
-        sb.AppendLine($"// {name} represents a message type.");
+
+        var typeDoc = DocComment(doc, identifier: name);
+        if (typeDoc.Length > 0)
+            sb.Append(typeDoc);
+        else
+            sb.AppendLine($"// {name} represents a message type.");
+
         sb.AppendLine($"type {name} struct " + "{");
 
         foreach (var f in fields)
         {
             // Go uses PascalCase for exported fields
             var fieldName = Capitalize(f.Name);
+            sb.Append(DocComment(f.Doc, Indent(1), identifier: fieldName));
             sb.AppendLine($"\t{fieldName} {f.Type}");
         }
 
@@ -88,15 +101,24 @@ public sealed class GoEmitter : ICodeEmitter
         return sb.ToString();
     }
 
-    public string TypedefDeclaration(string name, string underlyingType)
+    public string TypedefDeclaration(string name, string underlyingType, string? doc = null)
     {
+        var typeDoc = DocComment(doc, identifier: name);
+        if (typeDoc.Length > 0)
+            return $"{typeDoc}type {name} = {underlyingType}";
         return $"// {name} is a type alias.\ntype {name} = {underlyingType}";
     }
 
-    public string ServiceInterfaceDeclaration(string name, IEnumerable<MethodDecl> methods, string? baseInterface = null)
+    public string ServiceInterfaceDeclaration(string name, IEnumerable<MethodDecl> methods, string? baseInterface = null, string? doc = null)
     {
         var sb = new StringBuilder();
-        sb.AppendLine($"// {name} defines the service interface.");
+
+        var typeDoc = DocComment(doc, identifier: name);
+        if (typeDoc.Length > 0)
+            sb.Append(typeDoc);
+        else
+            sb.AppendLine($"// {name} defines the service interface.");
+
         sb.AppendLine($"type {name} interface " + "{");
 
         if (!string.IsNullOrEmpty(baseInterface))
@@ -116,6 +138,7 @@ public sealed class GoEmitter : ICodeEmitter
             if (string.IsNullOrEmpty(returnType))
                 returnType = "error";
 
+            sb.Append(DocComment(method.Doc, Indent(1), method.DocParams, method.Name));
             sb.AppendLine($"\t{method.Name}({string.Join(", ", allParams)}) {returnType}");
         }
 
@@ -127,13 +150,20 @@ public sealed class GoEmitter : ICodeEmitter
     {
         // Go doesn't have classes, use struct + methods
         var sb = new StringBuilder();
-        sb.AppendLine($"// {decl.Name} implementation.");
+
+        var typeDoc = DocComment(decl.Doc, identifier: decl.Name);
+        if (typeDoc.Length > 0)
+            sb.Append(typeDoc);
+        else
+            sb.AppendLine($"// {decl.Name} implementation.");
+
         sb.AppendLine($"type {decl.Name} struct " + "{");
 
         if (decl.Fields != null)
         {
             foreach (var field in decl.Fields)
             {
+                sb.Append(DocComment(field.Doc, Indent(1), identifier: Capitalize(field.Name)));
                 sb.AppendLine($"\t{Capitalize(field.Name)} {field.Type}");
             }
         }
@@ -146,12 +176,17 @@ public sealed class GoEmitter : ICodeEmitter
     // UNION TYPES
     // ═══════════════════════════════════════════════════════════════════
 
-    public string UnionBaseDeclaration(string name, IEnumerable<string> caseNames, IEnumerable<FieldDecl>? sharedFields = null)
+    public string UnionBaseDeclaration(string name, IEnumerable<string> caseNames, IEnumerable<FieldDecl>? sharedFields = null, string? doc = null)
     {
         var sb = new StringBuilder();
 
         // Interface for the union
-        sb.AppendLine($"// I{name} is the union interface.");
+        var typeDoc = DocComment(doc, identifier: $"I{name}");
+        if (typeDoc.Length > 0)
+            sb.Append(typeDoc);
+        else
+            sb.AppendLine($"// I{name} is the union interface.");
+
         sb.AppendLine($"type I{name} interface " + "{");
         sb.AppendLine("\tionUnionMarker()");
         sb.AppendLine("\tUnionKey() string");
@@ -161,15 +196,21 @@ public sealed class GoEmitter : ICodeEmitter
         return sb.ToString();
     }
 
-    public string UnionCaseDeclaration(string caseName, string unionName, int caseIndex, IEnumerable<FieldDecl> fields)
+    public string UnionCaseDeclaration(string caseName, string unionName, int caseIndex, IEnumerable<FieldDecl> fields, string? doc = null)
     {
         var sb = new StringBuilder();
 
         // Struct for the case
-        sb.AppendLine($"// {caseName} is a union case of I{unionName}.");
+        var typeDoc = DocComment(doc, identifier: caseName);
+        if (typeDoc.Length > 0)
+            sb.Append(typeDoc);
+        else
+            sb.AppendLine($"// {caseName} is a union case of I{unionName}.");
+
         sb.AppendLine($"type {caseName} struct " + "{");
         foreach (var f in fields)
         {
+            sb.Append(DocComment(f.Doc, Indent(1), identifier: Capitalize(f.Name)));
             sb.AppendLine($"\t{Capitalize(f.Name)} {f.Type}");
         }
         sb.AppendLine("}");
@@ -239,4 +280,18 @@ public sealed class GoEmitter : ICodeEmitter
         if (string.IsNullOrEmpty(input)) return input;
         return char.ToUpperInvariant(input[0]) + input[1..];
     }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // DOCUMENTATION
+    // ═══════════════════════════════════════════════════════════════════
+
+    public string DocComment(
+        string? doc,
+        string indent = "",
+        IReadOnlyList<DocParam>? parameters = null,
+        string? identifier = null)
+        => DocCommentFormatter.GoDoc(doc, indent, identifier, parameters);
+
+    public string ModuleDocComment(string? doc, string? name = null)
+        => DocCommentFormatter.GoPackageDoc(doc, name ?? "generated");
 }

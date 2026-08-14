@@ -92,10 +92,11 @@ public sealed class RustCodeGenerator : CodeGeneratorBase
     {
         var members = e.members.Select(m => new EnumMember(
             m.name.Identifier,
-            FormatEnumValue(m.constantValue, m.type)
+            FormatEnumValue(m.constantValue, m.type),
+            m.Doc
         ));
         var baseType = _rustResolver.ResolvePrimitive(e.baseType.name.Identifier);
-        return Emitter.EnumDeclaration(e.name.Identifier, members, new EnumOptions(baseType));
+        return Emitter.EnumDeclaration(e.name.Identifier, members, new EnumOptions(baseType), e.Doc);
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -161,7 +162,8 @@ public sealed class RustCodeGenerator : CodeGeneratorBase
                 .Set("originalMethodName", method.name.Identifier)
                 .Set("argsCount", argsCountUnary.ToString())
                 .Set("writeArgs", writeArgs)
-                .Set("args", methodArgs);
+                .Set("args", methodArgs)
+                .Set("methodDoc", MethodDoc(method));
 
             if (!method.returnType.IsVoid)
             {
@@ -179,9 +181,24 @@ public sealed class RustCodeGenerator : CodeGeneratorBase
 
         var classCtx = new TemplateContext()
             .Set("serviceName", serviceName)
+            .Set("serviceDoc", Emitter.DocComment(service.Doc))
             .Set("methods", methodsBuilder.ToString());
 
         return classCtx.Apply(Templates.ServiceClientClassTemplate);
+    }
+
+    /// <summary>
+    /// Rustdoc for a generated client method, indented to match the method body.
+    /// Rust arguments are snake_cased, so the parameter names are converted too.
+    /// </summary>
+    private string MethodDoc(IonMethod method)
+    {
+        var parameters = method.arguments
+            .Where(a => a.mod != IonArgumentModifiers.Stream)
+            .Select(a => new DocParam(ToSnakeCase(a.name.Identifier), a.Doc))
+            .ToList();
+
+        return Emitter.DocComment(method.Doc, Emitter.Indent(1), parameters);
     }
 
     private string GenerateStreamingMethod(string serviceName, IonMethod method, string methodNameRust)
@@ -212,6 +229,7 @@ public sealed class RustCodeGenerator : CodeGeneratorBase
                 .Set("args", methodArgs)
                 .Set("returnType", returnTypeName)
                 .Set("inputType", inputTypeName)
+                .Set("methodDoc", MethodDoc(method))
                 .Apply(((RustTemplateProvider)Templates).ServiceClientMethodDuplexStreamTemplate);
         }
 
@@ -223,6 +241,7 @@ public sealed class RustCodeGenerator : CodeGeneratorBase
             .Set("writeArgs", writeArgs)
             .Set("args", methodArgs)
             .Set("returnType", returnTypeName)
+            .Set("methodDoc", MethodDoc(method))
             .Apply(Templates.ServiceClientMethodStreamTemplate);
     }
 
@@ -390,6 +409,14 @@ public sealed class RustCodeGenerator : CodeGeneratorBase
     {
         var sb = new StringBuilder();
         sb.AppendLine(FileHeader());
+
+        // Crate level documentation (//!) collected from the `//!` blocks of every module.
+        // ProcessedModules can list the same module twice (RestoreUnresolvedTypeStage re-adds
+        // rebuilt modules), so distinct doc texts — not distinct modules — are what we want.
+        var moduleDocs = CollectModuleDocs(ctx);
+        if (moduleDocs is not null)
+            sb.Append(Emitter.ModuleDocComment(moduleDocs));
+
         sb.AppendLine();
         sb.AppendLine("use ion_rustcore::formatter::IonFormat;");
         sb.AppendLine("use ion_rustcore::{Decoder, Encoder, IonError};");
