@@ -44,8 +44,7 @@ public sealed record IonProjectConfig
 public enum IonGeneratorFeature
 {
     Orleans,
-    Std,
-    Vector
+    Std
 }
 
 internal sealed class FeatureJsonConverter : JsonConverter<IonGeneratorFeature>
@@ -60,8 +59,7 @@ internal sealed class FeatureJsonConverter : JsonConverter<IonGeneratorFeature>
         {
             "orleans" => IonGeneratorFeature.Orleans,
             "std" => IonGeneratorFeature.Std,
-            "vector" => IonGeneratorFeature.Vector,
-            _ => throw new JsonException("Invalid feature. Allowed: 'orleans','std','vector'.")
+            _ => throw new JsonException("Invalid feature. Allowed: 'orleans','std'.")
         };
     }
 
@@ -71,7 +69,6 @@ internal sealed class FeatureJsonConverter : JsonConverter<IonGeneratorFeature>
         {
             IonGeneratorFeature.Orleans => "orleans",
             IonGeneratorFeature.Std => "std",
-            IonGeneratorFeature.Vector => "vector",
             _ => throw new JsonException($"Unknown Feature: {value}")
         };
         writer.WriteStringValue(s);
@@ -83,8 +80,7 @@ public enum IonGeneratorPlatform
 {
     Dotnet,
     Browser,
-    Rust,
-    Go
+    Rust
 }
 internal sealed class PlatformKeyConverter : JsonConverter<IonGeneratorPlatform>
 {
@@ -107,8 +103,7 @@ internal sealed class PlatformKeyConverter : JsonConverter<IonGeneratorPlatform>
         "dotnet" => IonGeneratorPlatform.Dotnet,
         "browser" => IonGeneratorPlatform.Browser,
         "rust" => IonGeneratorPlatform.Rust,
-        "go" => IonGeneratorPlatform.Go,
-        _ => throw new JsonException($"Invalid platform key '{s}'. Allowed: 'dotnet','browser','rust','go'.")
+        _ => throw new JsonException($"Invalid platform key '{s}'. Allowed: 'dotnet','browser','rust'.")
     };
 
     private static string ToString(IonGeneratorPlatform value) => value switch
@@ -116,7 +111,6 @@ internal sealed class PlatformKeyConverter : JsonConverter<IonGeneratorPlatform>
         IonGeneratorPlatform.Dotnet => "dotnet",
         IonGeneratorPlatform.Browser => "browser",
         IonGeneratorPlatform.Rust => "rust",
-        IonGeneratorPlatform.Go => "go",
         _ => throw new JsonException($"Unknown Platform: {value}")
     };
 }
@@ -136,27 +130,12 @@ public sealed record BrowserGeneratorConfig : IonPlatformConfig
     [JsonPropertyName("singleFileOutput")] public bool SingleFileOutput { get; init; }
 }
 
-public sealed record GoGeneratorConfig : IonPlatformConfig
-{
-    [JsonPropertyName("features")] public required HashSet<GoFeature> Features { get; init; }
-    [JsonPropertyName("outputs")] public required string Outputs { get; init; }
-    [JsonPropertyName("packageName")] public string? PackageName { get; init; }
-}
-
 public sealed record RustGeneratorConfig : IonPlatformConfig
 {
     [JsonPropertyName("features")] public required HashSet<RustFeature> Features { get; init; }
     [JsonPropertyName("outputs")] public required string Outputs { get; init; }
     [JsonPropertyName("crateName")] public string? CrateName { get; init; }
     [JsonPropertyName("rustcorePath")] public string? RustcorePath { get; init; }
-}
-
-[JsonConverter(typeof(JsonStringEnumConverter))]
-public enum GoFeature
-{
-    Server,
-    Client,
-    Models
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -187,34 +166,27 @@ internal sealed class IonPlatformConfigConverter : JsonConverter<IonPlatformConf
             // Browser config has outputFile
             return JsonSerializer.Deserialize<BrowserGeneratorConfig>(root.GetRawText(), options);
         }
-        else if (root.TryGetProperty("crateName", out _))
+
+        if (root.TryGetProperty("crateName", out _))
         {
             // Rust config has crateName
             return JsonSerializer.Deserialize<RustGeneratorConfig>(root.GetRawText(), options);
         }
-        else if (root.TryGetProperty("packageName", out _))
-        {
-            // Go config has packageName
-            return JsonSerializer.Deserialize<GoGeneratorConfig>(root.GetRawText(), options);
-        }
-        else if (root.TryGetProperty("outputs", out _) && root.TryGetProperty("features", out var features))
-        {
-            // Both dotnet and go have outputs+features, need to check feature values
-            var featuresRaw = features.GetRawText();
-            if (featuresRaw.Contains("Server", StringComparison.OrdinalIgnoreCase) ||
-                featuresRaw.Contains("Client", StringComparison.OrdinalIgnoreCase) ||
-                featuresRaw.Contains("Models", StringComparison.OrdinalIgnoreCase))
-            {
-                // Could be either dotnet or go, default to dotnet for backward compatibility
-                return JsonSerializer.Deserialize<DotnetGeneratorConfig>(root.GetRawText(), options);
-            }
-        }
-        else if (root.TryGetProperty("outputs", out _))
+
+        // `outputs` (with or without `features`) is dotnet. This arm used to sniff the feature
+        // values as well, because dotnet and go had identical shapes and the tie had to be broken;
+        // with go gone, dotnet is the only `outputs`-shaped platform left that is not already
+        // claimed by `crateName`, so an unrecognised feature is now reported by DotnetFeature's own
+        // converter instead of as an opaque "unknown platform config format".
+        if (root.TryGetProperty("outputs", out _))
         {
             return JsonSerializer.Deserialize<DotnetGeneratorConfig>(root.GetRawText(), options);
         }
-        
-        throw new JsonException("Unknown platform config format.");
+
+        throw new JsonException(
+            "Unknown platform config format. A generator block must be one of: dotnet " +
+            "('features' + 'outputs'), browser ('outputFile'), rust ('features' + 'outputs' + " +
+            "'crateName').");
     }
 
     public override void Write(Utf8JsonWriter writer, IonPlatformConfig value, JsonSerializerOptions options)
@@ -226,9 +198,6 @@ internal sealed class IonPlatformConfigConverter : JsonConverter<IonPlatformConf
                 break;
             case BrowserGeneratorConfig b:
                 JsonSerializer.Serialize(writer, b, options);
-                break;
-            case GoGeneratorConfig g:
-                JsonSerializer.Serialize(writer, g, options);
                 break;
             case RustGeneratorConfig r:
                 JsonSerializer.Serialize(writer, r, options);

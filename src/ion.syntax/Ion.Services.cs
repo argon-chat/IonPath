@@ -21,12 +21,23 @@ public partial class IonParser
 
     public static Parser<char, IonMethodSyntax> ServiceMethod => WithLeading(ServiceMethodCore);
 
+    /// <summary>
+    /// One method modifier keyword, terminated by a word boundary.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Keyword"/>, not a bare <c>String</c>. <c>String("internal")</c> happily matches the
+    /// first eight characters of <c>internalThing</c>, so <c>internalThing(): i4;</c> parsed as an
+    /// <c>internal</c>-modified method called <c>Thing</c> — a wire-visible rename, emitted into the
+    /// generated interface and the server dispatcher, with no diagnostic anywhere. The same held for
+    /// <c>stream…</c> and <c>unary…</c>. <see cref="Keyword"/> also supplies the <c>Try</c>, so a
+    /// rejected match consumes nothing and the identifier parser downstream still sees the full name.
+    /// </remarks>
     private static Parser<char, IonMethodModifiers> MethodModifierOne =>
         OneOf(
-            String("stream").ThenReturn(IonMethodModifiers.Stream),
-            String("unary").ThenReturn(IonMethodModifiers.Unary),
-            String("internal").ThenReturn(IonMethodModifiers.Internal)
-        ).Before(SkipTrivia);
+            Keyword("stream").ThenReturn(IonMethodModifiers.Stream),
+            Keyword("unary").ThenReturn(IonMethodModifiers.Unary),
+            Keyword("internal").ThenReturn(IonMethodModifiers.Internal)
+        );
 
     private static Parser<char, IEnumerable<IonMethodModifiers>> MethodModifiers =>
         Try(MethodModifierOne).Many();

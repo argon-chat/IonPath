@@ -53,14 +53,12 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
           <span class="text-[12px] text-text-secondary">Standard library — includes all primitive types, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Maybe&lt;T&gt;</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Array&lt;T&gt;</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Partial&lt;T&gt;</code></span>
         </div>
         <div class="type-grid-row">
-          <span class="font-mono text-[12px] type-keyword">vector</span>
-          <span class="text-[12px] text-text-secondary">Vector math types — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Vector2</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Vector3</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Vector4</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Quaternion</code></span>
-        </div>
-        <div class="type-grid-row">
           <span class="font-mono text-[12px] type-keyword">orleans</span>
           <span class="text-[12px] text-text-secondary">Microsoft Orleans integration — grain-aware code generation</span>
         </div>
       </div>
+      <p class="text-sm text-text-secondary mt-3">The list is closed — any other string is rejected when the config is read. A file can assert that it needs one of these with the <a href="/guides/directives/#feature" class="text-accent hover:underline"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#feature</code></a> directive, which now errors if the feature is missing from this array.</p>
+      <p class="text-sm text-text-secondary mt-3">A third value, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">"vector"</code>, was accepted here until recently. It enabled nine builtin vector types (<code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">vec2f</code>…<code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">vec4h</code>) that no generator mapped and no runtime defined, so turning it on produced code that did not compile in any target. It has been <a href="/guides/directives/#feature" class="text-accent hover:underline">removed as unimplemented</a>. Remove it from <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">features</code> if your config still lists it — the config parser will now reject the file.</p>
     </section>
 
     <section>
@@ -95,9 +93,46 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
           <span class="font-mono text-[12px] type-property">outputFile</span>
           <span class="text-[12px] text-text-secondary">Path to the generated <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">.ts</code> file</span>
         </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-property">singleFileOutput</span>
+          <span class="text-[12px] text-text-secondary">Optional boolean. Folds the types and services of imported <a href="/guides/modules/" class="text-accent hover:underline">external modules</a> into the same <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">outputFile</code>.</span>
+        </div>
       </div>
 
+      <h3 id="rust" class="text-lg font-semibold mt-6 mb-3">rust</h3>
+      <p class="text-sm text-text-secondary mb-3">Generates a Cargo crate: a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Cargo.toml</code> in the output directory and all types, formatters and clients in <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">src/lib.rs</code> beneath it.</p>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Field</span>
+          <span>Description</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-property">features</span>
+          <span class="text-[12px] text-text-secondary">Array of: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">"models"</code> (type definitions), <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">"client"</code> (RPC client impls). There is no <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">"server"</code> — the Rust generator emits no server surface.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-property">outputs</span>
+          <span class="text-[12px] text-text-secondary">Crate root directory (relative to project root). Existing <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">.rs</code> files directly inside it are deleted before generation.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-property">crateName</span>
+          <span class="text-[12px] text-text-secondary">Optional. Cargo package name. Defaults to the project <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">name</code>, lowercased, with <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">.</code> replaced by <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">-</code>.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-property">rustcorePath</span>
+          <span class="text-[12px] text-text-secondary">Optional. Relative path to the <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ion.rustcore</code> crate the generated code depends on, written into <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Cargo.toml</code> as a path dependency. Omitted, the dependency is taken from the registry instead.</span>
+        </div>
+      </div>
+      <div class="code-block text-[13px] mt-3">
+        <pre>"rust": {'{'}
+  "features": ["client"],
+  "outputs": "./gen-rust",
+  "crateName": "test-contracts",
+  "rustcorePath": "../packages/ion.rustcore"
+{'}'}</pre>
+      </div>
 
+      <p class="text-sm text-text-secondary mt-6">Those three keys — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">dotnet</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">browser</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">rust</code> — are the whole set; any other platform key is rejected when the config is read. A fourth, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">"go"</code>, was accepted until recently. It has been <a href="/changelog/" class="text-accent hover:underline">removed</a>: there was no Go runtime in this repository, so nothing the Go generator emitted was ever compiled or verified. Remove the <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">"go"</code> block — and its <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">packageName</code> field — from <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ion.config.json</code> if your config still lists it.</p>
     </section>
 
     <section>

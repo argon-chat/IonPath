@@ -174,6 +174,55 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
         
         IonFormatterStorage<i4>.WriteNullable(writer, result);
     }
+    /// <summary>
+    /// `i4[]?` in both argument and return position: null in, null out; otherwise the
+    /// elementwise power, same length as the input.
+    ///
+    /// The return is the shape the C# client used to emit `CallAsyncNullable&lt;Array&gt;` for —
+    /// `Maybe&lt;Array&lt;i4&gt;&gt;` collapsed to the bare word `Array` instead of naming the element
+    /// type. A value-typed element is the interesting half: `IonArray&lt;i4&gt;?` is a nullable
+    /// struct, so a reader that peels only one wrapper cannot even be coerced into compiling.
+    /// </summary>
+    [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+    public async Task PowArrayMaybe_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
+    {
+        var service = scope.ServiceProvider.GetRequiredService<IMathInteraction>();
+    
+        const int argumentSize = 2;
+    
+        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+    
+        var __leftoperand = IonFormatterStorage<i4>.Read(reader);
+        var __rightoperand = IonFormatterStorage<i4>.ReadNullableArray(reader);
+    
+        reader.ReadEndArrayAndSkip(arraySize - argumentSize);
+    
+        var result = await service.PowArrayMaybe(__leftoperand, __rightoperand);
+        
+        IonFormatterStorage<i4>.WriteNullableArray(writer, result);
+    }
+    /// <summary>
+    /// The same return shape over a reference-typed element, to pin that the fix is not
+    /// specific to value types.
+    /// </summary>
+    [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+    public async Task Spell_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
+    {
+        var service = scope.ServiceProvider.GetRequiredService<IMathInteraction>();
+    
+        const int argumentSize = 2;
+    
+        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+    
+        var __leftoperand = IonFormatterStorage<i4>.Read(reader);
+        var __rightoperand = IonFormatterStorage<i4>.ReadNullableArray(reader);
+    
+        reader.ReadEndArrayAndSkip(arraySize - argumentSize);
+    
+        var result = await service.Spell(__leftoperand, __rightoperand);
+        
+        IonFormatterStorage<string>.WriteNullableArray(writer, result);
+    }
 
     
     
@@ -195,6 +244,10 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
             return PowArray_Execute(reader, writer, ct);
         if (methodName.Equals("ToPositive", StringComparison.InvariantCultureIgnoreCase))
             return ToPositive_Execute(reader, writer, ct);
+        if (methodName.Equals("PowArrayMaybe", StringComparison.InvariantCultureIgnoreCase))
+            return PowArrayMaybe_Execute(reader, writer, ct);
+        if (methodName.Equals("Spell", StringComparison.InvariantCultureIgnoreCase))
+            return Spell_Execute(reader, writer, ct);
 
         
         throw new InvalidOperationException("no method defined");

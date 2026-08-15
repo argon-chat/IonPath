@@ -1,11 +1,21 @@
 ---
 import DocsLayout from '../../layouts/DocsLayout.astro';
+
+const toc = [
+  { id: 'syntax', title: 'Syntax' },
+  { id: 'usage', title: 'Usage' },
+  { id: 'erasure', title: 'Erasure' },
+  { id: 'schema-lock', title: 'Schema lock' },
+  { id: 'generated-code', title: 'Generated code' },
+  { id: 'attributes', title: 'Attributes' },
+  { id: 'diagnostics', title: 'Diagnostics' },
+];
 ---
 
-<DocsLayout title="Typedefs — IonPath" current="/guides/typedefs/">
+<DocsLayout title="Typedefs — IonPath" current="/guides/typedefs/" toc={toc}>
   <div class="animate-fade-in-up">
     <h1 class="text-3xl font-bold tracking-tight mb-2">Typedefs</h1>
-    <p class="text-text-secondary mb-8">Typedefs create named aliases for existing types, improving readability without adding wire overhead.</p>
+    <p class="text-text-secondary mb-8">A typedef gives an existing type a second name. It is a <strong>transparent alias</strong>, not a wrapper: <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">UserId</code> <em>is</em> <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">u4</code>, with no formatter, no indirection and no wire overhead of its own.</p>
   </div>
 
   <div class="space-y-12 animate-fade-in-up-delay-1">
@@ -17,12 +27,23 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
 <span class="text-accent-3">typedef</span> <span class="type-name">Email</span> = <span class="type-keyword">string</span>;
 <span class="text-accent-3">typedef</span> <span class="type-name">Timestamp</span> = <span class="type-keyword">datetime</span>;</pre>
       </div>
-      <p class="text-sm text-text-secondary mt-3">A typedef is a compile-time alias. On the wire, it is identical to the underlying type — there is no additional wrapping or indirection.</p>
+      <p class="text-sm text-text-secondary mt-3">The underlying type may be any type expression, including modifiers and other user-defined types:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">typedef</span> <span class="type-name">UserIds</span> = <span class="type-keyword">u4</span>[];
+<span class="text-accent-3">typedef</span> <span class="type-name">MaybeEmail</span> = <span class="type-keyword">string</span>?;
+<span class="text-accent-3">typedef</span> <span class="type-name">Account</span> = <span class="type-name">User</span>;</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">Chains are allowed and collapse fully — given <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">typedef A = B;</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">typedef B = u4;</code>, every use of <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">A</code> is a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">u4</code>. A chain that loops back on itself is an error (<a href="/guides/diagnostics/#ION0017" class="text-accent hover:underline">ION0017</a>).</p>
+
+      <div class="glass rounded-xl p-4 mt-4 border-l-2 border-accent/40">
+        <p class="text-sm font-medium mb-1">The trailing <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'{ }'}</code> block</p>
+        <p class="text-xs text-text-secondary">Older grammars required a block after the underlying type — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">typedef UserId = u4 {'{}'}</code>. It is still accepted so existing sources keep compiling, but its contents have never been read and it carries no meaning. Write the plain <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">;</code> form in new code.</p>
+      </div>
     </section>
 
     <section>
       <h2 id="usage" class="text-xl font-bold mb-4">Usage</h2>
-      <p class="text-sm text-text-secondary mb-4">Use typedefs in messages, services, and other type positions:</p>
+      <p class="text-sm text-text-secondary mb-4">Use typedefs anywhere a type is expected — message fields, service base arguments, method parameters and return types:</p>
       <div class="code-block text-[13px]">
         <pre><span class="text-accent-3">typedef</span> <span class="type-name">UserId</span> = <span class="type-keyword">u4</span>;
 <span class="text-accent-3">typedef</span> <span class="type-name">SpaceId</span> = <span class="type-keyword">u4</span>;
@@ -37,19 +58,100 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
     GetMember(user: <span class="type-name">UserId</span>): <span class="type-name">Membership</span>;
 {'}'}</pre>
       </div>
+      <p class="text-sm text-text-secondary mt-3">Because the alias is transparent, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">UserId</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">SpaceId</code> are freely interchangeable — both are <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">u4</code>, and nothing stops you passing one where the other is expected. A typedef documents intent; it does not enforce it. If you need a type the compiler will keep apart from its underlying representation, wrap it in a single-field <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg</code> instead.</p>
     </section>
 
     <section>
-      <h2 id="generated-code" class="text-xl font-bold mb-4">Generated Code</h2>
-      <p class="text-sm text-text-secondary mb-4">In C#, typedefs generate global type aliases in <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">moduleInit.cs</code>:</p>
+      <h2 id="erasure" class="text-xl font-bold mb-4">Erasure</h2>
+      <p class="text-sm text-text-secondary mb-4">The compiler rewrites every <em>use</em> of an alias to the underlying type before anything downstream sees it. After that point no field, argument or return type in the intermediate representation still mentions the typedef, so formatters, the dependency graph and the schema lock never need to know typedefs exist.</p>
+      <p class="text-sm text-text-secondary">Concretely, for the example above:</p>
+      <ul class="text-sm text-text-secondary space-y-2 mt-3 ml-4">
+        <li>• No formatter is generated for <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">UserId</code>. One would produce a one-element CBOR array — exactly the overhead a transparent alias is defined not to have.</li>
+        <li>• <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Membership</code> encodes identically whether its fields are declared as <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">UserId</code> or as <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">u4</code>.</li>
+        <li>• The alias name survives only as a <em>name</em> in generated code, so hand-written code on either side can still say <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">UserId</code>.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 id="schema-lock" class="text-xl font-bold mb-4">Schema lock</h2>
+      <p class="text-sm text-text-secondary mb-4">This is the interesting consequence of erasure. Typedefs get <strong>no entry of their own</strong> in <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ion.lock.json</code>; instead the lock records the <strong>underlying type at every use site</strong>. Adding, renaming or deleting a typedef therefore does not move the lock at all, and does not bump the lock version.</p>
+      <p class="text-sm text-text-secondary mb-4">Changing what a typedef points at is a different matter. Given:</p>
       <div class="code-block text-[13px]">
-        <pre><span class="text-accent-3">global using</span> <span class="type-name">UserId</span> = <span class="type-keyword">uint</span>;
-<span class="text-accent-3">global using</span> <span class="type-name">SpaceId</span> = <span class="type-keyword">uint</span>;</pre>
+        <pre><span class="text-text-muted">// before</span>
+<span class="text-accent-3">typedef</span> <span class="type-name">UserId</span> = <span class="type-keyword">u4</span>;
+
+<span class="text-text-muted">// after</span>
+<span class="text-accent-3">typedef</span> <span class="type-name">UserId</span> = <span class="type-keyword">u8</span>;</pre>
       </div>
-      <p class="text-sm text-text-secondary mt-3">In TypeScript, they generate <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">type</code> aliases:</p>
+      <p class="text-sm text-text-secondary mt-3">the lock sees no change to <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">UserId</code> — there is nothing there to change. What it sees is that <em>every field that used the alias</em> switched from <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">u4</code> to <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">u8</code>, and it raises <a href="/guides/diagnostics/#ION0022" class="text-accent hover:underline">ION0022</a> once per field:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-status-down">ION0022</span> Breaking change: field 'userId' in 'Membership' changed type from 'u4' to 'u8'.</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">That is the correct report: a one-line edit to a typedef is a breaking change to every message that mentions it, and the diagnostics name each affected message rather than pointing at the alias.</p>
+    </section>
+
+    <section>
+      <h2 id="generated-code" class="text-xl font-bold mb-4">Generated code</h2>
+      <p class="text-sm text-text-secondary mb-4">Every target emits a real language-level alias, never a wrapper type — so the generated name is assignment-compatible with the underlying type in both directions.</p>
+
+      <h3 class="text-lg font-semibold mt-6 mb-3">C#</h3>
+      <p class="text-sm text-text-secondary mb-3">A global using alias in <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">moduleInit.cs</code>, visible to the whole compilation:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">global using</span> <span class="type-name">UserId</span> = <span class="type-name">System</span>.<span class="type-name">UInt32</span>;
+<span class="text-accent-3">global using</span> <span class="type-name">SpaceId</span> = <span class="type-name">System</span>.<span class="type-name">UInt32</span>;</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">Underlying types are written as fully qualified CLR names — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">System.UInt32</code>, not <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">uint</code> — because a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">using</code> alias directive is resolved without regard to other using directives, so an unqualified name would not bind. A handful of underlying types have no <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">using</code>-alias form at all (<code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">void</code>, an open generic); those emit an explanatory comment in place of the alias rather than failing the build.</p>
+
+      <h3 class="text-lg font-semibold mt-6 mb-3">TypeScript</h3>
       <div class="code-block text-[13px]">
         <pre><span class="text-accent-3">export type</span> <span class="type-name">UserId</span> = <span class="type-keyword">number</span>;
 <span class="text-accent-3">export type</span> <span class="type-name">SpaceId</span> = <span class="type-keyword">number</span>;</pre>
+      </div>
+
+      <h3 class="text-lg font-semibold mt-6 mb-3">Rust</h3>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">pub type</span> <span class="type-name">UserId</span> = <span class="type-keyword">u32</span>;
+<span class="text-accent-3">pub type</span> <span class="type-name">SpaceId</span> = <span class="type-keyword">u32</span>;</pre>
+      </div>
+
+      <p class="text-sm text-text-secondary mt-4">In all three targets, aliases are emitted <em>before</em> the declarations that mention them, and no formatter is registered under the alias name.</p>
+    </section>
+
+    <section>
+      <h2 id="attributes" class="text-xl font-bold mb-4">Attributes</h2>
+      <p class="text-sm text-text-secondary mb-4"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">typedef</code> is one of the twelve <a href="/guides/attributes/#targets" class="text-accent hover:underline">attribute targets</a>, so an attribute written on an alias is checked like any other — arity, argument types, and whether the attribute's <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">on</code> clause permits a typedef at all. The alias keeps the attribute in the compiled model:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">{'@'}deprecated</span>(<span class="text-accent-2">"2.0"</span>, <span class="text-accent-2">"use AccountId"</span>)
+<span class="text-accent-3">typedef</span> <span class="type-name">UserId</span> = <span class="type-keyword">u4</span>;</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3"><a href="/guides/attributes/#deprecated" class="text-accent hover:underline"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}deprecated</code></a> is the one built-in that does something here: every field, argument or return type written as <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">UserId</code> reports <a href="/guides/diagnostics/#ION1004" class="text-accent hover:underline">ION1004</a>. Note the direction — deprecating the <em>alias</em> warns at its use sites; a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">typedef Alias = OldMsg;</code> whose <em>underlying</em> type is deprecated warns once, at the typedef itself, because the fields that then use <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Alias</code> are using a live alias and are not the ones that need changing.</p>
+      <p class="text-sm text-text-secondary mt-3">Beyond that, <strong>no attribute changes how a typedef is generated or encoded</strong>, and attributes are never propagated to the underlying type or to use sites. Doc comments are different: they <em>are</em> carried through to the generated alias in all three targets. In C# they appear as a plain <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">//</code> comment above the <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">global using</code> rather than as XML <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">///</code> documentation, because a using directive is not a documentable declaration.</p>
+    </section>
+
+    <section>
+      <h2 id="diagnostics" class="text-xl font-bold mb-4">Diagnostics</h2>
+      <p class="text-sm text-text-secondary mb-4">Four forms parse but mean nothing, and are reported rather than silently dropped:</p>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Code</span>
+          <span>Cause</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]"><a href="/guides/diagnostics/#ION0014" class="text-accent hover:underline">ION0014</a></span>
+          <span class="text-[12px] text-text-secondary">No underlying type — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">typedef UserId;</code>. An alias to nothing.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]"><a href="/guides/diagnostics/#ION0015" class="text-accent hover:underline">ION0015</a></span>
+          <span class="text-[12px] text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">?</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">[]</code> or <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">~</code> on the <em>name</em> side — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">typedef Foo? = u4;</code>. Put the modifier on the underlying type instead.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]"><a href="/guides/diagnostics/#ION0016" class="text-accent hover:underline">ION0016</a></span>
+          <span class="text-[12px] text-text-secondary">Generic typedef — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">typedef Foo&lt;T&gt; = Bar&lt;T&gt;;</code>. Not supported.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]"><a href="/guides/diagnostics/#ION0017" class="text-accent hover:underline">ION0017</a></span>
+          <span class="text-[12px] text-text-secondary">Cyclic chain — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">typedef A = B; typedef B = A;</code>. The chain must terminate in a concrete type.</span>
+        </div>
       </div>
     </section>
 

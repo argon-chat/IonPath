@@ -86,45 +86,11 @@ public interface ITemplateProvider
     /// </summary>
     string? ServiceClientMethodNullableTemplate { get; }
 
-    // ???????????????????????????????????????????????????????????????????
-    // SERVICE EXECUTOR TEMPLATES (Server-side)
-    // ???????????????????????????????????????????????????????????????????
-
-    /// <summary>
-    /// Шаблон класса executor'а сервиса.
-    /// Placeholders: {serviceName}, {methods}, {routerBody}, {streamRouterBody}, {interfaces}
-    /// </summary>
-    string ServiceExecutorClassTemplate { get; }
-
-    /// <summary>
-    /// Шаблон unary метода executor'а.
-    /// </summary>
-    string ServiceExecutorMethodTemplate { get; }
-
-    /// <summary>
-    /// Шаблон void метода executor'а.
-    /// </summary>
-    string ServiceExecutorMethodVoidTemplate { get; }
-
-    /// <summary>
-    /// Шаблон streaming метода executor'а.
-    /// </summary>
-    string ServiceExecutorMethodStreamTemplate { get; }
-
-    /// <summary>
-    /// Шаблон router метода (для dispatch по имени).
-    /// </summary>
-    string ServiceExecutorRouterTemplate { get; }
-
-    /// <summary>
-    /// Шаблон stream router метода.
-    /// </summary>
-    string ServiceExecutorStreamRouterTemplate { get; }
-
-    /// <summary>
-    /// Шаблон одной branch в router.
-    /// </summary>
-    string ServiceExecutorBranchTemplate { get; }
+    // The seven ServiceExecutor* templates that used to sit here (class, unary/void/stream method,
+    // router, stream router, branch) were the server half of this abstraction and only the Go
+    // provider ever filled them in. They went with the Go target: Rust is client-only and answered
+    // all seven with NotSupportedException, and no CodeGeneratorBase subclass reads them any more.
+    // A future server-capable ITemplateProvider target reintroduces them alongside a real reader.
 
     /// <summary>
     /// Шаблон для каста input stream.

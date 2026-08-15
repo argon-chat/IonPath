@@ -21,3 +21,10 @@ chrono = { version = "0.4", features = ["serde"] }
 async-trait = "0.1"
 thiserror = "2"
 base64 = "0.22"
+
+[dev-dependencies]
+# only used to read the shared cross-runtime vectors in /tests/golden
+serde_json = "1"
+# tests/float_golden.rs builds f2 values from their IEEE bit patterns; `half` is already in the
+# tree as minicbor's "half" feature dependency.
+half = "2"

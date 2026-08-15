@@ -53,8 +53,15 @@ public static class LevenshteinDistance
             if (Math.Abs(candidate.Length - target.Length) > maxDistance)
                 continue;
 
+            // Skip only an *ordinal* exact match — there is nothing to suggest when the caller
+            // already wrote the candidate. `Compute` folds case, so a case-only misspelling scores
+            // 0; excluding those (`dist > 0`) suppressed the one suggestion that is certainly
+            // right, because every name Ion resolves is matched ordinally.
+            if (string.Equals(candidate, target, StringComparison.Ordinal))
+                continue;
+
             var dist = Compute(target, candidate);
-            if (dist < bestDist && dist <= maxDistance && dist > 0)
+            if (dist < bestDist && dist <= maxDistance)
             {
                 bestDist = dist;
                 best = candidate;

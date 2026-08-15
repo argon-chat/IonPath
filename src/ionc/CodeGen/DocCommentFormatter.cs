@@ -11,7 +11,7 @@ public readonly record struct DocParam(string Name, string? Doc);
 
 /// <summary>
 /// Shared normalization and escaping for the documentation comments emitted by every Ion
-/// code generator (C#, TypeScript, Rust, Go).
+/// code generator (C#, TypeScript, Rust).
 /// <para>
 /// Every formatter here obeys the same contract: a <c>null</c>, empty or whitespace-only
 /// document produces the empty string — never a blank line, never an empty comment marker.
@@ -182,17 +182,31 @@ public static class DocCommentFormatter
     /// <summary>
     /// Builds a JSDoc block with an optional <c>@param</c> tag per documented parameter.
     /// </summary>
+    /// <param name="doc">Raw documentation text, or <c>null</c> when undocumented.</param>
+    /// <param name="indent">Indent carried by every emitted line.</param>
+    /// <param name="parameters">Parameters to emit a <c>@param</c> tag for; undocumented ones are skipped.</param>
+    /// <param name="returns">Return documentation, emitted as <c>@returns</c>.</param>
+    /// <param name="deprecated">
+    /// The text of a <c>@deprecated</c> tag, or <see langword="null"/> when the declaration is not
+    /// deprecated. The empty string is <em>not</em> the same as <see langword="null"/>: it emits a
+    /// bare <c>@deprecated</c>, which is what <c>@deprecated</c> with no arguments means and what
+    /// every editor already strikes through. The tag is emitted last, after <c>@param</c> and
+    /// <c>@returns</c>, and a block is produced even when there is nothing else to document — so a
+    /// deprecated but undocumented declaration still gets exactly one comment, never a second
+    /// detached one.
+    /// </param>
     public static string JsDoc(
         string? doc,
         string indent = "",
         IReadOnlyList<DocParam>? parameters = null,
-        string? returns = null)
+        string? returns = null,
+        string? deprecated = null)
     {
         var summary = Normalize(doc);
         var documentedParams = CollectDocumented(parameters);
         var returnLines = Normalize(returns);
 
-        if (summary is null && documentedParams is null && returnLines is null)
+        if (summary is null && documentedParams is null && returnLines is null && deprecated is null)
             return string.Empty;
 
         var sb = new StringBuilder();
@@ -204,7 +218,7 @@ public static class DocCommentFormatter
                 AppendJsDocLine(sb, indent, line);
         }
 
-        if (documentedParams is not null || returnLines is not null)
+        if (documentedParams is not null || returnLines is not null || deprecated is not null)
         {
             if (summary is not null)
                 sb.AppendLine($"{indent} *");
@@ -217,6 +231,11 @@ public static class DocCommentFormatter
 
             if (returnLines is not null)
                 AppendJsDocTag(sb, indent, "@returns", returnLines);
+
+            if (deprecated is not null)
+                sb.AppendLine(deprecated.Length == 0
+                    ? $"{indent} * @deprecated"
+                    : $"{indent} * @deprecated {deprecated}");
         }
 
         sb.AppendLine($"{indent} */");
@@ -292,96 +311,6 @@ public static class DocCommentFormatter
         foreach (var line in lines)
             AppendPrefixed(sb, indent, "//!", line);
         return sb.ToString();
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
-    // GO — DOC COMMENTS
-    // ═══════════════════════════════════════════════════════════════════
-
-    /// <summary>
-    /// Builds a Go doc comment. Following the Go convention the first line is prefixed with
-    /// the declared identifier unless the text already starts with it. Documented parameters
-    /// are rendered as a Go 1.19 bullet list under a <c>Parameters:</c> heading, because Go
-    /// has no per-parameter doc syntax.
-    /// </summary>
-    public static string GoDoc(
-        string? doc,
-        string indent = "",
-        string? identifier = null,
-        IReadOnlyList<DocParam>? parameters = null)
-    {
-        var summary = Normalize(doc);
-        var documentedParams = CollectDocumented(parameters);
-
-        if (summary is null && documentedParams is null)
-            return string.Empty;
-
-        var sb = new StringBuilder();
-
-        if (summary is not null)
-        {
-            for (var i = 0; i < summary.Count; i++)
-            {
-                var line = summary[i];
-                if (i == 0 && identifier is { Length: > 0 } && !StartsWithIdentifier(line, identifier))
-                    sb.AppendLine($"{indent}// {identifier} {line}");
-                else
-                    AppendPrefixed(sb, indent, "//", line);
-            }
-        }
-        else if (identifier is { Length: > 0 })
-        {
-            // Parameters documented but the declaration itself is not: still anchor the block.
-            sb.AppendLine($"{indent}// {identifier}");
-        }
-
-        if (documentedParams is not null)
-        {
-            sb.AppendLine($"{indent}//");
-            sb.AppendLine($"{indent}// Parameters:");
-
-            foreach (var (name, lines) in documentedParams)
-            {
-                sb.AppendLine($"{indent}//   - {name}: {lines[0]}");
-                for (var i = 1; i < lines.Count; i++)
-                    sb.AppendLine(lines[i].Length == 0 ? $"{indent}//" : $"{indent}//     {lines[i]}");
-            }
-        }
-
-        return sb.ToString();
-    }
-
-    /// <summary>
-    /// Builds a Go package doc comment (<c>// Package name ...</c>).
-    /// </summary>
-    public static string GoPackageDoc(string? doc, string packageName)
-    {
-        var lines = Normalize(doc);
-        if (lines is null)
-            return string.Empty;
-
-        var sb = new StringBuilder();
-        var head = $"Package {packageName}";
-
-        for (var i = 0; i < lines.Count; i++)
-        {
-            if (i == 0 && !StartsWithIdentifier(lines[0], "Package"))
-                sb.AppendLine($"// {head} {lines[0]}");
-            else
-                AppendPrefixed(sb, string.Empty, "//", lines[i]);
-        }
-
-        return sb.ToString();
-    }
-
-    private static bool StartsWithIdentifier(string line, string identifier)
-    {
-        if (!line.StartsWith(identifier, StringComparison.Ordinal))
-            return false;
-        if (line.Length == identifier.Length)
-            return true;
-        var next = line[identifier.Length];
-        return !char.IsLetterOrDigit(next) && next != '_';
     }
 
     // ═══════════════════════════════════════════════════════════════════

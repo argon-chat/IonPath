@@ -8,6 +8,9 @@ const { current = '/' } = Astro.props;
 const isGuides = current.startsWith('/guides/');
 const isDocs = current.startsWith('/docs/');
 
+// NOTE: this array and the one in layouts/DocsLayout.astro must stay identical — see the comment
+// there. The mobile menu renders from here; the desktop sidebar and the prev/next footer render
+// from there.
 const guideSections = [
   {
     label: 'Getting Started',
@@ -21,12 +24,16 @@ const guideSections = [
     items: [
       { href: '/guides/syntax-overview/', label: 'Syntax Overview' },
       { href: '/guides/primitive-types/', label: 'Primitive Types' },
+      { href: '/guides/collections/', label: 'Collections' },
       { href: '/guides/messages/', label: 'Messages' },
+      { href: '/guides/mixins/', label: 'Mixins' },
+      { href: '/guides/inline-types/', label: 'Inline Types' },
       { href: '/guides/services/', label: 'Services' },
       { href: '/guides/unions/', label: 'Unions' },
       { href: '/guides/enums-flags/', label: 'Enums & Flags' },
       { href: '/guides/typedefs/', label: 'Typedefs' },
       { href: '/guides/generics/', label: 'Generics' },
+      { href: '/guides/partial/', label: 'Partial<T>' },
       { href: '/guides/attributes/', label: 'Attributes' },
       { href: '/guides/directives/', label: 'Directives' },
       { href: '/guides/modules/', label: 'Modules' },

@@ -287,52 +287,6 @@ public partial class IonParser
         return string.Join("\n", lines.GetRange(start, end - start + 1));
     }
 
-    /// <summary>
-    /// Removes <c>//</c> and <c>/* */</c> comments from a raw text span while respecting
-    /// double quoted strings. Used to clean attribute argument spans before splitting on <c>,</c>.
-    /// </summary>
-    internal static string StripComments(string raw)
-    {
-        if (raw.IndexOf('/') < 0)
-            return raw;
-
-        var sb = new System.Text.StringBuilder(raw.Length);
-        var i = 0;
-        while (i < raw.Length)
-        {
-            var c = raw[i];
-
-            if (c == '"')
-            {
-                var start = i++;
-                while (i < raw.Length && raw[i] != '"') i++;
-                if (i < raw.Length) i++;
-                sb.Append(raw, start, i - start);
-                continue;
-            }
-
-            if (c == '/' && i + 1 < raw.Length && raw[i + 1] == '/')
-            {
-                while (i < raw.Length && raw[i] != '\n' && raw[i] != '\r') i++;
-                continue;
-            }
-
-            if (c == '/' && i + 1 < raw.Length && raw[i + 1] == '*')
-            {
-                i += 2;
-                while (i + 1 < raw.Length && !(raw[i] == '*' && raw[i + 1] == '/')) i++;
-                i = i + 1 < raw.Length ? i + 2 : raw.Length;
-                sb.Append(' ');
-                continue;
-            }
-
-            sb.Append(c);
-            i++;
-        }
-
-        return sb.ToString();
-    }
-
     #endregion
 
     #region raw (source preserving) scanners, used by error recovery

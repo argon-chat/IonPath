@@ -89,13 +89,6 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
         <div class="glass rounded-xl p-4">
           <div class="flex items-center gap-3 mb-2">
             <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-xs font-bold text-accent">4</span>
-            <h3 class="font-semibold">Content Hashing</h3>
-          </div>
-          <p class="text-sm text-text-secondary ml-10">A SHA-256 hash of all module source files is computed for change detection. The hash is stored in the lock file and validated on subsequent compilations (<a href="/guides/diagnostics/#ION0046" class="text-accent hover:underline">ION0046</a>).</p>
-        </div>
-        <div class="glass rounded-xl p-4">
-          <div class="flex items-center gap-3 mb-2">
-            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-xs font-bold text-accent">5</span>
             <h3 class="font-semibold">Topological Ordering</h3>
           </div>
           <p class="text-sm text-text-secondary ml-10">Modules are sorted in dependency order — dependencies are compiled before dependents, ensuring all types are available when needed.</p>
@@ -162,10 +155,6 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
           <span class="text-[12px] text-text-secondary">Imported type from module unused</span>
         </div>
         <div class="type-grid-row">
-          <span class="font-mono text-[12px] type-keyword"><a href="/guides/diagnostics/#ION0046" class="hover:underline">ION0046</a></span>
-          <span class="text-[12px] text-text-secondary">Module content hash mismatch (lock file)</span>
-        </div>
-        <div class="type-grid-row">
           <span class="font-mono text-[12px] type-keyword"><a href="/guides/diagnostics/#ION0047" class="hover:underline">ION0047</a></span>
           <span class="text-[12px] text-text-secondary">Deprecated <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#use</code> directive</span>
         </div>
@@ -173,7 +162,12 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
           <span class="font-mono text-[12px] type-keyword"><a href="/guides/diagnostics/#ION0048" class="hover:underline">ION0048</a></span>
           <span class="text-[12px] text-text-secondary">Cross-module duplicate type name</span>
         </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword"><a href="/guides/diagnostics/#ION0049" class="hover:underline">ION0049</a></span>
+          <span class="text-[12px] text-text-secondary">A <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#feature</code> declaration the project does not satisfy</span>
+        </div>
       </div>
+      <p class="text-sm text-text-secondary mt-4"><strong>ION0046 was removed.</strong> This page used to describe a "content hashing" resolution step: a SHA-256 hash of every module source file, stored in the lock and validated on later compilations. The hash was computed, but it was never compared against anything, so ION0046 could not fire and drift was never detected. Both the hash and the code have been deleted rather than left in place implying a check that did not happen.</p>
     </section>
 
   </div>

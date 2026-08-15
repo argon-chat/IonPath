@@ -1,0 +1,181 @@
+//! `Map<K,V>`, `Set<T>` and the fixed-size array `T[N]` contracts.
+//!
+//! One file per shape would hide the interesting half. What has to hold here is that the
+//! three containers behave like every other Ion type in *every* position a generator has
+//! to spell — a message field, a method argument, a method return — and that they still
+//! behave when stacked with the modifiers (`?`, `[]`, `~`) and with each other.
+//!
+//! What each container buys, and therefore what the integration tests assert:
+//!
+//! * `Map<K,V>` is a definite-length CBOR map whose keys are sorted in canonical
+//!   RFC 8949 §4.2.1 order — byte length first, then lexicographically. The sort is the
+//!   whole feature: a C# `Dictionary`, a JavaScript `Map` and a Rust `HashMap` have three
+//!   different iteration orders, so without a total order the same logical map would
+//!   produce three different byte strings.
+//! * `Set<T>` is CBOR tag 258 wrapping a definite-length array, elements under the same
+//!   ordering. The tag is what tells it apart from `Array<T>` on the wire; without it a
+//!   captured payload would be ambiguous to anything that does not already hold the schema.
+//! * `T[N]` is a definite-length array of exactly N, and a wrong length is a typed decode
+//!   error naming both lengths — not a truncation, and not a silent pad.
+
+/// Key type for the enum arm of `KeyMatrix`.
+///
+/// An enum is the one non-builtin the compiler admits as a `Map` key (ION0061): an integral
+/// base type and a closed set of named values, which every target can hash. It is also the
+/// arm most likely to break on a target-by-target basis — a generated Rust enum has to
+/// derive `Eq + Hash` for `HashMap<Tier, V>` to compile at all.
+enum Tier : u1 {
+    Free = 0,
+    Paid = 1,
+    Trial = 2
+}
+
+/// Plain message used as a `Map` value and a `Set`-adjacent element.
+msg Member {
+    id: guid;
+    name: string;
+}
+
+/// The `Partial<T>` target, so `Map<string, Doc~>` has something to patch.
+msg Doc {
+    title: string;
+    revision: i4;
+}
+
+/// Every key type ION0061 allows, one field each.
+///
+/// The compiler's rule is: the ten integral builtins, `bool`, `duration`, `string`, `guid`,
+/// and any enum. Nothing else — a float key would gain or lose entries on decode (`-0.0`
+/// and `0.0` encode differently but compare equal, `NaN` does not compare equal to itself),
+/// and `bytes`/`datetime` map to reference-equality types in at least one target.
+///
+/// `duration` is deliberately absent despite being legal: `ion_rustcore::IonDuration` is
+/// `#[derive(Debug, Clone, PartialEq)]` with no `Eq` and no `Hash`, so
+/// `HashMap<IonDuration, i32>` does not compile. See the codegen report — the fix is one
+/// derive in `packages/ion.rustcore/src/types.rs`, which is out of this change's scope.
+msg KeyMatrix {
+    /// The narrow signed integrals. `i1` also pins the length-first rule at its most
+    /// visible: `-1` encodes as one byte (`20`) and `1000` as three (`1903e8`), so
+    /// canonical order puts `-1` first where a bytewise sort would put `1000` first.
+    byI1: Map<i1, i4>;
+    byI2: Map<i2, i4>;
+    byI4: Map<i4, i4>;
+    byI8: Map<i8, i4>;
+
+    /// `i16`/`u16` are `Int128`/`UInt128` in C#, `bigint` in TypeScript and `i128`/`u128`
+    /// in Rust — three different key representations over one wire encoding.
+    byI16: Map<i16, i4>;
+
+    byU1: Map<u1, i4>;
+    byU2: Map<u2, i4>;
+    byU4: Map<u4, i4>;
+    byU8: Map<u8, i4>;
+    byU16: Map<u16, i4>;
+
+    /// Two keys only, and the one case where the encoded key is a single byte in both arms.
+    byBool: Map<bool, i4>;
+
+    /// The common case, and the only key whose canonical order is *not* the same as the
+    /// target's natural string order: `"z"` (2 bytes encoded) sorts before `"aa"` (3).
+    byString: Map<string, i4>;
+
+    /// A 16-byte byte string on the wire; every target has a value-equal guid type.
+    byGuid: Map<guid, i4>;
+
+    /// The non-builtin key.
+    byEnum: Map<Tier, i4>;
+}
+
+/// The three containers as ordinary message fields, plus every stacking.
+msg ContainerShapes {
+    // ── the three, bare ─────────────────────────────────────────────────────
+
+    /// `Map<K,V>` — `Dictionary<string,i4>` / `Map<string,i4>` / `HashMap<String,i32>`.
+    tags: Map<string, i4>;
+
+    /// `Set<T>` — `HashSet<i4>` / `Set<i4>` / `HashSet<i32>`.
+    ids: Set<i4>;
+
+    /// `T[N]` — the one shape a target's type system can express only in Rust
+    /// (`[f32; 16]`); C# and TypeScript carry the length in the formatter call instead.
+    coords: f4[16];
+
+    // ── stackings ───────────────────────────────────────────────────────────
+
+    /// `Map<K,V>?` — `Maybe<Map<…>>`. Null and empty are different values, and the
+    /// integration tests keep them apart.
+    membersByName: Map<string, Member>?;
+
+    /// `Set<T>[]` — `Array<Set<i4>>`. A set inside an array is still one item to the
+    /// array codec, tag and all.
+    groups: Set<i4>[];
+
+    /// The same shape written as an explicit generic. It must lock, and generate,
+    /// identically to `groups` above — the suffix form is sugar, not a second type.
+    layers: Array<Set<i4>>;
+
+    /// `T[N]?` — `Maybe<Array<f4, 16>>`. Two collapsing wrappers, read through a single
+    /// nullable-fixed call rather than a nullable of an array.
+    offsets: f4[16]?;
+
+    /// `Map<K, T~>` — a container over a sparse patch. The `Partial<Doc>` schema has to be
+    /// registered for this to resolve, and it is reached only through the Map's type
+    /// argument, never through a field of its own.
+    patches: Map<string, Doc~>;
+
+    /// `Map<K, T[]>` — the one nesting neither the C# nor the TypeScript runtime can serve
+    /// unaided. Everywhere else an array is reached with its *element* type
+    /// (`ReadArray<Member>`), so neither runtime registers a formatter for the array type
+    /// itself; a Map resolves its value by type/name alone. The generators emit the missing
+    /// adapter (`Ion_nested_array_Formatter<T>`, and a named `IonArray<Member>` registration)
+    /// for exactly this shape. Rust needs nothing — `Vec<T>: IonFormat` is blanket.
+    rosters: Map<string, Member[]>;
+
+    /// A `Set` nested in a `Map` value: the same adapter question, one container over.
+    cohorts: Map<Tier, Set<i4>>;
+}
+
+/// Round-trip surface: each container in argument and in return position.
+///
+/// Return position is where the three targets diverge most. C# has no
+/// `CallAsyncWithFixedArray`, so the generated client checks `T[N]`'s length itself with the
+/// runtime's own typed exception; TypeScript registers the whole fixed array under one
+/// formatter name (`f4[16]`) and lets the ordinary nullable/plain call resolve it; Rust's
+/// `[T; N]` needs nothing at all, because the const-generic `IonFormat` impl carries N.
+service CollectionInteraction() {
+    /// `Map<K,V>` in and out. The integration test sends the same entries in two different
+    /// insertion orders and asserts identical request bytes.
+    CountByTag(tags: Map<string, i4>): Map<string, i4>;
+
+    /// `Set<T>` in and out — same insertion-order claim, plus tag 258 on the wire.
+    Dedup(ids: Set<i4>): Set<i4>;
+
+    /// `T[N]` in and out. A wrong length must be a typed error at both ends.
+    Rotate(coords: f4[16]): f4[16];
+
+    /// `T[N]?` in and out. A null argument returns null, so the null branch is reachable.
+    RotateMaybe(coords: f4[16]?): f4[16]?;
+
+    /// `Map<K,V>?` in and out, with a message value.
+    Lookup(members: Map<string, Member>?): Map<string, Member>?;
+
+    /// `Set<T>[]` in and out.
+    Regroup(groups: Set<i4>[]): Set<i4>[];
+
+    /// `Map<K, T~>` in and out.
+    Patch(patches: Map<string, Doc~>): Map<string, Doc~>;
+
+    /// `Map<K, T[]>` in and out — the nested-array adapter over a real transport.
+    Roster(rosters: Map<string, Member[]>): Map<string, Member[]>;
+
+    /// A container beside a plain argument, to pin the argument count: a write path that
+    /// emits nothing for a container while still declaring the full array length produces
+    /// malformed CBOR rather than a compile error.
+    Merge(baseline: Map<string, i4>, weight: i4): Map<string, i4>;
+
+    /// Every field shape in one message, over a real transport.
+    Echo(shapes: ContainerShapes): ContainerShapes;
+
+    /// Every legal key type in one message, over a real transport.
+    EchoKeys(keys: KeyMatrix): KeyMatrix;
+}

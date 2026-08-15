@@ -11,20 +11,11 @@ public partial class IonParser
             .Select(int.Parse)
             .Before(SkipTrivia);
 
-    public static Parser<char, int> IntExpression =>
-        Map(
-            (lhs, op, rhs) =>
-            {
-                return op switch
-                {
-                    "<<" => lhs << rhs,
-                    _ => throw new Exception($"Unknown op {op}")
-                };
-            },
-            Integer,
-            Try(String("<<").Before(SkipTrivia)),
-            Integer
-        ).Or(Integer);
+    // `IntExpression` — a `<<` folding parser — lived here and was referenced by nothing. The
+    // grammar never used it: an enum/flags member value is captured verbatim by `Expression` below
+    // and folded later by `TransformStage.EvaluateConstantExpression`, which is also the only place
+    // that can report ION0007 instead of throwing. The dead copy could only ever drift from it, and
+    // it threw a bare `Exception` on an operator its own `Try` had already guaranteed.
 
     private static Parser<char, IonFlagEntrySyntax> FlagEntry =>
         Map(

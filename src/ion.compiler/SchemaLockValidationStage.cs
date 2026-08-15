@@ -267,6 +267,8 @@ public sealed class SchemaLockValidationStage : CompilationStage
         {
             foreach (var def in module.Definitions)
             {
+                // Typedefs never enter the lock (see SchemaLockGenerator), so they must not be
+                // looked for in it either — erasure means their use sites carry the change.
                 if (def.IsBuiltin || def.isTypedef) continue;
                 map.TryAdd(def.name.Identifier, new DefinitionEntry(def, null));
             }

@@ -2,6 +2,421 @@
   "version": 1,
   "module": "TestContracts",
   "definitions": {
+    "LegacyRequest": {
+      "kind": "Msg",
+      "nextIndex": 2,
+      "fields": [
+        {
+          "index": 0,
+          "name": "oldId",
+          "type": "i4"
+        },
+        {
+          "index": 1,
+          "name": "name",
+          "type": "string"
+        }
+      ]
+    },
+    "CacheProbe": {
+      "kind": "Msg",
+      "nextIndex": 3,
+      "fields": [
+        {
+          "index": 0,
+          "name": "hits",
+          "type": "i4"
+        },
+        {
+          "index": 1,
+          "name": "misses",
+          "type": "i4"
+        },
+        {
+          "index": 2,
+          "name": "total",
+          "type": "i4"
+        }
+      ]
+    },
+    "CacheRegion": {
+      "kind": "Enum",
+      "members": {
+        "None": "0",
+        "Local": "1",
+        "Session": "2",
+        "Shared": "3"
+      },
+      "baseType": "i4"
+    },
+    "LegacyCacheInteraction": {
+      "kind": "Service",
+      "methods": {
+        "Ping": {
+          "args": [],
+          "returns": "i4",
+          "modifiers": []
+        }
+      }
+    },
+    "CacheInteraction": {
+      "kind": "Service",
+      "methods": {
+        "Legacy": {
+          "args": [
+            {
+              "index": 0,
+              "name": "id",
+              "type": "i4"
+            }
+          ],
+          "returns": "i4",
+          "modifiers": []
+        },
+        "Renamed": {
+          "args": [
+            {
+              "index": 0,
+              "name": "id",
+              "type": "i4"
+            }
+          ],
+          "returns": "i4",
+          "modifiers": []
+        },
+        "Bare": {
+          "args": [
+            {
+              "index": 0,
+              "name": "id",
+              "type": "i4"
+            }
+          ],
+          "returns": "i4",
+          "modifiers": []
+        },
+        "Current": {
+          "args": [
+            {
+              "index": 0,
+              "name": "id",
+              "type": "i4"
+            }
+          ],
+          "returns": "i4",
+          "modifiers": []
+        },
+        "Ping": {
+          "args": [],
+          "returns": "i4",
+          "modifiers": []
+        }
+      }
+    },
+    "Member": {
+      "kind": "Msg",
+      "nextIndex": 2,
+      "fields": [
+        {
+          "index": 0,
+          "name": "id",
+          "type": "guid"
+        },
+        {
+          "index": 1,
+          "name": "name",
+          "type": "string"
+        }
+      ]
+    },
+    "Doc": {
+      "kind": "Msg",
+      "nextIndex": 2,
+      "fields": [
+        {
+          "index": 0,
+          "name": "title",
+          "type": "string"
+        },
+        {
+          "index": 1,
+          "name": "revision",
+          "type": "i4"
+        }
+      ]
+    },
+    "KeyMatrix": {
+      "kind": "Msg",
+      "nextIndex": 14,
+      "fields": [
+        {
+          "index": 0,
+          "name": "byI1",
+          "type": "Map\u003Ci1, i4\u003E"
+        },
+        {
+          "index": 1,
+          "name": "byI2",
+          "type": "Map\u003Ci2, i4\u003E"
+        },
+        {
+          "index": 2,
+          "name": "byI4",
+          "type": "Map\u003Ci4, i4\u003E"
+        },
+        {
+          "index": 3,
+          "name": "byI8",
+          "type": "Map\u003Ci8, i4\u003E"
+        },
+        {
+          "index": 4,
+          "name": "byI16",
+          "type": "Map\u003Ci16, i4\u003E"
+        },
+        {
+          "index": 5,
+          "name": "byU1",
+          "type": "Map\u003Cu1, i4\u003E"
+        },
+        {
+          "index": 6,
+          "name": "byU2",
+          "type": "Map\u003Cu2, i4\u003E"
+        },
+        {
+          "index": 7,
+          "name": "byU4",
+          "type": "Map\u003Cu4, i4\u003E"
+        },
+        {
+          "index": 8,
+          "name": "byU8",
+          "type": "Map\u003Cu8, i4\u003E"
+        },
+        {
+          "index": 9,
+          "name": "byU16",
+          "type": "Map\u003Cu16, i4\u003E"
+        },
+        {
+          "index": 10,
+          "name": "byBool",
+          "type": "Map\u003Cbool, i4\u003E"
+        },
+        {
+          "index": 11,
+          "name": "byString",
+          "type": "Map\u003Cstring, i4\u003E"
+        },
+        {
+          "index": 12,
+          "name": "byGuid",
+          "type": "Map\u003Cguid, i4\u003E"
+        },
+        {
+          "index": 13,
+          "name": "byEnum",
+          "type": "Map\u003CTier, i4\u003E"
+        }
+      ]
+    },
+    "ContainerShapes": {
+      "kind": "Msg",
+      "nextIndex": 10,
+      "fields": [
+        {
+          "index": 0,
+          "name": "tags",
+          "type": "Map\u003Cstring, i4\u003E"
+        },
+        {
+          "index": 1,
+          "name": "ids",
+          "type": "Set\u003Ci4\u003E"
+        },
+        {
+          "index": 2,
+          "name": "coords",
+          "type": "Array\u003Cf4, 16\u003E"
+        },
+        {
+          "index": 3,
+          "name": "membersByName",
+          "type": "Maybe\u003CMap\u003Cstring, Member\u003E\u003E"
+        },
+        {
+          "index": 4,
+          "name": "groups",
+          "type": "Array\u003CSet\u003Ci4\u003E\u003E"
+        },
+        {
+          "index": 5,
+          "name": "layers",
+          "type": "Array\u003CSet\u003Ci4\u003E\u003E"
+        },
+        {
+          "index": 6,
+          "name": "offsets",
+          "type": "Maybe\u003CArray\u003Cf4, 16\u003E\u003E"
+        },
+        {
+          "index": 7,
+          "name": "patches",
+          "type": "Map\u003Cstring, Partial\u003CDoc\u003E\u003E"
+        },
+        {
+          "index": 8,
+          "name": "rosters",
+          "type": "Map\u003Cstring, Array\u003CMember\u003E\u003E"
+        },
+        {
+          "index": 9,
+          "name": "cohorts",
+          "type": "Map\u003CTier, Set\u003Ci4\u003E\u003E"
+        }
+      ]
+    },
+    "Tier": {
+      "kind": "Enum",
+      "members": {
+        "Free": "0",
+        "Paid": "1",
+        "Trial": "2"
+      },
+      "baseType": "u1"
+    },
+    "CollectionInteraction": {
+      "kind": "Service",
+      "methods": {
+        "CountByTag": {
+          "args": [
+            {
+              "index": 0,
+              "name": "tags",
+              "type": "Map\u003Cstring, i4\u003E"
+            }
+          ],
+          "returns": "Map\u003Cstring, i4\u003E",
+          "modifiers": []
+        },
+        "Dedup": {
+          "args": [
+            {
+              "index": 0,
+              "name": "ids",
+              "type": "Set\u003Ci4\u003E"
+            }
+          ],
+          "returns": "Set\u003Ci4\u003E",
+          "modifiers": []
+        },
+        "Rotate": {
+          "args": [
+            {
+              "index": 0,
+              "name": "coords",
+              "type": "Array\u003Cf4, 16\u003E"
+            }
+          ],
+          "returns": "Array\u003Cf4, 16\u003E",
+          "modifiers": []
+        },
+        "RotateMaybe": {
+          "args": [
+            {
+              "index": 0,
+              "name": "coords",
+              "type": "Maybe\u003CArray\u003Cf4, 16\u003E\u003E"
+            }
+          ],
+          "returns": "Maybe\u003CArray\u003Cf4, 16\u003E\u003E",
+          "modifiers": []
+        },
+        "Lookup": {
+          "args": [
+            {
+              "index": 0,
+              "name": "members",
+              "type": "Maybe\u003CMap\u003Cstring, Member\u003E\u003E"
+            }
+          ],
+          "returns": "Maybe\u003CMap\u003Cstring, Member\u003E\u003E",
+          "modifiers": []
+        },
+        "Regroup": {
+          "args": [
+            {
+              "index": 0,
+              "name": "groups",
+              "type": "Array\u003CSet\u003Ci4\u003E\u003E"
+            }
+          ],
+          "returns": "Array\u003CSet\u003Ci4\u003E\u003E",
+          "modifiers": []
+        },
+        "Patch": {
+          "args": [
+            {
+              "index": 0,
+              "name": "patches",
+              "type": "Map\u003Cstring, Partial\u003CDoc\u003E\u003E"
+            }
+          ],
+          "returns": "Map\u003Cstring, Partial\u003CDoc\u003E\u003E",
+          "modifiers": []
+        },
+        "Roster": {
+          "args": [
+            {
+              "index": 0,
+              "name": "rosters",
+              "type": "Map\u003Cstring, Array\u003CMember\u003E\u003E"
+            }
+          ],
+          "returns": "Map\u003Cstring, Array\u003CMember\u003E\u003E",
+          "modifiers": []
+        },
+        "Merge": {
+          "args": [
+            {
+              "index": 0,
+              "name": "baseline",
+              "type": "Map\u003Cstring, i4\u003E"
+            },
+            {
+              "index": 1,
+              "name": "weight",
+              "type": "i4"
+            }
+          ],
+          "returns": "Map\u003Cstring, i4\u003E",
+          "modifiers": []
+        },
+        "Echo": {
+          "args": [
+            {
+              "index": 0,
+              "name": "shapes",
+              "type": "ContainerShapes"
+            }
+          ],
+          "returns": "ContainerShapes",
+          "modifiers": []
+        },
+        "EchoKeys": {
+          "args": [
+            {
+              "index": 0,
+              "name": "keys",
+              "type": "KeyMatrix"
+            }
+          ],
+          "returns": "KeyMatrix",
+          "modifiers": []
+        }
+      }
+    },
     "TestBlobs": {
       "kind": "Service",
       "methods": {
@@ -47,6 +462,194 @@
             }
           ],
           "returns": "bytes",
+          "modifiers": []
+        }
+      }
+    },
+    "LedgerEntry": {
+      "kind": "Msg",
+      "nextIndex": 9,
+      "fields": [
+        {
+          "index": 0,
+          "name": "bookedAt",
+          "type": "datetime"
+        },
+        {
+          "index": 1,
+          "name": "amount",
+          "type": "decimal"
+        },
+        {
+          "index": 2,
+          "name": "settledAt",
+          "type": "Maybe\u003Cdatetime\u003E"
+        },
+        {
+          "index": 3,
+          "name": "fee",
+          "type": "Maybe\u003Cdecimal\u003E"
+        },
+        {
+          "index": 4,
+          "name": "revisions",
+          "type": "Array\u003Cdatetime\u003E"
+        },
+        {
+          "index": 5,
+          "name": "adjustments",
+          "type": "Array\u003Cdecimal\u003E"
+        },
+        {
+          "index": 6,
+          "name": "corrections",
+          "type": "Maybe\u003CArray\u003Cdecimal\u003E\u003E"
+        },
+        {
+          "index": 7,
+          "name": "openedAt",
+          "type": "datetime"
+        },
+        {
+          "index": 8,
+          "name": "openingBalance",
+          "type": "decimal"
+        }
+      ]
+    },
+    "LedgerPatch": {
+      "kind": "Msg",
+      "nextIndex": 4,
+      "fields": [
+        {
+          "index": 0,
+          "name": "bookedAt",
+          "type": "datetime"
+        },
+        {
+          "index": 1,
+          "name": "amount",
+          "type": "decimal"
+        },
+        {
+          "index": 2,
+          "name": "settledAt",
+          "type": "Maybe\u003Cdatetime\u003E"
+        },
+        {
+          "index": 3,
+          "name": "adjustments",
+          "type": "Array\u003Cdecimal\u003E"
+        }
+      ]
+    },
+    "LedgerInteraction": {
+      "kind": "Service",
+      "methods": {
+        "Echo": {
+          "args": [
+            {
+              "index": 0,
+              "name": "openedAt",
+              "type": "datetime"
+            },
+            {
+              "index": 1,
+              "name": "at",
+              "type": "datetime"
+            }
+          ],
+          "returns": "datetime",
+          "modifiers": []
+        },
+        "EchoAmount": {
+          "args": [
+            {
+              "index": 0,
+              "name": "openedAt",
+              "type": "datetime"
+            },
+            {
+              "index": 1,
+              "name": "amount",
+              "type": "decimal"
+            }
+          ],
+          "returns": "decimal",
+          "modifiers": []
+        },
+        "Roundtrip": {
+          "args": [
+            {
+              "index": 0,
+              "name": "openedAt",
+              "type": "datetime"
+            },
+            {
+              "index": 1,
+              "name": "entry",
+              "type": "LedgerEntry"
+            }
+          ],
+          "returns": "LedgerEntry",
+          "modifiers": []
+        },
+        "EchoMaybe": {
+          "args": [
+            {
+              "index": 0,
+              "name": "openedAt",
+              "type": "datetime"
+            },
+            {
+              "index": 1,
+              "name": "at",
+              "type": "Maybe\u003Cdatetime\u003E"
+            },
+            {
+              "index": 2,
+              "name": "amount",
+              "type": "Maybe\u003Cdecimal\u003E"
+            }
+          ],
+          "returns": "Maybe\u003Cdecimal\u003E",
+          "modifiers": []
+        },
+        "EchoMany": {
+          "args": [
+            {
+              "index": 0,
+              "name": "openedAt",
+              "type": "datetime"
+            },
+            {
+              "index": 1,
+              "name": "instants",
+              "type": "Array\u003Cdatetime\u003E"
+            },
+            {
+              "index": 2,
+              "name": "amounts",
+              "type": "Array\u003Cdecimal\u003E"
+            }
+          ],
+          "returns": "Array\u003Cdatetime\u003E",
+          "modifiers": []
+        },
+        "Patch": {
+          "args": [
+            {
+              "index": 0,
+              "name": "openedAt",
+              "type": "datetime"
+            },
+            {
+              "index": 1,
+              "name": "patch",
+              "type": "Partial\u003CLedgerPatch\u003E"
+            }
+          ],
+          "returns": "Partial\u003CLedgerPatch\u003E",
           "modifiers": []
         }
       }
@@ -165,6 +768,38 @@
           ],
           "returns": "Maybe\u003Ci4\u003E",
           "modifiers": []
+        },
+        "PowArrayMaybe": {
+          "args": [
+            {
+              "index": 0,
+              "name": "leftOperand",
+              "type": "i4"
+            },
+            {
+              "index": 1,
+              "name": "rightOperand",
+              "type": "Maybe\u003CArray\u003Ci4\u003E\u003E"
+            }
+          ],
+          "returns": "Maybe\u003CArray\u003Ci4\u003E\u003E",
+          "modifiers": []
+        },
+        "Spell": {
+          "args": [
+            {
+              "index": 0,
+              "name": "leftOperand",
+              "type": "i4"
+            },
+            {
+              "index": 1,
+              "name": "rightOperand",
+              "type": "Maybe\u003CArray\u003Ci4\u003E\u003E"
+            }
+          ],
+          "returns": "Maybe\u003CArray\u003Cstring\u003E\u003E",
+          "modifiers": []
         }
       }
     },
@@ -207,6 +842,139 @@
           "modifiers": [
             "stream"
           ]
+        }
+      }
+    },
+    "PatchTarget": {
+      "kind": "Msg",
+      "nextIndex": 5,
+      "fields": [
+        {
+          "index": 0,
+          "name": "n",
+          "type": "i4"
+        },
+        {
+          "index": 1,
+          "name": "f",
+          "type": "f4"
+        },
+        {
+          "index": 2,
+          "name": "s",
+          "type": "string"
+        },
+        {
+          "index": 3,
+          "name": "items",
+          "type": "Array\u003Ci4\u003E"
+        },
+        {
+          "index": 4,
+          "name": "note",
+          "type": "Maybe\u003Cstring\u003E"
+        }
+      ]
+    },
+    "PatchEnvelope": {
+      "kind": "Msg",
+      "nextIndex": 4,
+      "fields": [
+        {
+          "index": 0,
+          "name": "one",
+          "type": "Partial\u003CPatchTarget\u003E"
+        },
+        {
+          "index": 1,
+          "name": "many",
+          "type": "Array\u003CPartial\u003CPatchTarget\u003E\u003E"
+        },
+        {
+          "index": 2,
+          "name": "maybe",
+          "type": "Maybe\u003CPartial\u003CPatchTarget\u003E\u003E"
+        },
+        {
+          "index": 3,
+          "name": "maybeMany",
+          "type": "Maybe\u003CArray\u003CPartial\u003CPatchTarget\u003E\u003E\u003E"
+        }
+      ]
+    },
+    "PatchInteraction": {
+      "kind": "Service",
+      "methods": {
+        "Apply": {
+          "args": [
+            {
+              "index": 0,
+              "name": "patch",
+              "type": "Partial\u003CPatchTarget\u003E"
+            }
+          ],
+          "returns": "Partial\u003CPatchTarget\u003E",
+          "modifiers": []
+        },
+        "ApplyMany": {
+          "args": [
+            {
+              "index": 0,
+              "name": "patches",
+              "type": "Array\u003CPartial\u003CPatchTarget\u003E\u003E"
+            }
+          ],
+          "returns": "Maybe\u003CPartial\u003CPatchTarget\u003E\u003E",
+          "modifiers": []
+        },
+        "ApplyAll": {
+          "args": [
+            {
+              "index": 0,
+              "name": "patches",
+              "type": "Array\u003CPartial\u003CPatchTarget\u003E\u003E"
+            }
+          ],
+          "returns": "Array\u003CPartial\u003CPatchTarget\u003E\u003E",
+          "modifiers": []
+        },
+        "ApplySome": {
+          "args": [
+            {
+              "index": 0,
+              "name": "patches",
+              "type": "Array\u003CPartial\u003CPatchTarget\u003E\u003E"
+            }
+          ],
+          "returns": "Maybe\u003CArray\u003CPartial\u003CPatchTarget\u003E\u003E\u003E",
+          "modifiers": []
+        },
+        "ApplyTo": {
+          "args": [
+            {
+              "index": 0,
+              "name": "target",
+              "type": "PatchTarget"
+            },
+            {
+              "index": 1,
+              "name": "patch",
+              "type": "Partial\u003CPatchTarget\u003E"
+            }
+          ],
+          "returns": "PatchTarget",
+          "modifiers": []
+        },
+        "Rewrap": {
+          "args": [
+            {
+              "index": 0,
+              "name": "envelope",
+              "type": "PatchEnvelope"
+            }
+          ],
+          "returns": "PatchEnvelope",
+          "modifiers": []
         }
       }
     },
@@ -335,6 +1103,22 @@
           "returns": "Vector",
           "modifiers": []
         },
+        "Component": {
+          "args": [
+            {
+              "index": 0,
+              "name": "leftOperand",
+              "type": "Vector"
+            },
+            {
+              "index": 1,
+              "name": "index",
+              "type": "u1"
+            }
+          ],
+          "returns": "f4",
+          "modifiers": []
+        },
         "Do": {
           "args": [
             {
@@ -344,6 +1128,38 @@
             }
           ],
           "returns": "VectorOfVectorOfVector",
+          "modifiers": []
+        },
+        "Repeat": {
+          "args": [
+            {
+              "index": 0,
+              "name": "leftOperand",
+              "type": "Vector"
+            },
+            {
+              "index": 1,
+              "name": "count",
+              "type": "u1"
+            }
+          ],
+          "returns": "Array\u003CVector\u003E",
+          "modifiers": []
+        },
+        "Spread": {
+          "args": [
+            {
+              "index": 0,
+              "name": "leftOperand",
+              "type": "Vector"
+            },
+            {
+              "index": 1,
+              "name": "count",
+              "type": "u1"
+            }
+          ],
+          "returns": "Maybe\u003CArray\u003CVector\u003E\u003E",
           "modifiers": []
         }
       }

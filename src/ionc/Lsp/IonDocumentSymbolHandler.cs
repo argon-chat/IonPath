@@ -28,11 +28,39 @@ public class IonDocumentSymbolHandler(IonWorkspace workspace) : DocumentSymbolHa
 
         var symbols = new List<SymbolInformationOrDocumentSymbol>();
 
+        // Hoisted inline types DO appear, deliberately.
+        //
+        // They are synthesized — the author wrote `shipping: msg { … }`, not `msg OrderShipping`
+        // — so listing them is a judgement call rather than an obvious one. They are listed
+        // because the derived name is a real top level declaration everywhere downstream: it has
+        // a lock entry, a generated declaration in three languages, and it occupies the global type
+        // namespace, which is exactly what ION0067 exists to police. An outline that hid it would
+        // be hiding a name the author is responsible for. What the outline must not do is pretend
+        // the author typed it, so the detail line says where it came from, and its range is the
+        // `msg { … }` body it was lifted from — clicking it goes to the right place.
         foreach (var msg in file.messageSyntaxes)
         {
             var children = msg.Fields.Select(f => MakeSymbol(
                 f.Name.Identifier, SymbolKind.Field, ToRange(f), f.Comments)).ToList();
-            symbols.Add(MakeSymbol(msg.Name.Identifier, SymbolKind.Struct, ToRange(msg), msg.Comments, children));
+
+            var synthesized = IonLspHelpers.IsHoistedInlineType(msg);
+
+            symbols.Add(MakeSymbol(
+                msg.Name.Identifier,
+                SymbolKind.Struct,
+                ToRange(msg),
+                synthesized ? "hoisted from an inline msg { … }" : msg.Comments,
+                children));
+        }
+
+        // Mixins. A mixin is not a type, so it is `Interface` rather than `Struct` — the same kind
+        // a service gets, the other declaration that describes a contract rather than a value.
+        foreach (var mixin in file.mixinSyntaxes)
+        {
+            var children = mixin.Fields.Select(f => MakeSymbol(
+                f.Name.Identifier, SymbolKind.Field, ToRange(f), f.Comments)).ToList();
+            symbols.Add(MakeSymbol(mixin.Name.Identifier, SymbolKind.Interface, ToRange(mixin),
+                mixin.Comments, children));
         }
 
         foreach (var svc in file.serviceSyntaxes)

@@ -87,16 +87,21 @@ Console.WriteLine(user.name);  <span class="text-text-muted">// fully typed</spa
 
     <section>
       <h2 id="deadlines" class="text-xl font-bold mb-4">Deadlines</h2>
-      <p class="text-sm text-text-secondary mb-4">Methods annotated with <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">{'@'}deadline(ms)</code> in the schema have automatic request timeouts:</p>
+      <p class="text-sm text-text-secondary mb-4">A service or method may be annotated with <a href="/guides/attributes/#builtin" class="text-accent hover:underline"><code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">{'@'}deadline(time: i4)</code></a>, which the C# generator emits as <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">[Deadline(n)]</code>:</p>
       <div class="code-block text-[13px]">
         <pre><span class="text-text-muted">// In the schema:</span>
-<span class="text-accent-3">{'@'}deadline</span>(5000)
+<span class="text-accent-3">{'@'}deadline</span>(30)
 <span class="text-accent-3">service</span> <span class="type-name">SearchService</span>() {'{'}
     Search(query: <span class="type-keyword">string</span>): <span class="type-name">SearchResult</span>;
-{'}'}
-
-<span class="text-text-muted">// C# client — auto-cancels after 5 seconds</span>
-<span class="text-accent-3">var</span> result = <span class="text-accent-3">await</span> searchService.Search(<span class="text-accent-2">"hello"</span>);</pre>
+{'}'}</pre>
+      </div>
+      <div class="mt-4 flex items-start gap-3 rounded-xl border border-status-degraded/20 bg-status-degraded-subtle p-4">
+        <span class="text-status-degraded text-sm mt-0.5">⚠</span>
+        <p class="text-sm text-text-secondary"><strong>Not wired up yet.</strong> The generated <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">[Deadline]</code> binds to <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ion.runtime.DeadlineAttribute</code>, whose single property is <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Seconds</code> — but no client, server or transport reads that attribute, so the value does not currently cancel or time out anything. To bound a call today, pass your own <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">CancellationToken</code>: every generated method takes one as its last parameter.</p>
+      </div>
+      <div class="code-block text-[13px] mt-4">
+        <pre><span class="text-accent-3">using var</span> cts = <span class="text-accent-3">new</span> CancellationTokenSource(TimeSpan.FromSeconds(<span class="text-accent-2">30</span>));
+<span class="text-accent-3">var</span> result = <span class="text-accent-3">await</span> searchService.Search(<span class="text-accent-2">"hello"</span>, cts.Token);</pre>
       </div>
     </section>
 

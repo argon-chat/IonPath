@@ -8,16 +8,24 @@ using ion.syntax;
 
 public class IonInlayHintsHandler(IonWorkspace workspace) : InlayHintsHandlerBase
 {
+    /// <summary>
+    /// Builtins with one fixed wire width. Anything absent — including everything variable-length
+    /// — yields a "variable" hint.
+    /// </summary>
+    /// <remarks>
+    /// <c>datetime</c> used to be listed at 64 bits. It is now CBOR tag 0 over RFC 3339 text, so
+    /// it has no fixed width in the sense this table means, and quoting one made every message
+    /// carrying a timestamp report a total size 8 bytes smaller than it can possibly encode.
+    /// <c>decimal</c> is tag 4 over a variable-length mantissa and is deliberately absent for the
+    /// same reason.
+    /// </remarks>
     private static readonly Dictionary<string, int> BuiltinBits = new(StringComparer.OrdinalIgnoreCase)
     {
         ["i1"] = 8, ["i2"] = 16, ["i4"] = 32, ["i8"] = 64, ["i16"] = 128,
         ["u1"] = 8, ["u2"] = 16, ["u4"] = 32, ["u8"] = 64, ["u16"] = 128,
         ["f2"] = 16, ["f4"] = 32, ["f8"] = 64,
         ["bool"] = 8, ["void"] = 0, ["guid"] = 128,
-        ["datetime"] = 64, ["dateonly"] = 32, ["timeonly"] = 64, ["duration"] = 64,
-        ["vec2f"] = 64, ["vec3f"] = 96, ["vec4f"] = 128,
-        ["vec2d"] = 128, ["vec3d"] = 192, ["vec4d"] = 256,
-        ["vec2h"] = 32, ["vec3h"] = 48, ["vec4h"] = 64,
+        ["dateonly"] = 32, ["timeonly"] = 64, ["duration"] = 64,
     };
 
     protected override InlayHintRegistrationOptions CreateRegistrationOptions(
@@ -47,24 +55,36 @@ public class IonInlayHintsHandler(IonWorkspace workspace) : InlayHintsHandlerBas
         var hints = new List<InlayHint>();
         var allDefs = GetAllDefs();
 
+        var hoisted = IonLspHelpers.HoistedTypeNames(file);
+
         // Field type sizes in messages
         foreach (var msg in file.messageSyntaxes)
         {
+            // A hoisted inline type is not a declaration anyone wrote; its "opening line" is the
+            // line of the field it was written on, so a size hint for it would land as a second,
+            // contradictory annotation on a line that already has the field's own.
+            var synthesized = IonLspHelpers.IsHoistedInlineType(msg);
+
             foreach (var field in msg.Fields)
             {
+                var line = Math.Max(0, field.StartPosition.Line - 1);
                 var bits = GetFieldBits(field.Type, allDefs);
+
                 if (bits is not null && bits > 0)
                 {
                     var label = bits >= 8 ? $"{bits / 8} bytes" : $"{bits} bits";
-                    var line = Math.Max(0, field.StartPosition.Line - 1);
                     hints.Add(MakeEolHint(lines, line, label));
                 }
                 else if (bits is null)
                 {
-                    var line = Math.Max(0, field.StartPosition.Line - 1);
                     hints.Add(MakeEolHint(lines, line, "variable"));
                 }
+
+                AddHoistedNameHint(hints, field, hoisted);
             }
+
+            if (synthesized)
+                continue;
 
             // Message total size on the opening line
             var totalBits = ComputeMessageBits(msg, allDefs);
@@ -74,6 +94,20 @@ public class IonInlayHintsHandler(IonWorkspace workspace) : InlayHintsHandlerBas
                 hints.Add(MakeEolHint(lines, line, $"{totalBits / 8} bytes ({totalBits} bits)"));
             }
         }
+
+        // Mixin fields get the same size annotation. A mixin has no total of its own — it is not a
+        // message and never encodes alone — so there is no declaration-line hint.
+        foreach (var mixin in file.mixinSyntaxes)
+            foreach (var field in mixin.Fields)
+            {
+                var line = Math.Max(0, field.StartPosition.Line - 1);
+                var bits = GetFieldBits(field.Type, allDefs);
+
+                hints.Add(MakeEolHint(lines, line,
+                    bits is > 0 ? bits >= 8 ? $"{bits / 8} bytes" : $"{bits} bits" : "variable"));
+
+                AddHoistedNameHint(hints, field, hoisted);
+            }
 
         // Enum/flags member count
         foreach (var en in file.enumSyntaxes)
@@ -95,7 +129,128 @@ public class IonInlayHintsHandler(IonWorkspace workspace) : InlayHintsHandlerBas
             hints.Add(MakeEolHint(lines, line, $"{svc.Methods.Count} methods"));
         }
 
-        return Task.FromResult<InlayHintContainer?>(new InlayHintContainer(hints));
+        AddAttributeArgumentHints(file, uri, hints);
+
+        // An inline type shares its line with the field it was written on —
+        // `shipping: msg { address: string; };` is one line holding two fields — so both the
+        // outer field and the inner one place an end-of-line size hint at the same column, and
+        // the reader sees `// variable  // variable`. Identical hints at one position are always
+        // redundant, whatever produced them.
+        var deduped = hints
+            .GroupBy(h => (h.Position.Line, h.Position.Character, h.Label.String))
+            .Select(g => g.First())
+            .ToList();
+
+        return Task.FromResult<InlayHintContainer?>(new InlayHintContainer(deduped));
+    }
+
+    /// <summary>
+    /// Shows the name an inline anonymous type was hoisted to, right where it was written:
+    /// <c>shipping: msg</c> <i>OrderShipping</i> <c>{ address: string; };</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the hint with the strongest case in the language. The derived name
+    /// <c>{Owner}{PascalCasedFieldName}</c> is a real, load-bearing identifier — it is what goes
+    /// into <c>ion.lock.json</c>, what three generators emit a declaration for, and what every
+    /// diagnostic about the type calls it — and there is no token anywhere in the source that
+    /// spells it. Without the hint the only way to learn it is to compile and read the output.
+    /// </para>
+    /// <para>
+    /// Placed at the type position rather than at the end of the line so it reads as part of the
+    /// type, and so it does not compete with the size hint that already sits at end-of-line.
+    /// </para>
+    /// </remarks>
+    private static void AddHoistedNameHint(
+        List<InlayHint> hints, IonFieldSyntax field, HashSet<string> hoisted)
+    {
+        var name = field.Type.Name.Identifier;
+
+        if (!hoisted.Contains(name))
+            return;
+
+        // The rewritten reference kept the inline body's span, so this is the `msg` keyword the
+        // author wrote. Anchor just past it.
+        var start = field.Type.Name.StartPosition;
+
+        if (start.Line <= 0 || start.Col <= 0)
+            return;
+
+        hints.Add(new InlayHint
+        {
+            Position = new Position(start.Line - 1, start.Col - 1 + "msg".Length),
+            Label = new StringOrInlayHintLabelParts($" {name}"),
+            Kind = InlayHintKind.Type,
+            Tooltip = new StringOrMarkupContent(
+                $"Inline anonymous type, hoisted to `{name}` — `{{Owner}}{{PascalCasedFieldName}}`. "
+                + "This is the name recorded in `ion.lock.json` and emitted by every generator. "
+                + "A collision with an explicit declaration is ION0067."),
+            PaddingLeft = true
+        });
+    }
+
+    /// <summary>
+    /// Names the positional arguments of every attribute use: <c>@Cache(</c><i>duration:</i>
+    /// <c>300, </c><i>key:</i><c> "user")</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the position in the language with the weakest local context. A method argument is
+    /// read next to a signature that is usually in the same file and often on screen; an attribute
+    /// use is a bare literal list, and the declaration that gives those literals meaning is
+    /// typically in another file or is a builtin with no source at all.
+    /// </para>
+    /// <para>
+    /// Only positional arguments are annotated — a written <c>key: "user"</c> already says it — and
+    /// only up to the declared parameter count, so a surplus argument (ION0032) is left unlabelled
+    /// rather than being given the name of a parameter it does not bind to.
+    /// </para>
+    /// </remarks>
+    private void AddAttributeArgumentHints(IonFileSyntax file, string uri, List<InlayHint> hints)
+    {
+        // Resolved once per request, not once per use: this handler runs on every viewport change,
+        // and IonAttributeLsp.Find rebuilds the whole visible-attribute list on each call.
+        var declarations = IonAttributeLsp.Declarations(workspace, uri)
+            .ToDictionary(d => d.Name, StringComparer.Ordinal);
+
+        foreach (var site in IonAttributeLsp.Sites(file))
+        {
+            var use = site.Attribute;
+
+            if (use.Args.Count == 0)
+                continue;
+
+            if (!declarations.TryGetValue(use.Name.Identifier, out var declaration)
+                || declaration.Parameters.Count == 0)
+                continue;
+
+            var slot = 0;
+
+            foreach (var argument in use.Args)
+            {
+                if (argument.Name is not null)
+                    continue;
+
+                if (slot >= declaration.Parameters.Count)
+                    break;
+
+                var parameter = declaration.Parameters[slot++];
+                var start = argument.Value.StartPosition;
+
+                if (start.Line <= 0 || start.Col <= 0)
+                    continue;
+
+                hints.Add(new InlayHint
+                {
+                    Position = IonLspHelpers.ToLspPosition(start),
+                    Label = new StringOrInlayHintLabelParts($"{parameter.Name}:"),
+                    Kind = InlayHintKind.Parameter,
+                    Tooltip = new StringOrMarkupContent(
+                        $"`{parameter.Name}: {parameter.Type}` of `@{declaration.Name}`"),
+                    PaddingRight = true
+                });
+            }
+        }
     }
 
     public override Task<InlayHint> Handle(InlayHint request, CancellationToken cancellationToken)
@@ -145,7 +300,18 @@ public class IonInlayHintsHandler(IonWorkspace workspace) : InlayHintsHandlerBas
     {
         var name = type.Name.Identifier;
 
-        if (name is "Maybe" or "Array" or "Partial" or "string" or "bytes" or "bigint" or "uri")
+        // A written modifier suffix has to be tested before the name is even looked at. `f4[16]`
+        // and `i4[]` have `Name == "f4"` / `"i4"`, so a name-only test reported the *element*
+        // width — every array field claimed to be 4 bytes — and the enclosing message's total was
+        // wrong by however many elements the arrays held. `T?` and `T~` are the same hazard:
+        // WrapModifiers turns them into a Maybe/Partial that the name does not mention.
+        if (type.IsArray || type.IsOptional || type.IsPartial || type.IsInline)
+            return null;
+
+        // null => the hint reads "variable". Correct for `Partial<T>`: it encodes as a CBOR map
+        // carrying only the fields the sender touched, so its width is unrelated to `sizeof(T)`.
+        if (name is "Maybe" or "Array" or "Partial" or "Map" or "Set"
+            or "string" or "bytes" or "bigint" or "uri" or "datetime" or "decimal")
             return null;
         if (type.generics.Count > 0) return null;
 

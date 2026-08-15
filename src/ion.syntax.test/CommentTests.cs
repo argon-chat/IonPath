@@ -594,15 +594,22 @@ public class CommentTests
         Assert.That(import.ModuleName, Is.EqualTo("identity"));
     }
 
+    /// <summary>
+    /// Attribute arguments are lexed literals now (see <c>AttributeArgumentTests</c>), so this
+    /// asserts on the parsed values rather than on a raw span. Bare identifiers such as the old
+    /// <c>@a(x, z)</c> are no longer a legal argument form — a literal is required.
+    /// </summary>
     [Test]
-    public void Comments_InsideAttributeArguments_AreStripped()
+    public void Comments_InsideAttributeArguments_AreSkipped()
     {
         var msg = (IonMessageSyntax)ParseOne(IonParser.Message, """
-                                                                @a(x /* y */, z)
+                                                                @a(1 /* y */, 2)
                                                                 msg M {}
                                                                 """);
 
-        Assert.That(msg.Attributes.Single().Args, Is.EqualTo(new[] { "x", "z" }));
+        Assert.That(
+            msg.Attributes.Single().Args.Select(a => ((IonIntegerLiteralSyntax)a.Value).Raw),
+            Is.EqualTo(new[] { "1", "2" }));
     }
 
     #endregion
@@ -1088,15 +1095,17 @@ public class CommentTests
     }
 
     /// <summary>
-    /// Attribute arguments are a raw character span. A <c>)</c> that only occurs inside a comment
-    /// or a string literal used to terminate the argument list early.
+    /// A <c>)</c> or <c>,</c> that only occurs inside a comment or a string literal must not
+    /// terminate the argument list early. Originally a regression guard for the raw span splitter;
+    /// it still guards the same inputs now that the arguments are lexed literals, and the
+    /// expectation is the <em>decoded</em> value of each argument.
     /// </summary>
-    [TestCase("@Foo(/* ) */ a)\nmsg A { x: u4; }", new[] { "a" }, TestName = "Attr_ParenInBlockComment")]
-    [TestCase("@Foo(a /* , */ )\nmsg A { x: u4; }", new[] { "a" }, TestName = "Attr_CommaInBlockComment")]
-    [TestCase("@Foo(\"a)b\")\nmsg A { x: u4; }", new[] { "\"a)b\"" }, TestName = "Attr_ParenInString")]
-    [TestCase("@Foo(\"a,b\")\nmsg A { x: u4; }", new[] { "\"a,b\"" }, TestName = "Attr_CommaInString")]
-    [TestCase("@Foo(a, b)\nmsg A { x: u4; }", new[] { "a", "b" }, TestName = "Attr_PlainTwoArgs")]
-    [TestCase("@Foo(a /*x*/, b)\nmsg A { x: u4; }", new[] { "a", "b" }, TestName = "Attr_CommentBetweenArgs")]
+    [TestCase("@Foo(/* ) */ 1)\nmsg A { x: u4; }", new[] { "1" }, TestName = "Attr_ParenInBlockComment")]
+    [TestCase("@Foo(1 /* , */ )\nmsg A { x: u4; }", new[] { "1" }, TestName = "Attr_CommaInBlockComment")]
+    [TestCase("@Foo(\"a)b\")\nmsg A { x: u4; }", new[] { "a)b" }, TestName = "Attr_ParenInString")]
+    [TestCase("@Foo(\"a,b\")\nmsg A { x: u4; }", new[] { "a,b" }, TestName = "Attr_CommaInString")]
+    [TestCase("@Foo(1, 2)\nmsg A { x: u4; }", new[] { "1", "2" }, TestName = "Attr_PlainTwoArgs")]
+    [TestCase("@Foo(1 /*x*/, 2)\nmsg A { x: u4; }", new[] { "1", "2" }, TestName = "Attr_CommentBetweenArgs")]
     public void AttributeArguments_ToleratesCommentsAndStrings(string source, string[] expected)
     {
         var file = IonParser.Parse("attr", source);
@@ -1104,7 +1113,12 @@ public class CommentTests
         Assert.That(file.allTokens!.OfType<InvalidIonBlock>(), Is.Empty);
         var attr = file.messageSyntaxes.Single().Attributes.Single();
         Assert.That(attr.Name.Identifier, Is.EqualTo("Foo"));
-        Assert.That(attr.Args.Select(Squash), Is.EqualTo(expected));
+        Assert.That(attr.Args.Select(a => a.Value switch
+        {
+            IonIntegerLiteralSyntax i => i.Raw,
+            IonStringLiteralSyntax s => s.Value,
+            var other => other.ToString()
+        }), Is.EqualTo(expected));
     }
 
     /// <summary>

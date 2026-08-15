@@ -44,14 +44,19 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
     </section>
 
     <section>
-      <h2 id="feature" class="text-xl font-bold mb-4">#feature — Feature Flags</h2>
-      <p class="text-sm text-text-secondary mb-4">Enable a feature module in the current file:</p>
+      <h2 id="feature" class="text-xl font-bold mb-4">#feature — Declare a Required Feature</h2>
+      <p class="text-sm text-text-secondary mb-4"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#feature</code> declares that <strong>this file requires</strong> the named feature. It does not switch a feature on — features are enabled for the whole project, in the <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">features</code> array of <a href="/guides/ion-config/" class="text-accent hover:underline">ion.config.json</a>. The directive is an assertion the compiler checks: if the project does not enable the feature, compilation fails with <a href="/guides/diagnostics/#ION0049" class="text-accent hover:underline">ION0049</a>, naming the config key you need to add and listing what is currently enabled. A feature name the compiler does not know at all is also ION0049 — the set is closed, so "add it to the config" would be bad advice.</p>
       <div class="code-block text-[13px]">
-        <pre><span class="text-accent-3">#feature</span> <span class="text-accent-2">"std"</span>
-<span class="text-accent-3">#feature</span> <span class="text-accent-2">"vector"</span></pre>
-      </div>
+        <pre><span class="text-accent-3">#feature</span> <span class="text-accent-2">"orleans"</span>
 
-      <div class="type-grid mt-4">
+<span class="text-accent-3">service</span> <span class="type-name">GrainService</span>() {'{'}
+    Ping(): <span class="type-keyword">void</span>;
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">The directive takes one double-quoted string and no semicolon. A file may declare more than one.</p>
+
+      <p class="text-sm text-text-secondary mt-4 mb-2">The features a project may enable:</p>
+      <div class="type-grid mt-2">
         <div class="type-grid-header">
           <span>Feature</span>
           <span>Provides</span>
@@ -61,16 +66,27 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
           <span class="text-[12px] text-text-secondary">All primitive types, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Maybe&lt;T&gt;</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Array&lt;T&gt;</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Partial&lt;T&gt;</code>, standard attributes</span>
         </div>
         <div class="type-grid-row">
-          <span class="font-mono text-[12px] type-keyword">vector</span>
-          <span class="text-[12px] text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Vector2</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Vector3</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Vector4</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Quaternion</code></span>
-        </div>
-        <div class="type-grid-row">
           <span class="font-mono text-[12px] type-keyword">orleans</span>
           <span class="text-[12px] text-text-secondary">Microsoft Orleans grain-aware code generation</span>
         </div>
       </div>
 
-      <p class="text-sm text-text-secondary mt-4">Features are also declared in <a href="/guides/ion-config/" class="text-accent hover:underline">ion.config.json</a>. The <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#feature</code> directive enables them at the file level.</p>
+      <div class="mt-4 flex items-start gap-3 rounded-xl border border-accent/20 bg-accent-subtle p-4">
+        <span class="text-accent text-sm mt-0.5">i</span>
+        <div>
+          <p class="text-sm font-medium mb-1">What this directive used to do: nothing</p>
+          <p class="text-sm text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#feature</code> parsed into the syntax tree and was read by no part of the compiler. It could name a feature that did not exist, or contradict the project configuration, and the build succeeded either way — the only consumer was the editor's syntax highlighter. It is checked now.</p>
+        </div>
+      </div>
+
+      <div class="mt-4 flex items-start gap-3 rounded-xl border border-status-degraded/20 bg-status-degraded-subtle p-4">
+        <span class="text-status-degraded text-sm mt-0.5">⚠</span>
+        <div>
+          <p class="text-sm font-medium mb-1">The <code class="font-mono text-[12px]">vector</code> feature has been removed</p>
+          <p class="text-sm text-text-secondary">A third feature, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">vector</code>, used to exist. It declared nine builtin types — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">vec2f</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">vec3f</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">vec4f</code> and the same in <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">d</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">h</code> precisions — intended for vector maths. It has been deleted as unimplemented: the names resolved in the compiler and the language server, but <strong>no generator mapped them to anything</strong> and <strong>no runtime defined them</strong>, so every target fell through to emitting the raw Ion name and enabling the feature produced output that did not compile in any language. Vector types may return later as a well-known-type feature with real runtime support; the names above are free until then.</p>
+          <p class="text-sm text-text-secondary mt-2">This page previously described the feature as providing <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Vector2</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Vector3</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Vector4</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Quaternion</code>. Those four names never existed in Ion at all, even while the feature did — they were the C# types the language server's hover text claimed the <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">vec*</code> names mapped to, and no generator ever emitted them either.</p>
+        </div>
+      </div>
     </section>
 
     <section>

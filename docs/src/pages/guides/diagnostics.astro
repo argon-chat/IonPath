@@ -6,6 +6,14 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
   <div class="animate-fade-in-up">
     <h1 class="text-3xl font-bold tracking-tight mb-2">Diagnostics</h1>
     <p class="text-text-secondary mb-8">Complete reference of all IonPath compiler diagnostic codes. Each code has a severity level, a message template, and guidance on how to fix the issue.</p>
+    <div class="glass rounded-xl p-4 mb-8 border-l-2 border-accent/40">
+      <p class="text-sm font-medium mb-1">Every code on this page is emitted</p>
+      <p class="text-xs text-text-secondary">There are no longer any reserved-but-unraised codes. The page used to carry a <em>Reserved — not emitted</em> badge for five codes; four of those (<a href="#ION0001" class="text-accent hover:underline">ION0001</a>, <a href="#ION0004" class="text-accent hover:underline">ION0004</a>, <a href="#ION0045" class="text-accent hover:underline">ION0045</a> and ION0046/ION1003) have since been resolved in one direction or the other — implemented, or deleted along with the number. <strong>ION0046</strong> (module content-hash drift) and <strong>ION1003</strong> (unused field) were removed from the compiler: the hash ION0046 compared was computed and never read, and a field is part of the wire contract, so "unused" is not a meaningful thing to say about one. Their numbers are retired, not recycled. <strong>ION0050</strong>, <strong>ION0052</strong> and <strong>ION0053</strong> joined them when the Go code-generation target was removed — all three were Go-only refusals, so deleting the generator left nothing that could raise them. See <a href="#target-limits" class="text-accent hover:underline">Target Capability Limits</a>.</p>
+    </div>
+    <div class="glass rounded-xl p-4 mb-8">
+      <p class="text-sm font-medium mb-2">Code bands</p>
+      <p class="text-xs text-text-secondary">Codes are allocated from a single space shared by the compilation pipeline and the code generators. <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ION0001–ION0013</code> pipeline, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ION0014–ION0017</code> typedefs, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ION0010</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ION0018–ION0019</code> type modifiers and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Partial&lt;T&gt;</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ION0020–ION0029</code> schema lock, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ION0030–ION0031</code> circular references and builtin shadowing, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ION0032–ION0039</code> attribute semantics, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ION0040–ION0049</code> modules and features, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ION0050–ION0059</code> target capability limits, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ION0060–ION0068</code> language features (generics, fixed-size arrays, mixins, inline types), <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ION1001–ION1004</code> advisory.</p>
+    </div>
   </div>
 
   <div class="space-y-12 animate-fade-in-up-delay-1">
@@ -19,7 +27,8 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
             <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
           </div>
           <p class="text-sm font-medium mb-1">Cyclic module import detected: {'{'}0{'}'}</p>
-          <p class="text-xs text-text-secondary">Module A imports B and B imports A (directly or transitively). Break the cycle by extracting shared types into a third module that both can import.</p>
+          <p class="text-xs text-text-secondary">Two or more <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">.ion</code> files in the same project include each other, directly or transitively — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">a.ion</code> uses <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">b.ion</code> which uses <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">a.ion</code>. The message prints the whole loop, arrow-separated, and the error is reported on the directive that closes it.</p>
+          <p class="text-xs text-text-secondary mt-2">This code was declared from the beginning and, until now, never reached anyone: the detection stage existed but threw <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">NotImplementedException</code> from its entry point and was never registered in the pipeline. It is implemented and registered now. Cycles between <em>external modules</em> (the <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">modules</code> map in <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ion.config.json</code>) remain <a href="#ION0040" class="text-accent hover:underline">ION0040</a>; cycles between <em>types</em> are <a href="#ION0030" class="text-accent hover:underline">ION0030</a>.</p>
         </div>
 
         <div class="glass rounded-xl p-4" id="ION0002">
@@ -27,8 +36,18 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
             <span class="font-mono text-sm font-bold text-status-down">ION0002</span>
             <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
           </div>
-          <p class="text-sm font-medium mb-1">Duplicate definition of '{'{'}0{'}'}' in module '{'{'}1{'}'}'</p>
-          <p class="text-xs text-text-secondary">Two types, messages, or services share the same name. Rename one of them.</p>
+          <p class="text-sm font-medium mb-1">Duplicate definition of '{'{'}0{'}'}' in module '{'{'}1{'}'}', first defined here {'{'}2{'}'}</p>
+          <p class="text-xs text-text-secondary">Two declarations share the same name. Messages, services, enums, flags, unions, typedefs <em>and attribute declarations</em> all contribute to one namespace, so <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg Foo</code> next to <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">attribute {'@'}Foo(…);</code> collides. Comparison is case-insensitive here, so <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg Foo</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">enum foo</code> are a duplicate. Rename one of them.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0031">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0031</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">{'{'}0{'}'} '{'{'}1{'}'}' has the same name as the builtin type '{'{'}1{'}'}' from module '{'{'}2{'}'}'</p>
+          <p class="text-xs text-text-secondary">A declaration whose name is already taken by a builtin. Type resolution consults the builtin table <em>before</em> anything the project declared, so <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">typedef u4 = i8;</code> or <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg u4 {'{'} … {'}'}</code> produced a declaration that no reference could ever reach — every <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">u4</code> in the file still meant the builtin, and the build reported success. Rename the declaration.</p>
+          <p class="text-xs text-text-secondary mt-2"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'{'}0{'}'}</code> is the declaration kind — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Message</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Typedef</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Enum</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Flags</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Union</code> or <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Attribute</code>. The name match is <em>case-sensitive</em>, matching how builtins are actually resolved: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg U4</code> shadows nothing and is legal. A <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">service</code> is exempt — services live in a separate table and never take part in type resolution, so <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">service u4()</code> is fine. The builtin list is derived from the modules actually enabled for the project, not hardcoded, so a name only collides when the module that declares it is switched on. The generic wrappers <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Maybe</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Array</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Partial</code> are builtins too and are covered.</p>
         </div>
 
         <div class="glass rounded-xl p-4" id="ION0003">
@@ -37,7 +56,8 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
             <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
           </div>
           <p class="text-sm font-medium mb-1">Type '{'{'}0{'}'}' not found or is not a standard builtin type</p>
-          <p class="text-xs text-text-secondary">The base type for an enum or attribute argument is not a valid built-in type. Use a primitive like <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">u1</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">u4</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">string</code>, etc.</p>
+          <p class="text-xs text-text-secondary">Raised in the two positions that accept only a builtin, never a user-defined type: the base type of an <a href="/guides/enums-flags/" class="text-accent hover:underline"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">enum</code> or <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">flags</code></a> declaration, and the type of an <a href="/guides/attributes/#declaring" class="text-accent hover:underline">attribute parameter</a>. For an enum or flags base, use an integral primitive — one of <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">i1 i2 i4 i8 i16 u1 u2 u4 u8 u16</code>. Members are numbered (auto-incremented for an <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">enum</code>, bit-shifted for <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">flags</code>), so the base has to be able to hold an integer; every other builtin would produce members whose declared type and whose value disagree.</p>
+          <p class="text-xs text-text-secondary mt-2"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">flags</code> used to be exempt. <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">enum E : Bogus</code> was reported correctly, but <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">flags F : Bogus</code> compiled clean — the flags arm resolved its base type and then asserted the result was non-null instead of checking it, so an unresolvable base produced a null base type and no diagnostic at all. Both arms are checked now, and both require the base to be <em>integral</em>: a non-integral builtin such as <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">string</code> or <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">f4</code> is rejected here too. A name that <em>is</em> a builtin but has no literal form, in an attribute parameter, is <a href="#ION0004" class="text-accent hover:underline">ION0004</a> instead.</p>
         </div>
 
         <div class="glass rounded-xl p-4" id="ION0004">
@@ -46,7 +66,7 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
             <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
           </div>
           <p class="text-sm font-medium mb-1">Type '{'{'}0{'}'}' is not allowed in attribute arguments</p>
-          <p class="text-xs text-text-secondary">Attribute arguments must be scalar types. You cannot use a message or union type as an attribute parameter.</p>
+          <p class="text-xs text-text-secondary">An <a href="/guides/attributes/#declaring" class="text-accent hover:underline">attribute parameter</a> is declared as a builtin with no literal form, so no use site could ever supply a value for it: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">void</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">bytes</code>, a bare <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Maybe</code>/<code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Array</code>/<code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Partial</code>, or a partial <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T~</code>. Reported on the declaration, not at each use. A name that is not a builtin at all is <a href="#ION0003" class="text-accent hover:underline">ION0003</a> instead.</p>
         </div>
 
         <div class="glass rounded-xl p-4" id="ION0005">
@@ -137,7 +157,224 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
             <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
           </div>
           <p class="text-sm font-medium mb-1">Circular type reference detected: {'{'}0{'}'}</p>
-          <p class="text-xs text-text-secondary">Types form a cycle (A → B → A). This would cause infinite recursion during serialization. Break the cycle by making one of the references optional (<code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T?</code>).</p>
+          <p class="text-xs text-text-secondary">Types form a loop of <em>unconditionally owned</em> references, so a value of the type could never finish being written. The message prints the whole cycle, arrow-separated.</p>
+
+          <p class="text-xs text-text-secondary mt-3 font-medium">The owned-edge rule</p>
+          <p class="text-xs text-text-secondary mt-1">Cycle detection follows only edges that <strong>must</strong> be present on the wire. A bare <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T</code> field is an owned edge: every instance of the owner contains one, always, so a loop of them is an infinite value. Every other spelling is <strong>cycle-breaking</strong>, because each one can terminate:</p>
+          <div class="overflow-x-auto mt-2">
+            <table class="w-full text-[11px] border-collapse">
+              <thead>
+                <tr class="border-b border-white/10">
+                  <th class="text-left py-1.5 pr-3 font-medium">Written</th>
+                  <th class="text-left py-1.5 pr-3 font-medium">Edge</th>
+                  <th class="text-left py-1.5 font-medium">Why</th>
+                </tr>
+              </thead>
+              <tbody class="text-text-secondary">
+                <tr class="border-b border-white/5"><td class="py-1.5 pr-3 font-mono">x: T;</td><td class="py-1.5 pr-3 text-status-down">owned</td><td class="py-1.5">Always present. Participates in cycle detection.</td></tr>
+                <tr class="border-b border-white/5"><td class="py-1.5 pr-3 font-mono">x: T?;</td><td class="py-1.5 pr-3 text-status-up">breaking</td><td class="py-1.5">May be absent — the recursion bottoms out on <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[10px]">null</code>.</td></tr>
+                <tr class="border-b border-white/5"><td class="py-1.5 pr-3 font-mono">x: T[];</td><td class="py-1.5 pr-3 text-status-up">breaking</td><td class="py-1.5">May be empty — the recursion bottoms out on a zero-length array.</td></tr>
+                <tr class="border-b border-white/5"><td class="py-1.5 pr-3 font-mono">x: T~;</td><td class="py-1.5 pr-3 text-status-up">breaking</td><td class="py-1.5">A <a href="/guides/partial/" class="text-accent hover:underline">patch</a> is a sparse map — the field need not appear in it.</td></tr>
+                <tr><td class="py-1.5 pr-3 font-mono">union U {'{'} T {'}'}</td><td class="py-1.5 pr-3 text-status-up">breaking</td><td class="py-1.5">Only one arm is written, so another arm can terminate.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p class="text-xs text-text-secondary mt-3 font-medium">What changed</p>
+          <p class="text-xs text-text-secondary mt-1">The stage used to strip <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Maybe</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Array</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Partial</code> <em>before</em> testing for a cycle, so an ordinary tree was rejected:</p>
+          <pre class="bg-oled-elevated rounded-lg p-3 mt-2 overflow-x-auto text-[11px] font-mono leading-relaxed"><span class="type-keyword">msg</span> Folder {'{'} items: Item[]; {'}'}
+<span class="type-keyword">msg</span> Item   {'{'} parent: Folder?; {'}'}   <span class="text-text-muted">// used to be ION0030</span></pre>
+          <p class="text-xs text-text-secondary mt-2">That was wrong twice over: neither edge is owned, and the diagnostic's own remedy text told the author to make the reference optional — which it already was. Both spellings are accepted now, and trees and back-referencing graphs are expressible for the first time.</p>
+          <p class="text-xs text-text-secondary mt-2">The rule cuts the other way as well. A <strong>direct</strong> self-reference used to be skipped outright, because a self-edge was filtered out before the search ran:</p>
+          <pre class="bg-oled-elevated rounded-lg p-3 mt-2 overflow-x-auto text-[11px] font-mono leading-relaxed"><span class="type-keyword">msg</span> A {'{'} a: A;        {'}'}   <span class="text-status-down">// now ION0030 — a genuinely infinite type</span>
+<span class="type-keyword">msg</span> A {'{'} a: A?;       {'}'}   <span class="text-status-up">// fine</span>
+<span class="type-keyword">msg</span> A {'{'} children: A[]; {'}'}  <span class="text-status-up">// fine</span></pre>
+
+          <p class="text-xs text-text-secondary mt-3 font-medium">Worked example — a tree</p>
+          <pre class="bg-oled-elevated rounded-lg p-3 mt-2 overflow-x-auto text-[11px] font-mono leading-relaxed"><span class="type-keyword">msg</span> TreeNode {'{'}
+    id: u4;
+    label: <span class="type-keyword">string</span>;
+    children: TreeNode[];   <span class="text-text-muted">// breaking: a leaf has none</span>
+    parent: TreeNode?;      <span class="text-text-muted">// breaking: the root has none</span>
+{'}'}</pre>
+          <p class="text-xs text-text-secondary mt-2">Recursion terminates on any node whose <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">children</code> is empty, so the type is finite and compiles. Adding <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">root: TreeNode;</code> — bare, owned — would make it infinite again and raise ION0030.</p>
+          <p class="text-xs text-text-secondary mt-2">To fix a real cycle, make one edge on the loop breaking: mark it <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T?</code>, move it into a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T[]</code>, or restructure so one side references the other by key instead of by value. Cycles between <em>typedef aliases</em> are <a href="#ION0017" class="text-accent hover:underline">ION0017</a>, which has no equivalent escape hatch — an alias is erased, so there is no wire position at which it could terminate.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="typedefs" class="text-xl font-bold mb-4">Typedef Validation (ION0014–ION0017)</h2>
+      <p class="text-sm text-text-secondary mb-4">A <a href="/guides/typedefs/" class="text-accent hover:underline">typedef</a> is a transparent alias. These four forms parse but describe nothing, so they are reported rather than silently discarded:</p>
+      <div class="space-y-4">
+        <div class="glass rounded-xl p-4" id="ION0014">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0014</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Typedef '{'{'}0{'}'}' declares no underlying type</p>
+          <p class="text-xs text-text-secondary">An alias needs something to alias. Write <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">typedef UserId = u4;</code> rather than <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">typedef UserId;</code>.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0015">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0015</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Typedef '{'{'}0{'}'}' applies the '{'{'}1{'}'}' modifier to the alias name</p>
+          <p class="text-xs text-text-secondary">A <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">?</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">[]</code> or <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">~</code> on the left of the <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">=</code> has no meaning — the name is just a name. Move it to the underlying type (<code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">typedef Foo = u4?;</code>) or apply it at each use site.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0016">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0016</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Generic typedef '{'{'}0{'}'}&lt;{'{'}1{'}'}&gt;' is not supported</p>
+          <p class="text-xs text-text-secondary">Nothing downstream can instantiate an aliased generic, so <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">typedef Foo&lt;T&gt; = Bar&lt;T&gt;;</code> is rejected instead of vanishing. Declare a non-generic alias for each instantiation you need.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0017">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0017</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Circular typedef: {'{'}0{'}'}</p>
+          <p class="text-xs text-text-secondary">The alias chain loops — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">typedef A = B; typedef B = A;</code>. Since an alias is erased at every use site, the chain must terminate in a concrete type. Distinct from <a href="#ION0030" class="text-accent hover:underline">ION0030</a>, which covers cycles between message types.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="type-modifiers" class="text-xl font-bold mb-4">Type Modifiers &amp; Partial (ION0010, ION0018–ION0019)</h2>
+      <p class="text-sm text-text-secondary mb-4">A type reference may carry three suffixes: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">~</code> (partial), <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">[]</code> (array) and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">?</code> (optional). They apply <strong>inside-out in that fixed order</strong> — partial innermost, then array, then optional — so <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Data~[]?</code> is "an optional array of patches over <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Data</code>", i.e. <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Maybe&lt;Array&lt;Partial&lt;Data&gt;&gt;&gt;</code>. The first two codes below police the <em>spelling</em>; the third polices what <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">~</code> is applied to.</p>
+      <p class="text-sm text-text-secondary mb-4">The spelling checks are a pipeline stage rather than a grammar rule on purpose: a parse failure aborts the whole enclosing declaration, so one stray <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">~</code> would swallow every remaining field and cascade. The parser records the suffix tokens it saw and keeps going. Both checks run before name resolution, so a misspelled type name and a misspelled modifier are reported on the same build.</p>
+      <p class="text-sm text-text-secondary mb-4">All three apply at every position a type can be written: message fields, method arguments and return types, service base arguments, union shared fields and cases, a typedef's underlying type, an <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">enum</code>/<code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">flags</code> base type, and attribute parameters.</p>
+      <div class="space-y-4">
+        <div class="glass rounded-xl p-4" id="ION0010">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0010</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Type '{'{'}0{'}'}' writes its modifiers out of order, so it silently compiles as '{'{'}1{'}'}'</p>
+          <p class="text-xs text-text-secondary">Written order was previously discarded — the parser reduced the suffixes to three booleans, so <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Data?~</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Data~?</code> lowered to the identical <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Maybe&lt;Partial&lt;Data&gt;&gt;</code>. Only the canonical spelling reads the way the type is actually built, so the other permutations are rejected rather than kept as synonyms. The message shows what you wrote, the IR it silently produced, and the spelling to use instead.</p>
+          <pre class="bg-oled-elevated rounded-lg p-3 mt-2 overflow-x-auto text-[11px] font-mono leading-relaxed">a: Data?~;     <span class="text-status-down">// ION0010 — write 'Data~?'</span>
+b: Data?[];    <span class="text-status-down">// ION0010 — write 'Data[]?'</span>
+c: Data~[]?;   <span class="text-status-up">// canonical</span></pre>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0019">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0019</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Type '{'{'}0{'}'}' repeats the '{'{'}1{'}'}' modifier, which Ion cannot represent</p>
+          <p class="text-xs text-text-secondary">A suffix written more than once — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Data~~</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Data??</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Data[][]</code>. The repeat is rejected rather than lowered, because the doubled form has no wire representation: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Partial&lt;Partial&lt;T&gt;&gt;</code> is not encodable, and neither <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Maybe&lt;Maybe&lt;T&gt;&gt;</code> nor a jagged <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T[][]</code> exists in the IR. Before the parser kept the raw suffix tokens, the repeat left no trace anywhere in the syntax tree and the author silently got a different type than they wrote.</p>
+          <p class="text-xs text-text-secondary mt-2">One diagnostic per repeated token, so <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Data~~??</code> is two errors. The ordering check is skipped when a repeat is found — the canonical spelling offered is already both de-duplicated and reordered, so <a href="#ION0010" class="text-accent hover:underline">ION0010</a> would only restate the same fix.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0018">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0018</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">The partial modifier '~' cannot be applied to '{'{'}0{'}'}': {'{'}1{'}'}</p>
+          <p class="text-xs text-text-secondary">A <a href="/guides/partial/" class="text-accent hover:underline"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Partial&lt;T&gt;</code></a> is a sparse patch over <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T</code>'s <em>field set</em>, so the modifier is legal over a user-defined <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg</code> and nothing else. Everything rejected here used to compile: the old formatter enumerated the target's properties, found none, and wrote an empty map forever.</p>
+          <p class="text-xs text-text-secondary mt-2">The second half of the message says <em>why</em>, and differs per target: a union ("a union's shape is a discriminated case rather than a field set"), an enum or flags ("has no fields to patch"), <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">void</code>, a builtin scalar, or an already-partial type. Two of them suggest the fix directly — a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Maybe</code> target says "write <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T~?</code>", an <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Array</code> target says "write <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T~[]</code>".</p>
+          <p class="text-xs text-text-secondary mt-2">A typedef is reported under the name you typed, not what it erases to: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">typedef UserId = u4; x: UserId~;</code> reads "cannot be applied to <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">UserId</code>: it is an alias for <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">u4</code>, which is a builtin scalar type and has no fields to patch". An unresolvable name stays silent here — <a href="#ION0009" class="text-accent hover:underline">ION0009</a> already covers it, and stacking a second error on one typo helps nobody.</p>
+          <pre class="bg-oled-elevated rounded-lg p-3 mt-2 overflow-x-auto text-[11px] font-mono leading-relaxed"><span class="type-keyword">msg</span> Data {'{'} id: u4; name: <span class="type-keyword">string</span>; {'}'}
+<span class="type-keyword">enum</span> Status : u1 {'{'} Ok, Bad {'}'}
+
+<span class="type-keyword">msg</span> Patch {'{'}
+    a: Data~;      <span class="text-status-up">// fine — a msg has a field set</span>
+    b: Data~?;     <span class="text-status-up">// fine — an optional patch</span>
+    c: Status~;    <span class="text-status-down">// ION0018 — an enum has no fields to patch</span>
+    d: u4~;        <span class="text-status-down">// ION0018 — a builtin scalar has no fields to patch</span>
+{'}'}</pre>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="attributes" class="text-xl font-bold mb-4">Attribute Semantics (ION0032–ION0039)</h2>
+      <p class="text-sm text-text-secondary mb-4">Raised when an <a href="/guides/attributes/" class="text-accent hover:underline">attribute</a> use does not match the declaration it names, or when the declaration itself is unsatisfiable. Every message names the attribute, the parameter it is about, and what was expected against what was written — an attribute's signature is not visible at the use site, so unlike a field type the reader cannot see what they got wrong without being told.</p>
+      <p class="text-sm text-text-secondary mb-4">Two related codes live outside this band: <a href="#ION0004" class="text-accent hover:underline">ION0004</a> (parameter type not allowed) and <a href="#ION0005" class="text-accent hover:underline">ION0005</a> (attribute not found), which predate it.</p>
+      <div class="space-y-4">
+        <div class="glass rounded-xl p-4" id="ION0032">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0032</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Attribute '{'@'}{'{'}0{'}'}' is missing required argument{'{'}1{'}'} {'{'}2{'}'}. Expected signature: '{'@'}{'{'}0{'}'}({'{'}3{'}'})'</p>
+          <p class="text-sm font-medium mb-1">Attribute '{'@'}{'{'}0{'}'}' takes {'{'}1{'}'} argument(s) but {'{'}2{'}'} were given. Expected signature: '{'@'}{'{'}0{'}'}({'{'}3{'}'})'</p>
+          <p class="text-xs text-text-secondary">Arity. A parameter declared <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T?</code> is not required, so it never appears in the first form. The missing-argument check is suppressed when a stray or misnamed argument already fired, because "and you also forgot it" on top of the real mistake is the same problem reported twice.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0033">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0033</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Attribute '{'@'}{'{'}0{'}'}' argument '{'{'}1{'}'}' expects '{'{'}2{'}'}', but {'{'}3{'}'} was given</p>
+          <p class="text-sm font-medium mb-1">Attribute '{'@'}{'{'}0{'}'}' argument '{'{'}1{'}'}' is not optional, so 'null' is not allowed. Declare it as '{'{'}2{'}'}?' to make it omittable</p>
+          <p class="text-xs text-text-secondary">The literal cannot convert to the declared type at all. An array element reads as <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">items[2]</code> so the failure points at the element. The <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">null</code> variant is split out because the fix is specific: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T?</code> is the only way to make a parameter omittable — there is no <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">= default</code>. An <em>enum reference</em> such as <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Status.Active</code> always lands here: it is a well-formed literal, but no attribute parameter can have an enum type. Distinct from <a href="#ION0034" class="text-accent hover:underline">ION0034</a>, which is the right kind of literal and only the wrong magnitude.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0034">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0034</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Attribute '{'@'}{'{'}0{'}'}' argument '{'{'}1{'}'}': the value {'{'}2{'}'} does not fit in '{'{'}3{'}'}' ({'{'}4{'}'})</p>
+          <p class="text-xs text-text-secondary">An integer outside the declared width's range, or a float magnitude that would become infinity when narrowed to <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">f4</code> or <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">f2</code>. The value is echoed exactly as written, so <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">0xFF</code> is not silently restated as <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">255</code>. A literal written as an infinity or a NaN stays one and is not an error.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0035">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0035</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Attribute '{'@'}{'{'}0{'}'}' has no parameter named '{'{'}1{'}'}'. Its parameters are: {'{'}2{'}'}</p>
+          <p class="text-sm font-medium mb-1">Attribute '{'@'}{'{'}0{'}'}' has no parameter named '{'{'}1{'}'}'. Did you mean '{'{'}2{'}'}'?</p>
+          <p class="text-xs text-text-secondary">A <a href="/guides/attributes/#named" class="text-accent hover:underline">named argument</a> whose name matches no declared parameter. The suggestion form is used when one declared name is close enough by edit distance.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0036">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0036</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Attribute '{'@'}{'{'}0{'}'}' argument '{'{'}1{'}'}' is specified more than once</p>
+          <p class="text-sm font-medium mb-1">Attribute '{'@'}{'{'}0{'}'}' argument '{'{'}1{'}'}' was already supplied positionally (argument {'{'}2{'}'}), so it cannot also be given by name</p>
+          <p class="text-xs text-text-secondary">The same parameter slot filled twice. The two forms are kept apart because the fix differs: one is a duplicated name, the other a name that collides with an earlier positional argument.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0037">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0037</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Attribute '{'@'}{'{'}0{'}'}': positional argument {'{'}1{'}'} follows a named argument. Once an argument is named, every argument after it must be named too</p>
+          <p class="text-xs text-text-secondary">The C# ordering rule. The grammar deliberately <em>accepts</em> the mistake so that this targeted message can be produced instead of a parse failure reading "expected <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">)</code>". Reported once per stray argument; the parameters it leaves unbound do not additionally raise <a href="#ION0032" class="text-accent hover:underline">ION0032</a>.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0038">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0038</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Attribute '{'@'}{'{'}0{'}'}' cannot be applied to {'{'}1{'}'}. It is declared 'on {'{'}2{'}'}'</p>
+          <p class="text-sm font-medium mb-1">Unknown attribute target '{'{'}0{'}'}' in the 'on' clause of attribute '{'@'}{'{'}1{'}'}'. Valid targets are: {'{'}2{'}'}</p>
+          <p class="text-xs text-text-secondary">The first form is the use site: the attribute was written somewhere its <a href="/guides/attributes/#targets" class="text-accent hover:underline"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">on</code> clause</a> forbids. A declaration with no clause is unrestricted and never reaches it. The second is the declaration side: a word in the clause that is not one of the twelve target keywords. The unknown word is then dropped rather than failing the declaration, and a clause left with nothing legal in it falls back to "any target".</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0039">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0039</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Attribute '{'@'}{'{'}0{'}'}' declares required parameter '{'{'}1{'}'}' after optional parameter '{'{'}2{'}'}'. Optional parameters ('T?') must come last, because arguments can only be omitted from the end</p>
+          <p class="text-xs text-text-secondary">Declaration side. Optionality is positional: an argument list may only be truncated from the end, so an optional parameter followed by a required one can never actually be omitted and the declaration promises something the grammar cannot express. Rejected here rather than at every use, where it would look like an arity bug in the caller's code. Reported once, on the first offender.</p>
         </div>
       </div>
     </section>
@@ -171,7 +408,7 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
             <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
           </div>
           <p class="text-sm font-medium mb-1">Breaking change: field '{'{'}0{'}'}' changed type from '{'{'}2{'}'}' to '{'{'}3{'}'}'</p>
-          <p class="text-xs text-text-secondary">Changing a field's type changes the wire encoding. Existing clients cannot deserialize.</p>
+          <p class="text-xs text-text-secondary">Changing a field's type changes the wire encoding. Existing clients cannot deserialize. This is also how a changed <a href="/guides/typedefs/#schema-lock" class="text-accent hover:underline">typedef</a> surfaces: the alias is erased, so the lock reports the underlying type change once per field that used it.</p>
         </div>
 
         <div class="glass rounded-xl p-4" id="ION0023">
@@ -240,7 +477,7 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
     </section>
 
     <section>
-      <h2 id="module-system" class="text-xl font-bold mb-4">Module System (ION0040–ION0048)</h2>
+      <h2 id="module-system" class="text-xl font-bold mb-4">Module System & Features (ION0040–ION0049)</h2>
       <p class="text-sm text-text-secondary mb-4">These diagnostics relate to external <a href="/guides/modules/" class="text-accent hover:underline">module dependencies</a> declared in <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ion.config.json</code>:</p>
       <div class="space-y-4">
         <div class="glass rounded-xl p-4" id="ION0040">
@@ -290,20 +527,15 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
 
         <div class="glass rounded-xl p-4" id="ION0045">
           <div class="flex items-center gap-2 mb-2">
-            <span class="font-mono text-sm font-bold text-status-degraded">ION0045</span>
-            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-degraded bg-status-degraded-subtle">Warning</span>
+            <span class="font-mono text-sm font-bold text-accent-2">ION0045</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-accent-2 bg-accent-subtle">Info</span>
           </div>
           <p class="text-sm font-medium mb-1">Imported type '{'{'}0{'}'}' from module '{'{'}1{'}'}' is never used</p>
-          <p class="text-xs text-text-secondary">Remove the unused import to keep your code clean.</p>
-        </div>
+          <p class="text-xs text-text-secondary">A name in an <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#import {'{'} … {'}'}</code> list that nothing in the file references. Per-type import usage is tracked now; this code was declared from the beginning and never raised until this release. Drop the name from the brace list.</p>
+          <pre class="bg-oled-elevated rounded-lg p-3 mt-2 overflow-x-auto text-[11px] font-mono leading-relaxed"><span class="text-accent-3">#import</span> {'{'} User, Session {'}'} <span class="type-keyword">from</span> <span class="text-accent-2">"auth"</span>;
 
-        <div class="glass rounded-xl p-4" id="ION0046">
-          <div class="flex items-center gap-2 mb-2">
-            <span class="font-mono text-sm font-bold text-status-down">ION0046</span>
-            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
-          </div>
-          <p class="text-sm font-medium mb-1">Module '{'{'}0{'}'}' content hash has changed since last lock</p>
-          <p class="text-xs text-text-secondary">The module's source files changed since the lock file was generated. Run <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ionc lock update</code> to acknowledge.</p>
+<span class="type-keyword">msg</span> Login {'{'} who: User; {'}'}   <span class="text-text-muted">// Session is never referenced → ION0045</span></pre>
+          <p class="text-xs text-text-secondary mt-2">Non-blocking. Distinct from <a href="#ION1002" class="text-accent hover:underline">ION1002</a>, which fires when an entire imported <em>file</em> goes unreferenced, and from <a href="#ION0043" class="text-accent hover:underline">ION0043</a>, which is a name the module does not export at all.</p>
         </div>
 
         <div class="glass rounded-xl p-4" id="ION0047">
@@ -323,12 +555,156 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
           <p class="text-sm font-medium mb-1">Type '{'{'}0{'}'}' has the same name as a type from module '{'{'}1{'}'}'</p>
           <p class="text-xs text-text-secondary">Cross-module name collision. Rename one of the types to avoid ambiguity.</p>
         </div>
+
+        <div class="glass rounded-xl p-4" id="ION0049">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0049</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">A <code class="font-mono text-[12px]">#feature</code> declaration is not satisfied</p>
+          <p class="text-xs text-text-secondary">Two variants, both about the <a href="/guides/directives/#feature" class="text-accent hover:underline"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#feature</code></a> directive. It shares the module band because it is a directive, parsed and read beside <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#use</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#import</code>, and because it is about project configuration rather than about the schema.</p>
+          <ul class="text-xs text-text-secondary space-y-2 mt-3 ml-4">
+            <li>• <strong>Not enabled.</strong> "File '<em>x.ion</em>' declares <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#feature "orleans"</code>, but the project does not enable it. Add <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">"orleans"</code> to the <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">"features"</code> array of <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ion.config.json</code>. Currently enabled: …" — the remedy names the config key literally, because the author of a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">.ion</code> file is often not the author of the config.</li>
+            <li>• <strong>Unknown feature.</strong> The name is not one the compiler knows. The message lists the closed set. Checked first, because "add <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">'vectr'</code> to ion.config.json" would be actively harmful advice — the config would then be rejected by its own validator.</li>
+          </ul>
+          <p class="text-xs text-text-secondary mt-3"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#feature</code> is a <em>requirement</em>, not a switch: a file cannot turn a feature on, because features decide which builtin modules exist and which generators run, and two files in one compilation must not disagree about that. The check runs <strong>first</strong> in the pipeline, since an unmet feature is the cause of every unresolved name that follows it and this message needs to be at the top of the list. Feature matching is case-insensitive; every declaration is reported, not just the first.</p>
+          <p class="text-xs text-text-secondary mt-2">Before this existed, the directive was inert: a file could declare <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#feature "orleans"</code>, be compiled by a project that did not enable orleans, and fail with <a href="#ION0005" class="text-accent hover:underline">ION0005</a> on every <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}grainId</code> — a pile of diagnostics naming the symptom while the one line that stated the requirement sat there doing nothing.</p>
+        </div>
       </div>
     </section>
 
     <section>
-      <h2 id="unused-symbols" class="text-xl font-bold mb-4">Unused Symbols (ION1001–ION1003)</h2>
-      <p class="text-sm text-text-secondary mb-4">Informational diagnostics reported when symbols are defined but never referenced:</p>
+      <h2 id="target-limits" class="text-xl font-bold mb-4">Target Capability Limits (ION0050–ION0059)</h2>
+      <p class="text-sm text-text-secondary mb-4">These are raised by a <em>code generator</em>, not by the compilation pipeline, and they describe a target's inability to express something rather than an error in your schema. The Ion source is valid and every other target compiles it. A project that does not enable the offending generator never sees them, and the fix is always one of two things: change the construct, or drop that generator from <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ion.config.json</code>.</p>
+      <p class="text-sm text-text-secondary mb-4">One code is allocated in this band today. The generator refuses rather than emitting output that would silently disagree with the other runtimes on the wire.</p>
+      <div class="glass rounded-xl p-4 mb-4 border-l-2 border-accent/40">
+        <p class="text-sm font-medium mb-1">ION0050, ION0052 and ION0053 no longer exist</p>
+        <p class="text-xs text-text-secondary">All three were refusals raised only by the <strong>Go</strong> code generator — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Partial&lt;T&gt;</code> (ION0050), <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">decimal</code> (ION0052), and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Map</code>/<code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Set</code>/<code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T[N]</code> (ION0053). The Go target has been removed, so all three became unreachable and were deleted with it. Their numbers are retired, not recycled.</p>
+      </div>
+      <div class="space-y-4">
+        <div class="glass rounded-xl p-4" id="ION0051">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0051</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Cannot generate the Rust patch struct for 'Partial&lt;{'{'}msg{'}'}&gt;': field '{'{'}field{'}'}' is a Rust keyword</p>
+          <p class="text-xs text-text-secondary">The target <em>can</em> represent <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Partial&lt;T&gt;</code>, but not this field name. The Rust patch macro derives its CBOR map keys from the field identifiers, and that preserves the raw-identifier prefix — a field named <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">type</code> becomes <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">r#type</code> in Rust and would go on the wire as the key <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">"r#type"</code>, desynchronising from the C# and TypeScript runtimes. Silently emitting that is worse than refusing to. Rename the field, or drop the Rust generator.</p>
+          <p class="text-xs text-text-secondary mt-2">Only reached for a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg</code> that is actually used as a patch target. The same field name in a message never written as <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T~</code> is fine — the ordinary Rust struct is positional and its field names never reach the wire.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="language-features" class="text-xl font-bold mb-4">Language Features (ION0060–ION0068)</h2>
+      <p class="text-sm text-text-secondary mb-4">A new band, allocated after ION0059 rather than filling a hole: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ION0046</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ION1003</code> are the only free numbers below it, and both were vacated on purpose. Sub-bands follow the one-run-per-feature precedent set by ION0014–ION0017: <strong>ION0060–ION0061</strong> generics, <strong>ION0062</strong> fixed-size arrays, <strong>ION0063–ION0066</strong> <a href="/guides/mixins/" class="text-accent hover:underline">mixins</a>, <strong>ION0067–ION0068</strong> <a href="/guides/inline-types/" class="text-accent hover:underline">inline anonymous types</a>. ION0069 is left free so the run can grow.</p>
+      <div class="space-y-4">
+
+        <div class="glass rounded-xl p-4" id="ION0060">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0060</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Generic type '{'{'}0{'}'}' takes {'{'}1{'}'} type argument(s), but was given {'{'}2{'}'}. Write '{'{'}3{'}'}'.</p>
+          <p class="text-sm font-medium mb-1">Type '{'{'}0{'}'}' is not generic, but was given {'{'}1{'}'} type argument(s). Remove the '&lt;...&gt;'.</p>
+          <p class="text-xs text-text-secondary">A generic used with the wrong number of arguments — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Map&lt;string&gt;</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Maybe&lt;A, B&gt;</code>, a bare <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Array</code>. The two spellings are split because the fixes are opposite: one tells you the argument list to write, the other tells you the angle brackets have to go. <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">string&lt;i4&gt;</code> is the second form.</p>
+          <p class="text-xs text-text-secondary mt-2">There was no arity check anywhere before <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Map</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Set</code> arrived: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Maybe&lt;A, B&gt;</code> resolved silently, writing two arguments into a one-parameter definition, and a bare <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Array</code> lowered to an open generic with no element type at all. The rule reads the declared parameter count, so the three pre-existing wrappers are now checked on the same terms as the two new collections.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0061">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0061</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">'{'{'}0{'}'}' cannot be a Map key: {'{'}1{'}'}. A key must be an integral scalar builtin, 'bool', 'duration', 'string', 'guid', or an enum.</p>
+          <p class="text-xs text-text-secondary">A <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Map&lt;K, V&gt;</code> whose <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">K</code> cannot serve as a key. The second half of the message says <em>why</em> for the specific type: a float because <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">-0.0</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">0.0</code> encode differently but compare equal and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">NaN</code> is not equal to itself; <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">decimal</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">bigint</code> because they are arbitrary-precision, so ordering by bytes is not ordering by value; <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">bytes</code> and the date/time types because at least one target maps them to a reference-equality type. See <a href="/guides/collections/#map-keys" class="text-accent hover:underline">Collections</a>.</p>
+          <p class="text-xs text-text-secondary mt-2">A <a href="/guides/typedefs/" class="text-accent hover:underline">typedef</a> is judged on what it erases to, since the wire only sees the underlying type — but the message names both, as <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">it is an alias for 'f8', which is …</code>. Anchored on the key, not on the whole type: the value half is usually fine.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0062">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0062</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Fixed-size array '{'{'}0{'}'}' declares a size of {'{'}1{'}'}. A size must be at least 1 …</p>
+          <p class="text-xs text-text-secondary">A <a href="/guides/collections/#fixed-arrays" class="text-accent hover:underline">fixed-size array</a> whose size is not at least 1 — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">f4[0]</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">f4[-3]</code>. A fixed array of no elements encodes nothing, so it is indistinguishable from the field being absent. A negative size has no reading at all; the grammar carries it here verbatim rather than failing, so one bad size does not abort the enclosing declaration.</p>
+          <p class="text-xs text-text-secondary mt-2"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">N &lt; 1</code>, not <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">N &lt;= 1</code>: a one-element fixed array is odd but coherent, and is what a schema mirroring a fixed C struct field sometimes needs. Anchored on the <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">[N]</code> suffix rather than on the whole type — the element type is fine and squiggling it would point at the half that is right.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0063">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0063</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">'{'{'}0{'}'}' in the 'with' clause of {'{'}1{'}'} does not name a mixin …</p>
+          <p class="text-sm font-medium mb-1">'{'{'}0{'}'}' in the 'with' clause of {'{'}2{'}'} is {'{'}1{'}'}, not a mixin …</p>
+          <p class="text-sm font-medium mb-1">Mixin '{'{'}0{'}'}' is listed more than once in the 'with' clause of {'{'}1{'}'} …</p>
+          <p class="text-xs text-text-secondary">Three ways a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">with</code> clause entry can be wrong. The first two are kept apart the same way <a href="#ION0004" class="text-accent hover:underline">ION0004</a> is kept apart from <a href="#ION0003" class="text-accent hover:underline">ION0003</a>: the name resolving to nothing and the name resolving to the wrong kind of thing are never both right about one token, and the fixes differ. A <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg</code> cannot be included with <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">with</code> — a mixin is a field-set template with no wire identity of its own.</p>
+          <p class="text-xs text-text-secondary mt-2">The duplicate case is rejected rather than collapsed: including the same mixin twice would otherwise contribute its fields twice and be caught downstream as a field collision with itself, which names the wrong mistake. Reported once per written clause, however many declarations later reach it — one misspelling in a widely used mixin produces one error, not one per consumer.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0064">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0064</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Circular mixin inclusion: {'{'}0{'}'}. A mixin is spliced into its includer at compile time, so the chain must terminate.</p>
+          <p class="text-xs text-text-secondary">A <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">mixin</code> that transitively includes itself. The whole chain is printed, arrow-separated, and the cycle is reported at most once — it is reachable from every member of it and from every message that includes any of them.</p>
+          <p class="text-xs text-text-secondary mt-2">Unlike a type cycle (<a href="#ION0030" class="text-accent hover:underline">ION0030</a>) there is no modifier that can break this one. Expansion is a compile-time splice, so a cycle simply has no fixed point; there is no <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">?</code> to add.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0065">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0065</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">Field '{'{'}0{'}'}' is contributed by {'{'}1{'}'} and is also declared by {'{'}2{'}'} …</p>
+          <p class="text-sm font-medium mb-1">Field '{'{'}0{'}'}' is contributed by both {'{'}1{'}'} and {'{'}2{'}'} …</p>
+          <p class="text-xs text-text-secondary">Two fields with the same name reaching one declaration: from a mixin and from the declaration's own body, or from two different mixins. Both sources are named, because neither is obviously the one to change and the second is usually not visible in the file being read. A source that arrived transitively is phrased <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">mixin 'A' (included by 'B')</code>.</p>
+          <p class="text-xs text-text-secondary mt-2">This is <em>not</em> what a <a href="/guides/mixins/#diamond" class="text-accent hover:underline">diamond</a> hits — a mixin reached by several paths is deduplicated by identity and contributes once. What is left after that dedupe is a real conflict between two different declarations, and it is a name conflict rather than a type conflict: two mixins each contributing <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">id: u4</code> still collide, because merging them would silently pick one of the two field <em>positions</em>, and on a positional wire format position is identity.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0066">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0066</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">'{'{'}0{'}'}' is a mixin, which is a field-set template rather than a type, so it cannot be used here …</p>
+          <p class="text-xs text-text-secondary">A mixin written where a type is expected — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">owner: Audited;</code>. A mixin has no wire identity, no entry in <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ion.lock.json</code> and no generated declaration, so a field typed by one would refer to something that does not exist at runtime. Include it with <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">with</code>, or declare a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg</code> if you need a type.</p>
+          <p class="text-xs text-text-secondary mt-2">Reported from the syntax walk, so each written position is reported exactly once. This <em>replaces</em> <a href="#ION0009" class="text-accent hover:underline">ION0009</a> rather than stacking on it: the name resolves perfectly well, it is the position that rejects it.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0067">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0067</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">The inline type on {'{'}2{'}'} hoists to '{'{'}0{'}'}', but {'{'}1{'}'} already has that name …</p>
+          <p class="text-sm font-medium mb-1">The inline types on {'{'}1{'}'} and on {'{'}2{'}'} both hoist to '{'{'}0{'}'}'. Rename one of the fields.</p>
+          <p class="text-xs text-text-secondary">An <a href="/guides/inline-types/" class="text-accent hover:underline">inline anonymous type</a> whose derived <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'{'}Owner{'}'}{'{'}PascalCasedFieldName{'}'}</code> name is already taken — by an explicit declaration, or by another inline type (<code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">trace_id</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">traceId</code> on one owner both pascal-case to <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">TraceId</code>).</p>
+          <p class="text-xs text-text-secondary mt-2"><strong>An error, never a silent rename.</strong> Hoisting puts a derived name into the same flat global namespace as every declared type — the pollution module namespacing is meant to fix later — and until then this diagnostic is the entire safety net. A compiler that quietly renamed <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">OrderShipping</code> to <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">OrderShipping1</code> would change a name in <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ion.lock.json</code> and in four generated languages without anyone asking. The two-inline-types wording names the two <em>fields</em>, since "it collides with msg 'TraceId'" would point at a declaration the author cannot find in their file.</p>
+        </div>
+
+        <div class="glass rounded-xl p-4" id="ION0068">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-mono text-sm font-bold text-status-down">ION0068</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-down bg-status-down-subtle">Error</span>
+          </div>
+          <p class="text-sm font-medium mb-1">An inline 'msg {'{'} … {'}'}' cannot be written as {'{'}0{'}'}: there is no field name to derive a type name from. {'{'}1{'}'}</p>
+          <p class="text-xs text-text-secondary">The grammar accepts <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg {'{'} … {'}'}</code> in every type position, but the naming rule needs a field name and several positions have none: a <strong>generic argument</strong> (at any depth), a <strong>typedef</strong>'s name side or underlying type, an <strong>enum</strong> or <strong>flags</strong> base type, an <strong>attribute parameter</strong>, a <strong>union case name</strong>, and a <strong>method return type</strong>. Each message names the position and says what to write instead.</p>
+          <p class="text-xs text-text-secondary mt-2">Rejected rather than named by invention: a generated type called <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Result</code> or <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Item</code> that the author never wrote is a name they then own forever, because it is in the lock. Method <em>arguments</em>, service base arguments and union case arguments all have names and are allowed.</p>
+        </div>
+
+      </div>
+    </section>
+
+    <section>
+      <h2 id="unused-symbols" class="text-xl font-bold mb-4">Advisory (ION1001–ION1004)</h2>
+      <p class="text-sm text-text-secondary mb-4">Non-blocking observations about an otherwise valid schema. ION1001 and ION1002 are unused-symbol hints; ION1004 widens the band from "unused" to "advisory" — a deprecated symbol is very much used, which is the point of saying so.</p>
+      <p class="text-sm text-text-secondary mb-4"><strong>ION1003 no longer exists.</strong> It read "field '{'{'}0{'}'}' in '{'{'}1{'}'}' is never used by any service method", and was declared but never raised. It has been deleted rather than implemented: a field is part of the wire contract, so "unused" is not a meaningful thing to say about one. A field nothing in <em>this</em> schema mentions is still read and written by every peer that speaks the schema, and removing it is a breaking change (<a href="#ION0020" class="text-accent hover:underline">ION0020</a>). The number is retired.</p>
+      <div class="glass rounded-xl p-4 mb-4 border-l-2 border-accent/40">
+        <p class="text-sm font-medium mb-1">These now print on a successful build</p>
+        <p class="text-xs text-text-secondary">The CLI used to render diagnostics only when the pipeline failed, so every warning and info diagnostic of a build that succeeded was discarded before it reached the terminal — the whole of this section, plus <a href="#ION0025" class="text-accent hover:underline">ION0025</a>, <a href="#ION0029" class="text-accent hover:underline">ION0029</a> and <a href="#ION0047" class="text-accent hover:underline">ION0047</a>. They are printed now. The exit code still keys off errors alone, so a warning never fails a build.</p>
+      </div>
       <div class="space-y-4">
         <div class="glass rounded-xl p-4" id="ION1001">
           <div class="flex items-center gap-2 mb-2">
@@ -336,7 +712,9 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
             <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-accent-2 bg-accent-subtle">Info</span>
           </div>
           <p class="text-sm font-medium mb-1">Type '{'{'}0{'}'}' is defined but never referenced</p>
+          <p class="text-sm font-medium mb-1">Mixin '{'{'}0{'}'}' is defined but no message or mixin includes it with 'with'</p>
           <p class="text-xs text-text-secondary">The type is not used by any service method, field, or union case. It may be safe to remove.</p>
+          <p class="text-xs text-text-secondary mt-2">The <a href="/guides/mixins/" class="text-accent hover:underline">mixin</a> variant shares the code because it is the same hint about the same kind of dead declaration, but is worded separately: a mixin is not referenced the way a type is — the only thing that can use one is a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">with</code> clause — so "never referenced" would send the reader looking for a field type that could never have existed.</p>
         </div>
 
         <div class="glass rounded-xl p-4" id="ION1002">
@@ -348,13 +726,14 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
           <p class="text-xs text-text-secondary">No types from this imported file are referenced. Remove the import.</p>
         </div>
 
-        <div class="glass rounded-xl p-4" id="ION1003">
+        <div class="glass rounded-xl p-4" id="ION1004">
           <div class="flex items-center gap-2 mb-2">
-            <span class="font-mono text-sm font-bold text-accent-2">ION1003</span>
-            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-accent-2 bg-accent-subtle">Info</span>
+            <span class="font-mono text-sm font-bold text-status-degraded">ION1004</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-degraded bg-status-degraded-subtle">Warning</span>
           </div>
-          <p class="text-sm font-medium mb-1">Field '{'{'}0{'}'}' in '{'{'}1{'}'}' is never used</p>
-          <p class="text-xs text-text-secondary">The field is not referenced by any service method.</p>
+          <p class="text-sm font-medium mb-1">'{'{'}0{'}'}' is deprecated{'{'}1{'}'} and is referenced by {'{'}2{'}'}.{'{'}3{'}'}</p>
+          <p class="text-xs text-text-secondary">Something carrying <a href="/guides/attributes/#deprecated" class="text-accent hover:underline"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}deprecated</code></a> is still referenced. <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'{'}1{'}'}</code> is empty or <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">since '2.0'</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'{'}2{'}'}</code> names the referencing site ("the field 'owner' of msg 'Doc'") and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'{'}3{'}'}</code> is the attribute's <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">reason</code> as a trailing sentence.</p>
+          <p class="text-xs text-text-secondary mt-2">A warning, not an error: deprecation is advice about a schema that still compiles, and the point is that the old name keeps working while callers migrate. Every <em>written type reference</em> is flagged, plus a use of an attribute whose own declaration is deprecated. The deprecated declaration itself is not flagged, nor is a reference made from inside something that is itself deprecated — otherwise deprecating a type would flood its own body with warnings about itself. See <a href="/guides/attributes/#deprecated" class="text-accent hover:underline">Deprecation</a>.</p>
         </div>
       </div>
     </section>

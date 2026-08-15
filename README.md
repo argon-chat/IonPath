@@ -3,7 +3,7 @@
 
 **IonPath** is a unified communication protocol and contract language designed for modern distributed applications. It combines a compact binary message format (based on **CBOR**) with a strongly typed DSL for defining interfaces and data contracts.
 
-IonPath enables seamless code generation, efficient serialization, and clear separation of protocol boundaries — supporting both **C#** and **TypeScript** out of the box.
+IonPath enables seamless code generation, efficient serialization, and clear separation of protocol boundaries — supporting **C#**, **TypeScript** and **Rust** out of the box.
 
 ---
 
@@ -23,7 +23,7 @@ IonPath consists of two parts:
 ## ✨ Features
 
 - **Declarative contract** (`.ion`) for defining types, services, messages
-- **Code generation** for C# and TypeScript — usable in both backend and frontend
+- **Code generation** for C#, TypeScript and Rust — usable in both backend and frontend
 - **Compact CBOR encoding** — fast, binary, schema-based
 - **Streaming & RPC ready** — defines request/response/event shapes
 - **Designed for low-latency systems** — suitable for WebSocket, QUIC, or custom transports
@@ -71,12 +71,10 @@ IonPath consists of two parts:
 | **Services**             | ✅     | **C# \ Client**              | ✅     | **QUIC Transport**       | 🔻     |
 | **POCO**                 | ✅     | **TypeScript \ Client**      | ✅     | **NATS**                 | 🔻     |
 | **IonPath Protocol**     | ✅     | **TypeScript \ Server**      | 🔻     | **WebSocket Streaming**  | 🔻     |
-| **Unions**               | ✅     | **Rust \ Client**            | 🔻     | **SteamNetworking**      | 🔻     |
+| **Unions**               | ✅     | **Rust \ Client**            | ✅     | **SteamNetworking**      | 🔻     |
 | **Unary Calls**          | ✅     | **Rust \ Server**            | 🔻     | **Unity Platform**       | 🔻     |
-| **Streaming Calls**      | ✅     | **Go \ Client**              | 🔻     | **Orleans Platform**     | 🔻     |
-| **Streaming Hubs**       | 🔻     | **Go \ Server**              | 🔻     |
-|                          |         | **Json Serialization**       | 🔻     |
-|                          |         | **MsgPack Serialization**    | 🔻     |
+| **Streaming Calls**      | ✅     | **Json Serialization**       | 🔻     | **Orleans Platform**     | 🔻     |
+| **Streaming Hubs**       | 🔻     | **MsgPack Serialization**    | 🔻     |
 |                          |         | **CBOR Serialization**       | ✅     |
 ---
 

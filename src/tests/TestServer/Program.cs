@@ -10,6 +10,7 @@ builder.Services.AddIonProtocol(i =>
     i.AddService<IVectorMathInteraction, VectorImpl>();
     i.AddService<IRandomStreamInteraction, RandomStreamImpl>();
     i.AddService<ITestBlobs, BytesTest>();
+    i.AddService<IPatchInteraction, PatchImpl>();
 
     i.IonWithSubProtocolTicketExchange<TicketExchanger>();
 });
@@ -70,6 +71,22 @@ public class MathImpl : IMathInteraction
             return null;
         return Math.Abs(rightOperand.Value);
     }
+
+    // `i4[]?` — null propagates rather than degrading to an empty array, so the round-trip test
+    // can tell "null" and "[]" apart on the wire.
+    public Task<IonArray<int>?> PowArrayMaybe(int leftOperand, IonArray<int>? rightOperand,
+        CancellationToken ct = default)
+        => Task.FromResult(rightOperand is null
+            ? (IonArray<int>?)null
+            : new IonArray<int>(rightOperand.Value.Values.Select(x => (int)Math.Pow(leftOperand, x)).ToList()));
+
+    // Same shape, reference-typed element.
+    public Task<IonArray<string>?> Spell(int leftOperand, IonArray<int>? rightOperand,
+        CancellationToken ct = default)
+        => Task.FromResult(rightOperand is null
+            ? (IonArray<string>?)null
+            : new IonArray<string>(rightOperand.Value.Values
+                .Select(x => $"{leftOperand}^{x}={(int)Math.Pow(leftOperand, x)}").ToList()));
 }
 
 public class VectorImpl : IVectorMathInteraction
@@ -80,9 +97,75 @@ public class VectorImpl : IVectorMathInteraction
 
     public Task<Vector> AndNot(Vector leftOperand, Vector rightOperand, CancellationToken ct = default) => Task.FromResult(leftOperand);
     public Task<Vector> Clamp(Vector leftOperand, Vector min, Vector max, CancellationToken ct = default) => Task.FromResult(leftOperand);
+
+    // `index` is declared as `Rank` and the return as `Scalar` in VectorInteraction.ion. Both are
+    // typedefs, and a typedef is a transparent alias, so the generated interface is plain
+    // `byte` / `float`. (The `global using Rank = System.Byte;` that ionc emits lives in the
+    // TestContracts assembly — global usings are not exported across assembly boundaries, exactly
+    // like the existing `u4` / `f4` aliases.)
+    public Task<float> Component(Vector leftOperand, byte index, CancellationToken ct = default) =>
+        Task.FromResult(index switch { 0 => leftOperand.x, 1 => leftOperand.y, _ => leftOperand.z });
+
     public Task<VectorOfVectorOfVector> Do(Vector leftOperand, CancellationToken ct = default) =>
         Task.FromResult(new VectorOfVectorOfVector(new VectorOfVector(leftOperand, leftOperand, leftOperand),
             new VectorOfVector(leftOperand, leftOperand, leftOperand)));
+
+    // `Vector[]` — the non-nullable neighbour of Spread, so a regression that swapped the two
+    // templates shows up as a wrong value rather than only as a compile error.
+    public Task<IonArray<Vector>> Repeat(Vector leftOperand, byte count, CancellationToken ct = default)
+        => Task.FromResult(new IonArray<Vector>(Enumerable.Repeat(leftOperand, count).ToList()));
+
+    // `Vector[]?` — count 0 is null, not an empty array.
+    public Task<IonArray<Vector>?> Spread(Vector leftOperand, byte count, CancellationToken ct = default)
+        => Task.FromResult(count == 0
+            ? (IonArray<Vector>?)null
+            : new IonArray<Vector>(Enumerable.Range(0, count)
+                .Select(i => new Vector(leftOperand.x + i, leftOperand.y + i, leftOperand.z + i)).ToList()));
+}
+
+/// <summary>
+/// Applies <c>Partial&lt;PatchTarget&gt;</c> patches. Exists so the generated executor and client
+/// for a service with <c>T~</c> arguments and returns are exercised over a real transport, not
+/// just compiled.
+/// </summary>
+public class PatchImpl : IPatchInteraction
+{
+    public Task<IonPartial<PatchTarget>> Apply(IonPartial<PatchTarget> patch, CancellationToken ct = default)
+        => Task.FromResult(patch);
+
+    public Task<IonPartial<PatchTarget>?> ApplyMany(IonArray<IonPartial<PatchTarget>> patches,
+        CancellationToken ct = default)
+        => Task.FromResult(patches.Size == 0 ? null : patches[patches.Size - 1]);
+
+    // `T~[]` — echo, so the client can compare the decoded patches field-by-field.
+    public Task<IonArray<IonPartial<PatchTarget>>> ApplyAll(IonArray<IonPartial<PatchTarget>> patches,
+        CancellationToken ct = default)
+        => Task.FromResult(patches);
+
+    // `T~[]?` — the two collapsing wrappers stacked; an empty input returns null.
+    public Task<IonArray<IonPartial<PatchTarget>>?> ApplySome(IonArray<IonPartial<PatchTarget>> patches,
+        CancellationToken ct = default)
+        => Task.FromResult(patches.Size == 0 ? (IonArray<IonPartial<PatchTarget>>?)null : patches);
+
+    public Task<PatchTarget> ApplyTo(PatchTarget target, IonPartial<PatchTarget> patch,
+        CancellationToken ct = default)
+    {
+        var result = target;
+        patch.On(x => x.n, n => result = result with { n = n },
+                onRemoved: () => result = result with { n = 0 })
+            .On(x => x.f, f => result = result with { f = f },
+                onRemoved: () => result = result with { f = 0 })
+            .On(x => x.s, s => result = result with { s = s! },
+                onRemoved: () => result = result with { s = "" })
+            .On(x => x.items, items => result = result with { items = items },
+                onRemoved: () => result = result with { items = new IonArray<int>([]) })
+            .On(x => x.note, note => result = result with { note = note },
+                onRemoved: () => result = result with { note = null });
+        return Task.FromResult(result);
+    }
+
+    public Task<PatchEnvelope> Rewrap(PatchEnvelope envelope, CancellationToken ct = default)
+        => Task.FromResult(envelope);
 }
 
 public class BytesTest : ITestBlobs

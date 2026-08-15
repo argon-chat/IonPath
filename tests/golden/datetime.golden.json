@@ -1,0 +1,277 @@
+{
+  "$format": "ionpath/datetime-golden/1",
+  "$comment": [
+    "Cross-runtime golden vectors for Ion's `datetime` primitive.",
+    "Consumed by all three in-repo runtimes; the three implementations must produce",
+    "byte-identical CBOR for the same instant+offset.",
+    "  C#   src/tests/IonTestClientServer/DateTimeGoldenTests.cs",
+    "  TS   packages/ion.webcore.js/test/datetime.golden.test.ts",
+    "  Rust packages/ion.rustcore/tests/datetime_golden.rs"
+  ],
+  "$wireBreaking": [
+    "THIS FILE IS A WIRE-FORMAT CHANGE. Every runtime previously wrote a DIFFERENT shape and no",
+    "two of them fully interoperated:",
+    "  C#    tag 0 + RFC 3339 text, but the READER was ReadDateTimeOffset().UtcDateTime, so the",
+    "        offset was parsed and then discarded. +05:30 came back as UTC.",
+    "  Rust  a bare CBOR array [i64 .NET-ticks, i32 offset_minutes] — not tag 0, not text, not even",
+    "        the same major type. A Rust client and a C# server could not exchange a datetime AT ALL.",
+    "  TS    tag 0 + Date.toISOString() — millisecond resolution, so 100ns ticks authored in C# were",
+    "        silently truncated on every round trip through a browser.",
+    "The format has no users and one of its three runtimes was already unable to interoperate, so",
+    "breaking it is strictly cheaper than keeping it."
+  ],
+  "wireFormat": {
+    "container": "CBOR tag 0 (standard date/time string) wrapping a definite-length text string.",
+    "text": "RFC 3339 date-time, ALWAYS in the canonical shape YYYY-MM-DDTHH:MM:SS.fffffff+HH:MM.",
+    "fractionalDigits": "EXACTLY 7, always, even when zero. 100ns is the resolution of the most precise runtime type in play (.NET's DateTimeOffset tick). Fewer digits would lose C# precision; more would be unrepresentable in C# and would make the byte-identity rule impossible to satisfy.",
+    "offset": "ALWAYS an explicit numeric offset, and never the 'Z' abbreviation — 'Z' and '+00:00' are the same instant but different bytes, so exactly one of them has to be canonical. Writers pick '+00:00'.",
+    "length": "The canonical text is always exactly 33 ASCII characters, so a datetime is always 36 wire bytes: c0 78 21 <33>.",
+    "readerLeniency": "Readers accept any valid RFC 3339 fractional precision (0..9 digits, truncating past the 7th), 'Z' as well as a numeric offset, and a lower-case 't' or a space as the date/time separator. They reject a missing tag 0, any other tag, a missing offset, and unparseable text — with a TYPED decode error, never an opaque throw.",
+    "tagIsRequired": "Tag 0 is mandatory in BOTH directions. The general rule across Ion's tagged types is that leniency is free only when the lenient form is not already some OTHER Ion type's encoding — and a bare text string is exactly how Ion's `string` type encodes, so accepting an untagged date would make `datetime` and `string` indistinguishable in a capture. The same rule makes tag 4 mandatory for `decimal` (an untagged [exponent, mantissa] pair is an `i8[2]`) and tag 258 mandatory for `Set<T>` (an untagged array is an `Array<T>`).",
+    "truncationNotRounding": "Fractional digits past the 7th are truncated toward zero, not rounded. Rounding .9999999xx could carry into the next second and is not reproducible across runtimes."
+  },
+  "types": {
+    "cs": "System.DateTimeOffset — NOT System.DateTime; the offset is part of the value and must survive the round trip.",
+    "ts": "IonDateTime (packages/ion.webcore.js/src/baseTypes.ts) — NOT Date, which cannot hold sub-millisecond precision.",
+    "rust": "chrono::DateTime<chrono::FixedOffset>"
+  },
+  "howToConsume": [
+    "For each entry of `vectors`:",
+    "  encode: build the value from `unixTicks` (signed 100ns intervals since 1970-01-01T00:00:00Z)",
+    "          and `offsetMinutes`, write it with the runtime's datetime formatter, expect `hex`.",
+    "          `iso` is the exact text that must appear inside the tag-0 string.",
+    "  decode: read `hex`, re-encode it, expect `hex` back.",
+    "For each entry of `decodeOnly`: read `hex`, re-encode, expect `reencodedHex`.",
+    "For each entry of `malformed`: reading `hex` must raise the runtime's TYPED decode error."
+  ],
+  "vectors": [
+    {
+      "name": "epoch-utc",
+      "iso": "1970-01-01T00:00:00.0000000+00:00",
+      "unixTicks": "0",
+      "offsetMinutes": 0,
+      "year": 1970,
+      "month": 1,
+      "day": 1,
+      "hour": 0,
+      "minute": 0,
+      "second": 0,
+      "fraction": 0,
+      "hex": "c07821313937302d30312d30315430303a30303a30302e303030303030302b30303a3030",
+      "notes": "The Unix epoch. Note the offset is written out as '+00:00', never as 'Z' — writers emit a numeric offset unconditionally so there is exactly one canonical spelling."
+    },
+    {
+      "name": "epoch-minus-one-tick",
+      "iso": "1969-12-31T23:59:59.9999999+00:00",
+      "unixTicks": "-1",
+      "offsetMinutes": 0,
+      "year": 1969,
+      "month": 12,
+      "day": 31,
+      "hour": 23,
+      "minute": 59,
+      "second": 59,
+      "fraction": 9999999,
+      "hex": "c07821313936392d31322d33315432333a35393a35392e393939393939392b30303a3030",
+      "notes": "One 100ns tick before the epoch. Guards the negative-unixTicks path and the floor-division every runtime needs to split a negative instant into (seconds, fraction)."
+    },
+    {
+      "name": "sub-millisecond",
+      "iso": "2024-03-01T12:34:56.7891234+00:00",
+      "unixTicks": "17092964967891234",
+      "offsetMinutes": 0,
+      "year": 2024,
+      "month": 3,
+      "day": 1,
+      "hour": 12,
+      "minute": 34,
+      "second": 56,
+      "fraction": 7891234,
+      "hex": "c07821323032342d30332d30315431323a33343a35362e373839313233342b30303a3030",
+      "notes": "SUB-MILLISECOND GUARD. .7891234 s = 7891234 ticks. The old TypeScript writer used Date.toISOString(), which has millisecond resolution, and silently truncated this to .789 — losing 1234 ticks on every C#<->TS exchange."
+    },
+    {
+      "name": "non-utc-positive-offset",
+      "iso": "2024-03-01T12:34:56.7891234+05:30",
+      "unixTicks": "17092766967891234",
+      "offsetMinutes": 330,
+      "year": 2024,
+      "month": 3,
+      "day": 1,
+      "hour": 12,
+      "minute": 34,
+      "second": 56,
+      "fraction": 7891234,
+      "hex": "c07821323032342d30332d30315431323a33343a35362e373839313233342b30353a3330",
+      "notes": "NON-UTC GUARD (+05:30). Same wall-clock reading as 'sub-millisecond' but a different instant. The old C# reader was ReadDateTimeOffset().UtcDateTime, which threw the offset away, so this vector and 'sub-millisecond' decoded to two different DateTimes that both re-encoded as UTC."
+    },
+    {
+      "name": "non-utc-negative-offset",
+      "iso": "2023-12-31T19:00:00.0000000-05:00",
+      "unixTicks": "17040672000000000",
+      "offsetMinutes": -300,
+      "year": 2023,
+      "month": 12,
+      "day": 31,
+      "hour": 19,
+      "minute": 0,
+      "second": 0,
+      "fraction": 0,
+      "hex": "c07821323032332d31322d33315431393a30303a30302e303030303030302d30353a3030",
+      "notes": "-05:00 on the far side of a year boundary: the same instant is 2024-01-01T00:00:00Z. A reader that discards the offset also moves this value into the wrong calendar year locally."
+    },
+    {
+      "name": "offset-max-plus-14",
+      "iso": "2024-01-01T00:00:00.0000000+14:00",
+      "unixTicks": "17040168000000000",
+      "offsetMinutes": 840,
+      "year": 2024,
+      "month": 1,
+      "day": 1,
+      "hour": 0,
+      "minute": 0,
+      "second": 0,
+      "fraction": 0,
+      "hex": "c07821323032342d30312d30315430303a30303a30302e303030303030302b31343a3030",
+      "notes": "+14:00, the largest offset RFC 3339 / .NET / chrono all accept."
+    },
+    {
+      "name": "offset-min-minus-14",
+      "iso": "2024-01-01T00:00:00.0000000-14:00",
+      "unixTicks": "17041176000000000",
+      "offsetMinutes": -840,
+      "year": 2024,
+      "month": 1,
+      "day": 1,
+      "hour": 0,
+      "minute": 0,
+      "second": 0,
+      "fraction": 0,
+      "hex": "c07821323032342d30312d30315430303a30303a30302e303030303030302d31343a3030",
+      "notes": "-14:00, the smallest offset. .NET's DateTimeOffset rejects anything beyond +/-14:00."
+    },
+    {
+      "name": "offset-with-odd-minutes",
+      "iso": "1994-11-05T08:15:30.1230000+05:45",
+      "unixTicks": "7840026301230000",
+      "offsetMinutes": 345,
+      "year": 1994,
+      "month": 11,
+      "day": 5,
+      "hour": 8,
+      "minute": 15,
+      "second": 30,
+      "fraction": 1230000,
+      "hex": "c07821313939342d31312d30355430383a31353a33302e313233303030302b30353a3435",
+      "notes": "+05:45 (Nepal). Offsets are not whole hours; a runtime storing offset-as-hours would corrupt this."
+    },
+    {
+      "name": "leap-day",
+      "iso": "2024-02-29T23:59:59.9999999+00:00",
+      "unixTicks": "17092511999999999",
+      "offsetMinutes": 0,
+      "year": 2024,
+      "month": 2,
+      "day": 29,
+      "hour": 23,
+      "minute": 59,
+      "second": 59,
+      "fraction": 9999999,
+      "hex": "c07821323032342d30322d32395432333a35393a35392e393939393939392b30303a3030",
+      "notes": "Leap day, last tick of the day."
+    },
+    {
+      "name": "max-value",
+      "iso": "9999-12-31T23:59:59.9999999+00:00",
+      "unixTicks": "2534023007999999999",
+      "offsetMinutes": 0,
+      "year": 9999,
+      "month": 12,
+      "day": 31,
+      "hour": 23,
+      "minute": 59,
+      "second": 59,
+      "fraction": 9999999,
+      "hex": "c07821393939392d31322d33315432333a35393a35392e393939393939392b30303a3030",
+      "notes": "DateTimeOffset.MaxValue in .NET. 7 fractional digits is exactly its resolution."
+    },
+    {
+      "name": "min-value",
+      "iso": "0001-01-01T00:00:00.0000000+00:00",
+      "unixTicks": "-621355968000000000",
+      "offsetMinutes": 0,
+      "year": 1,
+      "month": 1,
+      "day": 1,
+      "hour": 0,
+      "minute": 0,
+      "second": 0,
+      "fraction": 0,
+      "hex": "c07821303030312d30312d30315430303a30303a30302e303030303030302b30303a3030",
+      "notes": "DateTimeOffset.MinValue in .NET (0001-01-01). Four-digit zero-padded year."
+    },
+    {
+      "name": "pre-epoch",
+      "iso": "1969-07-20T20:17:40.0000000+00:00",
+      "unixTicks": "-141829400000000",
+      "offsetMinutes": 0,
+      "year": 1969,
+      "month": 7,
+      "day": 20,
+      "hour": 20,
+      "minute": 17,
+      "second": 40,
+      "fraction": 0,
+      "hex": "c07821313936392d30372d32305432303a31373a34302e303030303030302b30303a3030",
+      "notes": "A whole-second instant before 1970. unixTicks is negative."
+    }
+  ],
+  "decodeOnly": [
+    {
+      "name": "reads-z-suffix",
+      "hex": "c0781c323032342d30332d30315431323a33343a35362e373839313233345a",
+      "reencodedHex": "c07821323032342d30332d30315431323a33343a35362e373839313233342b30303a3030",
+      "notes": "'Z' is a legal RFC 3339 offset and readers accept it; writers normalise it to '+00:00'."
+    },
+    {
+      "name": "reads-millisecond-precision",
+      "hex": "c0781d323032342d30332d30315431323a33343a35362e3738392b30323a3030",
+      "reencodedHex": "c07821323032342d30332d30315431323a33343a35362e373839303030302b30323a3030",
+      "notes": "COMPATIBILITY GUARD. Exactly what the previous TypeScript release wrote (Date.toISOString() with an offset re-appended). Three fractional digits are right-padded to seven."
+    },
+    {
+      "name": "reads-no-fraction",
+      "hex": "c07819313937302d30312d30315430303a30303a30302b30303a3030",
+      "reencodedHex": "c07821313937302d30312d30315430303a30303a30302e303030303030302b30303a3030",
+      "notes": "An absent fractional part is zero."
+    },
+    {
+      "name": "reads-nanosecond-precision-truncating",
+      "hex": "c07823323032342d30332d30315431323a33343a35362e3738393132333435362b30303a3030",
+      "reencodedHex": "c07821323032342d30332d30315431323a33343a35362e373839313233342b30303a3030",
+      "notes": "Nine fractional digits from a nanosecond-resolution peer. Digits past the seventh are TRUNCATED, never rounded (.789123456 -> .7891234, not .7891235) — rounding could carry into the next second and is not reproducible in a fixed-width integer runtime."
+    }
+  ],
+  "malformed": [
+    {
+      "name": "wrong-tag",
+      "hex": "c11a65e1cb70",
+      "notes": "Tag 1 (epoch-based date-time) is a different shape and is rejected, not silently misread."
+    },
+    {
+      "name": "missing-tag",
+      "hex": "7821323032342d30332d30315431323a33343a35362e373839313233342b30303a3030",
+      "notes": "A bare RFC 3339 text string with no tag 0 is REJECTED. Tag 0 is required in both directions: an untagged text string is exactly the encoding of Ion's `string` type, so accepting it would make `datetime` and `string` indistinguishable in a capture."
+    },
+    {
+      "name": "not-a-date",
+      "hex": "c06568656c6c6f",
+      "notes": "Unparseable text must produce the runtime's typed decode error, never an opaque throw."
+    },
+    {
+      "name": "missing-offset",
+      "hex": "c0781b323032342d30332d30315431323a33343a35362e37383931323334",
+      "notes": "RFC 3339 requires an offset. A local-time-without-offset string is ambiguous and is rejected rather than being guessed as UTC."
+    }
+  ]
+}

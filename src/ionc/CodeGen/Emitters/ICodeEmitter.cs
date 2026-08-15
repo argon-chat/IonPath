@@ -9,12 +9,12 @@ using ion.runtime;
 public interface ICodeEmitter
 {
     /// <summary>
-    /// Язык генератора (CSharp, TypeScript, Go, etc.)
+    /// Язык генератора (CSharp, TypeScript, Rust, etc.)
     /// </summary>
     string Language { get; }
 
     /// <summary>
-    /// Расширение файла (.cs, .ts, .go)
+    /// Расширение файла (.cs, .ts, .rs)
     /// </summary>
     string FileExtension { get; }
 
@@ -39,17 +39,28 @@ public interface ICodeEmitter
     /// <summary>
     /// Генерирует enum: enum Foo { A = 1, B = 2 }
     /// </summary>
-    string EnumDeclaration(string name, IEnumerable<EnumMember> members, EnumOptions? options = null, string? doc = null);
+    /// <remarks>
+    /// <c>deprecated</c> is the declaration's <c>@deprecated</c> use, or <c>null</c>. Every target
+    /// renders it in its own idiom — <c>[Obsolete]</c>, a <c>@deprecated</c> JSDoc tag,
+    /// <c>#[deprecated]</c>, a <c>// Deprecated:</c> doc paragraph — which is why the emitters take
+    /// the unpacked <see cref="IonDeprecation"/> rather than a pre-rendered string. The same
+    /// parameter appears on every declaration method below, and on
+    /// <see cref="FieldDecl"/> / <see cref="EnumMember"/> / <see cref="MethodDecl"/> for members.
+    /// </remarks>
+    string EnumDeclaration(string name, IEnumerable<EnumMember> members, EnumOptions? options = null,
+        string? doc = null, IonDeprecation? deprecated = null);
 
     /// <summary>
     /// Генерирует flags enum (с атрибутом [Flags] в C#)
     /// </summary>
-    string FlagsDeclaration(string name, string? baseType, IEnumerable<EnumMember> members, string? doc = null);
+    string FlagsDeclaration(string name, string? baseType, IEnumerable<EnumMember> members, string? doc = null,
+        IonDeprecation? deprecated = null);
 
     /// <summary>
     /// Генерирует record/interface для message типа
     /// </summary>
-    string MessageDeclaration(string name, IEnumerable<FieldDecl> fields, string? doc = null);
+    string MessageDeclaration(string name, IEnumerable<FieldDecl> fields, string? doc = null,
+        IonDeprecation? deprecated = null);
 
     /// <summary>
     /// Генерирует typedef/type alias
@@ -59,7 +70,8 @@ public interface ICodeEmitter
     /// <summary>
     /// Генерирует интерфейс сервиса
     /// </summary>
-    string ServiceInterfaceDeclaration(string name, IEnumerable<MethodDecl> methods, string? baseInterface = null, string? doc = null);
+    string ServiceInterfaceDeclaration(string name, IEnumerable<MethodDecl> methods, string? baseInterface = null,
+        string? doc = null, IonDeprecation? deprecated = null);
 
     /// <summary>
     /// Генерирует класс
@@ -73,12 +85,14 @@ public interface ICodeEmitter
     /// <summary>
     /// Генерирует базовый тип union (interface/abstract class)
     /// </summary>
-    string UnionBaseDeclaration(string name, IEnumerable<string> caseNames, IEnumerable<FieldDecl>? sharedFields = null, string? doc = null);
+    string UnionBaseDeclaration(string name, IEnumerable<string> caseNames, IEnumerable<FieldDecl>? sharedFields = null,
+        string? doc = null, IonDeprecation? deprecated = null);
 
     /// <summary>
     /// Генерирует case тип union
     /// </summary>
-    string UnionCaseDeclaration(string caseName, string unionName, int caseIndex, IEnumerable<FieldDecl> fields, string? doc = null);
+    string UnionCaseDeclaration(string caseName, string unionName, int caseIndex, IEnumerable<FieldDecl> fields,
+        string? doc = null, IonDeprecation? deprecated = null);
 
     // ═══════════════════════════════════════════════════════════════════
     // TYPE NAMES
@@ -144,7 +158,7 @@ public interface ICodeEmitter
 
     /// <summary>
     /// Форматирует документационный комментарий для целевого языка
-    /// (XML doc в C#, JSDoc в TypeScript, rustdoc в Rust, doc comment в Go).
+    /// (XML doc в C#, JSDoc в TypeScript, rustdoc в Rust).
     /// <para>
     /// Возвращает <c>""</c> когда документации нет — ни пустой строки, ни маркера,
     /// ни лишнего перевода строки. Иначе возвращает блок, в котором каждая строка
@@ -155,32 +169,38 @@ public interface ICodeEmitter
     /// <param name="doc">Сырой текст документации (строки разделены '\n'), либо <c>null</c>.</param>
     /// <param name="indent">Отступ, соответствующий окружающему сгенерированному коду.</param>
     /// <param name="parameters">Документированные параметры (<c>&lt;param&gt;</c> / <c>@param</c>).</param>
-    /// <param name="identifier">
-    /// Имя объявления. Используется только Go, где по конвенции комментарий начинается с имени.
-    /// </param>
+    /// <remarks>
+    /// This used to take a trailing <c>identifier</c> for the declared name. Only Go read it — its
+    /// convention is that a doc comment opens with the name it documents — and it was removed with
+    /// the Go target. No remaining emitter needs the declaration's name to format its doc block.
+    /// </remarks>
     string DocComment(
         string? doc,
         string indent = "",
-        IReadOnlyList<DocParam>? parameters = null,
-        string? identifier = null);
+        IReadOnlyList<DocParam>? parameters = null);
 
     /// <summary>
     /// Форматирует документацию уровня файла/модуля
-    /// (<c>//</c> в C#, JSDoc в TypeScript, <c>//!</c> в Rust, package doc в Go).
+    /// (<c>//</c> в C#, JSDoc в TypeScript, <c>//!</c> в Rust).
     /// Возвращает <c>""</c> когда документации нет.
     /// </summary>
-    string ModuleDocComment(string? doc, string? name = null);
+    /// <remarks>
+    /// Likewise dropped a trailing <c>name</c> parameter that only Go passed, for
+    /// <c>// Package &lt;name&gt; …</c>.
+    /// </remarks>
+    string ModuleDocComment(string? doc);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // DECLARATION MODELS
 // ═══════════════════════════════════════════════════════════════════════════
 
-public record EnumMember(string Name, string Value, string? Doc = null);
+public record EnumMember(string Name, string Value, string? Doc = null, IonDeprecation? Deprecated = null);
 
 public record EnumOptions(string? BaseType = null, bool IsFlags = false);
 
-public record FieldDecl(string Name, string Type, bool IsOptional = false, string? Doc = null);
+public record FieldDecl(string Name, string Type, bool IsOptional = false, string? Doc = null,
+    IonDeprecation? Deprecated = null);
 
 public record MethodDecl(
     string Name,
@@ -188,7 +208,8 @@ public record MethodDecl(
     IReadOnlyList<ParameterDecl> Parameters,
     MethodModifiers Modifiers = MethodModifiers.None,
     IReadOnlyList<string>? Attributes = null,
-    string? Doc = null
+    string? Doc = null,
+    IonDeprecation? Deprecated = null
 )
 {
     /// <summary>

@@ -21,6 +21,9 @@ public partial class IonParser
             UseDirectiveCore,
             FeatureDirectiveCore,
             MessageCore,
+            // After MessageCore only for readability: `msg` and `mixin` share a first letter but
+            // MsgKeyword is atomic, so neither can consume the other's input.
+            MixinCore.OfType<IonSyntaxMember>(),
             FlagsCore,
             EnumsCore,
             TypedefCore.OfType<IonSyntaxMember>(),
@@ -51,7 +54,10 @@ public partial class IonParser
     /// past invalid input to the next recognizable definition.
     /// </summary>
     private static readonly string[] DefinitionKeywords =
-        ["msg", "service", "#import", "#use", "#feature", "flags", "enum", "typedef", "union", "attribute", "attr"];
+    [
+        "msg", "mixin", "service", "#import", "#use", "#feature", "flags", "enum", "typedef", "union",
+        "attribute", "attr"
+    ];
 
     /// <summary>
     /// Attempts to parse a Definition, and on failure skips to the next definition keyword
@@ -165,7 +171,10 @@ public partial class IonParser
             membersList.OfType<IonUnionSyntax>().ToList(),
             membersList,
             moduleDoc
-        );
+        )
+        {
+            mixinSyntaxes = membersList.OfType<IonMixinSyntax>().ToList()
+        };
     }
 }
 

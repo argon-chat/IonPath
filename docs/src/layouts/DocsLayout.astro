@@ -17,6 +17,10 @@ interface Props {
 
 const { title = 'Docs — IonPath', current = '/docs/', toc = [] } = Astro.props;
 
+// NOTE: this array and the one in components/Navbar.astro must stay identical — the sidebar
+// renders from here and the mobile menu from there, so a page added to one and not the other is
+// reachable in one layout and invisible in the other. They had already drifted: `partial` was
+// only here and `modules` was only there.
 const guideSections = [
   {
     label: 'Getting Started',
@@ -30,14 +34,19 @@ const guideSections = [
     items: [
       { href: '/guides/syntax-overview/', label: 'Syntax Overview' },
       { href: '/guides/primitive-types/', label: 'Primitive Types' },
+      { href: '/guides/collections/', label: 'Collections' },
       { href: '/guides/messages/', label: 'Messages' },
+      { href: '/guides/mixins/', label: 'Mixins' },
+      { href: '/guides/inline-types/', label: 'Inline Types' },
       { href: '/guides/services/', label: 'Services' },
       { href: '/guides/unions/', label: 'Unions' },
       { href: '/guides/enums-flags/', label: 'Enums & Flags' },
       { href: '/guides/typedefs/', label: 'Typedefs' },
       { href: '/guides/generics/', label: 'Generics' },
+      { href: '/guides/partial/', label: 'Partial<T>' },
       { href: '/guides/attributes/', label: 'Attributes' },
       { href: '/guides/directives/', label: 'Directives' },
+      { href: '/guides/modules/', label: 'Modules' },
       { href: '/guides/comments/', label: 'Comments' },
     ],
   },

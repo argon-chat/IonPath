@@ -44,7 +44,7 @@ public abstract class CodeGeneratorBase : IIonCodeGenerator
         sb.AppendLine(FileHeader());
         sb.AppendLine();
 
-        foreach (var type in module.Definitions.Where(t => !t.IsUnionCase && !t.IsUnion))
+        foreach (var type in TypedefsFirst(module.Definitions.Where(t => !t.IsUnionCase && !t.IsUnion)))
         {
             var generated = GenerateType(type);
             if (!string.IsNullOrEmpty(generated))
@@ -74,7 +74,7 @@ public abstract class CodeGeneratorBase : IIonCodeGenerator
         var sb = new StringBuilder();
         var allTypes = types.ToList();
 
-        foreach (var type in allTypes.Where(t => !t.IsUnionCase && !t.IsUnion))
+        foreach (var type in TypedefsFirst(allTypes.Where(t => !t.IsUnionCase && !t.IsUnion)))
         {
             var generated = GenerateType(type);
             if (!string.IsNullOrEmpty(generated))
@@ -108,6 +108,10 @@ public abstract class CodeGeneratorBase : IIonCodeGenerator
     {
         var candidates = types
             .Where(t => !t.IsBuiltin && !t.IsScalar && !t.IsVoid && !t.IsUnionCase && !t.IsUnion)
+            // A typedef is erased before it reaches the wire, so nothing ever serializes one.
+            // Emitting a formatter for it would produce a 1-element CBOR array — exactly the
+            // wire overhead a transparent alias is defined not to have.
+            .Where(t => !IsTypedefDeclaration(t))
             .ToList();
 
         var sorted = TopoSortByDependencies(candidates);
@@ -142,20 +146,54 @@ public abstract class CodeGeneratorBase : IIonCodeGenerator
         {
             IonEnum e => GenerateEnum(e),
             IonFlags f => GenerateFlags(f),
+            // The typedef arm must precede the IonGenericType arm: a generic definition is
+            // skipped, so a generic sitting in front would swallow typedefs silently.
+            _ when IsTypedefDeclaration(type) => GenerateTypedef(type),
             IonGenericType => null, // Skip generic definitions
-            _ when type.isTypedef => GenerateTypedef(type),
             _ => GenerateMessage(type)
         };
     }
+
+    /// <summary>
+    /// Whether <paramref name="type"/> is a typedef <em>declaration</em>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>isTypedef</c> alone is not enough on either side:
+    /// </para>
+    /// <list type="bullet">
+    /// <item><see cref="IonArray"/> propagates <c>isTypedef</c> from its element type, so an array
+    /// of a typedef reports <c>isTypedef: true</c> and would be routed to
+    /// <see cref="GenerateTypedef"/> and emitted as an alias of its own element.</item>
+    /// <item>Every builtin in the std module is declared with <c>isTypedef: true</c> — see the
+    /// <c>new("u4", [...], [], true)</c> entries in <c>IonModule.GetStdModule</c>, where the flag
+    /// is the fourth positional argument. Requiring the single <c>Value</c> field that
+    /// <c>TransformStage.CompileTypedefs</c> always emits separates a real alias from those.</item>
+    /// </list>
+    /// </remarks>
+    protected static bool IsTypedefDeclaration(IonType type)
+        => type is { isTypedef: true, fields.Count: > 0 } and not IonArray and not IonUnresolvedType;
+
+    /// <summary>
+    /// Orders a type list for emission: typedefs first, everything else in its original order.
+    /// </summary>
+    /// <remarks>
+    /// Keeps an alias ahead of the declarations that mention it. <c>OrderBy</c> is stable, so the
+    /// relative order inside each group is untouched.
+    /// </remarks>
+    protected static IEnumerable<IonType> TypedefsFirst(IEnumerable<IonType> types)
+        => types.OrderBy(t => IsTypedefDeclaration(t) ? 0 : 1);
 
     protected virtual string GenerateEnum(IonEnum e)
     {
         var members = e.members.Select(m => new EnumMember(
             m.name.Identifier,
             FormatEnumValue(m.constantValue, m.type),
-            m.Doc
+            m.Doc,
+            AttributeEmission.DeprecationOf(m.attributes)
         ));
-        return Emitter.EnumDeclaration(e.name.Identifier, members, null, e.Doc);
+        return Emitter.EnumDeclaration(e.name.Identifier, members, null, e.Doc,
+            AttributeEmission.DeprecationOf(e.attributes));
     }
 
     protected virtual string GenerateFlags(IonFlags f)
@@ -163,13 +201,15 @@ public abstract class CodeGeneratorBase : IIonCodeGenerator
         var members = f.members.Select(m => new EnumMember(
             m.name.Identifier,
             FormatEnumValue(m.constantValue, m.type),
-            m.Doc
+            m.Doc,
+            AttributeEmission.DeprecationOf(m.attributes)
         ));
         return Emitter.FlagsDeclaration(
             f.name.Identifier,
             TypeResolver.ResolvePrimitive(f.baseType.name.Identifier),
             members,
-            f.Doc
+            f.Doc,
+            AttributeEmission.DeprecationOf(f.attributes)
         );
     }
 
@@ -185,9 +225,11 @@ public abstract class CodeGeneratorBase : IIonCodeGenerator
         var fields = type.fields.Select(f => new FieldDecl(
             f.name.Identifier,
             TypeResolver.Resolve(f.type),
-            Doc: f.Doc
+            Doc: f.Doc,
+            Deprecated: AttributeEmission.DeprecationOf(f.attributes)
         ));
-        return Emitter.MessageDeclaration(type.name.Identifier, fields, type.Doc);
+        return Emitter.MessageDeclaration(type.name.Identifier, fields, type.Doc,
+            AttributeEmission.DeprecationOf(type.attributes));
     }
 
     protected virtual string GenerateService(IonService service)
@@ -198,7 +240,8 @@ public abstract class CodeGeneratorBase : IIonCodeGenerator
             $"I{service.name.Identifier}",
             methods,
             "IIonService",
-            service.Doc
+            service.Doc,
+            AttributeEmission.DeprecationOf(service.attributes)
         );
     }
 
@@ -217,9 +260,17 @@ public abstract class CodeGeneratorBase : IIonCodeGenerator
                 Doc: a.Doc
             )).ToList(),
             m.IsStreamable ? MethodModifiers.Stream : MethodModifiers.Async,
-            m.attributes.Select(FormatAttribute).ToList(),
-            m.Doc
+            FormatAttributes(m.attributes),
+            m.Doc,
+            AttributeEmission.DeprecationOf(m.attributes)
         )).ToList();
+
+    /// <summary>
+    /// Renders a declaration's attributes into the target language's annotation syntax, dropping
+    /// the ones that language cannot express.
+    /// </summary>
+    protected List<string> FormatAttributes(IReadOnlyList<IonAttributeInstance> attributes)
+        => attributes.Select(FormatAttribute).OfType<string>().ToList();
 
     // ═══════════════════════════════════════════════════════════════════
     // UNION GENERATION
@@ -240,7 +291,8 @@ public abstract class CodeGeneratorBase : IIonCodeGenerator
             union.name.Identifier,
             union.types.Select(t => t.name.Identifier),
             sharedFields,
-            union.Doc
+            union.Doc,
+            AttributeEmission.DeprecationOf(union.attributes)
         ));
 
         // Generate case types
@@ -255,7 +307,8 @@ public abstract class CodeGeneratorBase : IIonCodeGenerator
                 var fields = caseType.fields.Select(f => new FieldDecl(
                     f.name.Identifier,
                     TypeResolver.Resolve(f.type),
-                    Doc: f.Doc
+                    Doc: f.Doc,
+                    Deprecated: AttributeEmission.DeprecationOf(f.attributes)
                 ));
 
                 sb.AppendLine();
@@ -264,7 +317,8 @@ public abstract class CodeGeneratorBase : IIonCodeGenerator
                     union.name.Identifier,
                     index,
                     fields,
-                    caseType.Doc
+                    caseType.Doc,
+                    AttributeEmission.DeprecationOf(caseType.attributes)
                 ));
             }
             index++;
@@ -340,15 +394,31 @@ public abstract class CodeGeneratorBase : IIonCodeGenerator
         return Emitter.FormatEnumValue(value, bits);
     }
 
-    protected virtual string FormatAttribute(IonAttributeInstance attr)
-    {
-        if (attr.name.Identifier == "deprecated")
-            return "Obsolete";
-        var args = attr.arguments.Any()
-            ? $"({string.Join(", ", attr.arguments)})"
-            : "";
-        return $"{attr.name.Identifier}{args}";
-    }
+    /// <summary>
+    /// One attribute use in the target language's annotation syntax, or <see langword="null"/> when
+    /// that language has no way to express it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The default is the C# form, kept as the base behaviour for any future C#-family emitter.
+    /// No emitter currently renders <c>MethodDecl.Attributes</c>: the only subclass left, Rust,
+    /// overrides this to <see langword="null"/> because it cannot carry a
+    /// general annotation (see <see cref="AttributeEmission"/>), and expresses
+    /// <c>@deprecated</c> through its own native form instead. The shipping C# output does not
+    /// come through here at all — <c>IonCSharpGenerator</c> builds its attributes directly via
+    /// <see cref="AttributeEmission.CSharpAttributes"/>.
+    /// </para>
+    /// <para>
+    /// This used to <c>string.Join</c> the argument values raw. With the current
+    /// <see cref="IonAttributeInstance.arguments"/> contract — always exactly as long as the
+    /// declaration's parameter list, with an omitted trailing optional present as an explicit
+    /// <see langword="null"/> — that produced <c>Cache(30, users, )</c>: an unquoted string and an
+    /// empty slot. <see cref="AttributeEmission.CSharpAttributes"/> owns the quoting, the trailing
+    /// null trimming and the std name mapping, so every generator agrees.
+    /// </para>
+    /// </remarks>
+    protected virtual string? FormatAttribute(IonAttributeInstance attr)
+        => AttributeEmission.CSharpAttributes([attr]).FirstOrDefault();
 
     /// <summary>
     /// Collects the module ('//!') documentation for a whole compilation into one text.

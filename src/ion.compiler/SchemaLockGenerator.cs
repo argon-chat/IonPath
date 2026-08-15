@@ -25,6 +25,12 @@ public static class SchemaLockGenerator
         {
             foreach (var def in module.Definitions)
             {
+                // Typedefs are deliberately absent from the lock, and IonSchemaLock.CurrentVersion
+                // must not be bumped to add them. A typedef is erased before this runs, so every
+                // *use site* already records the underlying type: changing `typedef UserId = u4`
+                // to `= u8` surfaces as ION0022_LockFieldTypeChanged on each field that used it,
+                // which is the breaking change that actually matters. Locking the alias itself
+                // would only add a second, redundant report of the same edit.
                 if (def.IsBuiltin || def.isTypedef)
                     continue;
 
@@ -169,11 +175,33 @@ public static class SchemaLockGenerator
         };
     }
 
+    /// <summary>
+    /// The wire identity of a type, as one string — this is what ION0022 compares between runs.
+    /// </summary>
+    /// <remarks>
+    /// The size of a fixed array is part of that identity and is rendered as a trailing argument:
+    /// <c>f4[16]</c> locks as <c>Array&lt;f4, 16&gt;</c>. It has to be. <c>ReadFixedArray(reader, n)</c>
+    /// consumes exactly <c>n</c> elements, so changing 16 to 8 changes how many items every existing
+    /// reader expects — a breaking change of exactly the kind ION0022 exists to catch, and one that
+    /// would otherwise be invisible here because <c>Array&lt;f4&gt;</c> and <c>Array&lt;f4, 16&gt;</c>
+    /// would have printed identically.
+    /// <para>
+    /// The size goes inside the angle brackets rather than as a <c>[16]</c> suffix so that the lock
+    /// keeps one shape for every generic — a reader and a differ only have to know
+    /// <c>Name&lt;args&gt;</c>. Since it also appears in nested position
+    /// (<c>Maybe&lt;Array&lt;f4, 16&gt;&gt;</c> for <c>f4[16]?</c>), a suffix form would have to be
+    /// parsed back out of the middle of a string.
+    /// </para>
+    /// </remarks>
     internal static string GetCanonicalTypeName(IonType type)
     {
         if (type is IonGenericType gt && gt.TypeArguments.Count > 0)
         {
             var args = string.Join(", ", gt.TypeArguments.Select(GetCanonicalTypeName));
+
+            if (gt.FixedSize is { } size)
+                args += $", {size}";
+
             return $"{gt.name.Identifier}<{args}>";
         }
 

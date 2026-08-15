@@ -51,7 +51,9 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 
         var allTypes = types.ToList();
 
-        foreach (var type in allTypes.Where(type => type is { IsUnionCase: false, IsUnion: false }))
+        // Typedefs first so an alias is declared ahead of the interfaces that mention it.
+        foreach (var type in allTypes.Where(type => type is { IsUnionCase: false, IsUnion: false })
+                     .OrderBy(type => IsTypedefDeclaration(type) ? 0 : 1))
         {
             sb.AppendLine(GenerateType(type));
             sb.AppendLine();
@@ -94,8 +96,23 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
     /// <paramref name="indent"/> and the block ends with a newline, so call sites
     /// <c>Append</c> it unconditionally.
     /// </summary>
-    private static string Doc(string? doc, string indent = "", IReadOnlyList<DocParam>? parameters = null)
-        => DocCommentFormatter.JsDoc(doc, indent, parameters);
+    /// <param name="doc">Raw documentation text, or <c>null</c> when undocumented.</param>
+    /// <param name="indent">Indent carried by every emitted line.</param>
+    /// <param name="parameters">Parameters to emit a <c>@param</c> tag for.</param>
+    /// <param name="attributes">
+    /// The declaration's attributes. Only <c>@deprecated</c> is rendered, as a JSDoc
+    /// <c>@deprecated</c> tag inside <em>this</em> block — TypeScript has no annotation a generated
+    /// <c>interface</c> or <c>enum</c> could carry (decorators apply to classes and their members
+    /// only, and would need a runtime import the generated client does not have), so the doc
+    /// comment is the whole mechanism. Emitting it here rather than beside the declaration is what
+    /// keeps a deprecated-but-undocumented declaration to one comment instead of two.
+    /// </param>
+    private static string Doc(string? doc, string indent = "", IReadOnlyList<DocParam>? parameters = null,
+        IReadOnlyList<IonAttributeInstance>? attributes = null)
+        => DocCommentFormatter.JsDoc(doc, indent, parameters, null,
+            AttributeEmission.DeprecationOf(attributes) is { } deprecation
+                ? AttributeEmission.JsDocDeprecated(deprecation)
+                : null);
 
     /// <summary>
     /// JSDoc for a service method: summary plus one <c>@param</c> per documented argument.
@@ -104,7 +121,32 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
     {
         nameOf ??= a => a.name.Identifier;
         var parameters = method.arguments.Select(a => new DocParam(nameOf(a), a.Doc)).ToList();
-        return Doc(method.Doc, indent, parameters);
+        return Doc(method.Doc, indent, parameters, method.attributes);
+    }
+
+    /// <summary>
+    /// Adds an <c>@internal</c> tag to a method's JSDoc block, opening a block when the method is
+    /// otherwise undocumented.
+    /// </summary>
+    /// <remarks>
+    /// TypeScript cannot narrow the visibility of a member that an <c>implements</c> clause
+    /// requires, so an <c>internal</c> method has to stay on the client class. <c>@internal</c> is
+    /// the tag <c>tsc --stripInternal</c> keys on, so the method is dropped from the emitted
+    /// <c>.d.ts</c> — which is the client surface a consumer actually programs against.
+    /// </remarks>
+    private static string InternalJsDoc(string methodDoc, string indent)
+    {
+        const string Tag = "@internal Not part of the client surface; for peer services only.";
+
+        if (string.IsNullOrWhiteSpace(methodDoc))
+            return $"{indent}/** {Tag} */\n";
+
+        var close = $"{indent} */";
+        var at = methodDoc.LastIndexOf(close, StringComparison.Ordinal);
+
+        return at < 0
+            ? methodDoc
+            : string.Concat(methodDoc.AsSpan(0, at), $"{indent} * {Tag}\n", methodDoc.AsSpan(at));
     }
 
     private static string GenerateType(IonType type)
@@ -113,12 +155,27 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
             return GenerateEnum(enumType);
         if (type is IonFlags flagsType)
             return GenerateFlags(flagsType);
+        // Typedefs are tested before generic definitions: generics return null (skipped), so
+        // checking IonGenericType first silently dropped every typedef.
+        if (IsTypedefDeclaration(type))
+            return GenerateTypedef(type);
         if (type is IonGenericType)
             return null;
-        if (type.isTypedef)
-            return GenerateTypedef(type);
         return GenerateMessage(type);
     }
+
+    /// <summary>
+    /// Whether <paramref name="type"/> is a typedef <em>declaration</em>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="IonArray"/> inherits <c>isTypedef</c> from its element type, and every std
+    /// builtin is declared with <c>isTypedef: true</c> (the fourth positional argument of the
+    /// <c>new("u4", [...], [], true)</c> entries in <c>IonModule.GetStdModule</c>). The single
+    /// <c>Value</c> field that <c>TransformStage.CompileTypedefs</c> emits is what tells a real
+    /// alias apart from both.
+    /// </remarks>
+    private static bool IsTypedefDeclaration(IonType type)
+        => type is { isTypedef: true, fields.Count: > 0 } and not IonArray and not IonUnresolvedType;
 
     private static string AppendPostfixForEnumType(IonType type, string constantValue)
     {
@@ -132,12 +189,12 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
     private static string GenerateEnum(IonEnum e)
     {
         var sb = new StringBuilder();
-        sb.Append(Doc(e.Doc));
+        sb.Append(Doc(e.Doc, attributes: e.attributes));
         sb.AppendLine($"export enum {e.name.Identifier}");
         sb.AppendLine("{");
         foreach (var m in e.members)
         {
-            sb.Append(Doc(m.Doc, new string(' ', 2)));
+            sb.Append(Doc(m.Doc, new string(' ', 2), attributes: m.attributes));
             sb.AppendLine(
                 $"{new string(' ', 2)}{m.name.Identifier} = {AppendPostfixForEnumType(m.type, m.constantValue)},");
         }
@@ -148,12 +205,12 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
     private static string GenerateFlags(IonFlags f)
     {
         var sb = new StringBuilder();
-        sb.Append(Doc(f.Doc));
+        sb.Append(Doc(f.Doc, attributes: f.attributes));
         sb.AppendLine($"export enum {f.name.Identifier}");
         sb.AppendLine("{");
         foreach (var m in f.members)
         {
-            sb.Append(Doc(m.Doc, new string(' ', 2)));
+            sb.Append(Doc(m.Doc, new string(' ', 2), attributes: m.attributes));
             sb.AppendLine(
                 $"{new string(' ', 2)}{m.name.Identifier} = {AppendPostfixForEnumType(m.type, m.constantValue)},");
         }
@@ -161,20 +218,64 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Emits the alias declaration for a typedef. Purely nominal — the alias never reaches the
+    /// wire, it exists so hand written TypeScript can name it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A scalar underlying type is spelled with its structural TypeScript type
+    /// (<c>export type UserId = number;</c>) rather than the Ion name: the <c>u4</c> etc. aliases
+    /// are <c>declare type</c>d in the bundle preamble and are not exported, so resolving them
+    /// here keeps the exported alias meaningful to a consumer.
+    /// </para>
+    /// <para>
+    /// Everything else falls back to <c>UnwrapType</c> — the same spelling fields use — so
+    /// <c>typedef Ids = u4[]</c> becomes <c>IonArray&lt;u4&gt;</c> and <c>typedef Handle = Point</c>
+    /// becomes <c>Point</c>.
+    /// </para>
+    /// </remarks>
     private static string GenerateTypedef(IonType type)
     {
-        var underlying = ResolveTypeName(type.fields.FirstOrDefault()?.type);
+        var field = type.fields.FirstOrDefault();
+        var underlying = field is null
+            ? "unknown"
+            : ScalarTsNames.GetValueOrDefault(field.type.name.Identifier) ?? UnwrapType(field.type);
+
         return $"{Doc(type.Doc)}export type {type.name.Identifier} = {underlying};";
     }
+
+    /// <summary>
+    /// Ion scalar to its structural TypeScript type. Mirrors the <c>declare type</c> block the
+    /// compile command writes at the head of the generated bundle.
+    /// </summary>
+    private static readonly Dictionary<string, string> ScalarTsNames = new(StringComparer.Ordinal)
+    {
+        ["bool"] = "boolean",
+        ["i1"] = "number",
+        ["i2"] = "number",
+        ["i4"] = "number",
+        ["i8"] = "bigint",
+        ["i16"] = "bigint",
+        ["u1"] = "number",
+        ["u2"] = "number",
+        ["u4"] = "number",
+        ["u8"] = "bigint",
+        ["u16"] = "bigint",
+        ["f2"] = "number",
+        ["f4"] = "number",
+        ["f8"] = "number",
+        ["string"] = "string"
+    };
 
     private static string GenerateMessage(IonType type)
     {
         var sb = new StringBuilder();
-        sb.Append(Doc(type.Doc));
+        sb.Append(Doc(type.Doc, attributes: type.attributes));
         sb.AppendLine($"export interface {type.name.Identifier} {{");
         foreach (var typeField in type.fields)
         {
-            sb.Append(Doc(typeField.Doc, new string(' ', 2)));
+            sb.Append(Doc(typeField.Doc, new string(' ', 2), attributes: typeField.attributes));
             sb.AppendLine($"{new string(' ', 2)}{GenerateField(typeField)};");
         }
 
@@ -185,7 +286,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
     private static string GenerateService(IonService service)
     {
         var sb = new StringBuilder();
-        sb.Append(Doc(service.Doc));
+        sb.Append(Doc(service.Doc, attributes: service.attributes));
         sb.AppendLine($"export interface I{service.name.Identifier} extends IIonService");
         sb.AppendLine("{");
 
@@ -214,27 +315,92 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         //IonUnresolvedType unresolved => throw new InvalidOperationException("Detected unresolved type"),
         (IonGenericType { IsMaybe: true } maybe, true) => $"IonMaybe<{UnwrapType(maybe.TypeArguments[0])}>",
         (IonGenericType { IsMaybe: true } maybe, false) => $"{UnwrapType(maybe.TypeArguments[0])} | null",
+        // `T[]` and `T[N]` are both `IonArray<T>` (= `T[]`): TypeScript has no fixed-length array
+        // type either, so N lives only in the formatter NAME — see UnwrapTypeForLookup.
         (IonGenericType { IsArray: true } array, _) => $"IonArray<{UnwrapType(array.TypeArguments[0])}>",
+        // The platform `Map`/`Set`, which is what the runtime's readMap/readSet produce.
+        (IonGenericType { IsMap: true } map, _) =>
+            $"Map<{UnwrapType(map.TypeArguments[0])}, {UnwrapType(map.TypeArguments[1])}>",
+        (IonGenericType { IsSet: true } set, _) => $"Set<{UnwrapType(set.TypeArguments[0])}>",
+        // MUST be IonPartial, never the bare `Partial<T>`: TypeScript has a built-in utility
+        // type of that name, so `Partial<Data>` type-checks and then throws
+        // "Formatter not found" at runtime because nothing is registered under it.
+        (IonGenericType { IsPartial: true } partial, _) => $"{PartialTypeName}<{UnwrapType(partial.TypeArguments[0])}>",
         (IonGenericType generic, _) => GenerateGenericTypeName(generic),
         _ => ResolveTypeName(type)
     };
 
 
+    /// <summary><c>true</c> for <c>T[]?</c> — <c>Maybe&lt;Array&lt;T&gt;&gt;</c>.</summary>
+    private static bool IsNullableArray(IonType type)
+        => type is IonGenericType { IsMaybe: true } maybe
+           && maybe.TypeArguments[0] is IonGenericType { IsArray: true };
+
+    /// <summary><c>true</c> for <c>T[N]?</c> — <c>Maybe&lt;Array&lt;T, N&gt;&gt;</c>.</summary>
+    private static bool IsNullableFixedArray(IonType type)
+        => type is IonGenericType { IsMaybe: true } maybe
+           && maybe.TypeArguments[0] is IonGenericType { IsArray: true, FixedSize: not null };
+
+    /// <summary>
+    /// The <em>registered formatter name</em> of a type. Diverges from <see cref="UnwrapType"/>
+    /// wherever the wire shape carries information the TypeScript type cannot.
+    /// </summary>
+    /// <remarks>
+    /// <c>T[N]</c> is the case that forces the split: its TypeScript type is the same
+    /// <c>IonArray&lt;T&gt;</c> as an unsized array, so the declared length can only live in the
+    /// lookup name — <c>f4[16]</c>, matching <c>IonFormatterStorage.registerFixedArray</c>. That
+    /// also keeps <c>IonRequest.extractTypeName</c> honest: it strips only an <c>IonArray&lt;…&gt;</c>
+    /// / <c>IonMaybe&lt;…&gt;</c> head, so <c>f4[16]</c> reaches <c>get()</c> intact and resolves to
+    /// the length-checked formatter rather than to a plain <c>readArray</c>.
+    /// </remarks>
     private static string UnwrapTypeForLookup(IonType type) => type switch
     {
         IonGenericType { IsMaybe: true } maybe => $"IonMaybe<{UnwrapTypeForLookup(maybe.TypeArguments[0])}>",
+        IonGenericType { IsArray: true, FixedSize: { } size } fixedArray =>
+            $"{UnwrapTypeForLookup(fixedArray.TypeArguments[0])}[{size}]",
         IonGenericType { IsArray: true } array => $"IonArray<{UnwrapTypeForLookup(array.TypeArguments[0])}>",
+        IonGenericType { IsMap: true } map =>
+            $"Map<{UnwrapTypeForLookup(map.TypeArguments[0])}, {UnwrapTypeForLookup(map.TypeArguments[1])}>",
+        IonGenericType { IsSet: true } set => $"Set<{UnwrapTypeForLookup(set.TypeArguments[0])}>",
+        IonGenericType { IsPartial: true } partial => $"{PartialTypeName}<{UnwrapTypeForLookup(partial.TypeArguments[0])}>",
         IonGenericType generic => GenerateGenericTypeName(generic),
         _ => ResolveTypeName(type)
     };
 
+    /// <summary>
+    /// The TypeScript spelling of <c>Partial&lt;T&gt;</c>. Exported from
+    /// <c>ion.webcore.js</c> (as <c>IonPartial</c>/<c>IonPartialOf</c>) and used verbatim as the
+    /// key <c>IonFormatterStorage.registerPartial</c> registers under, which is what makes
+    /// <see cref="FormatterTemplateRef"/> resolve a partial with no special-casing.
+    /// </summary>
+    private const string PartialTypeName = "IonPartial";
+
     private static string GenerateGenericTypeName(IonGenericType generic)
         => $"{generic.name.Identifier}<{string.Join(',', generic.TypeArguments.Select(x => x.name.Identifier))}>";
 
+    /// <summary>
+    /// The name of a type when it appears as the <em>element</em> of a wrapper — both the TS type
+    /// argument and the formatter lookup string in
+    /// <c>IonFormatterStorage.readArray&lt;X&gt;(reader, 'X')</c>.
+    /// </summary>
     private static string ResolveTypeName(IonType type)
     {
         if (type is IonUnion union)
             return $"I{union.name.Identifier}";
+        // Without this, `Data~[]` emits readArray<Partial>(reader, 'Partial').
+        if (type is IonGenericType { IsPartial: true } partial)
+            return $"{PartialTypeName}<{UnwrapType(partial.TypeArguments[0])}>";
+        // Same failure mode one wrapper out: a bare `Array` / `Maybe` / `Map` / `Set` is not a TS
+        // type and is not a registered formatter key. Nothing reaches the Maybe arm today (every
+        // caller peels the wrapper first), but falling through used to be how `T[]?` in return
+        // position broke.
+        //
+        // UnwrapType, not UnwrapTypeForLookup: this result is used where a TypeScript *type* is
+        // wanted. The two agree everywhere except `T[N]`, whose lookup name (`f4[16]`) is not a
+        // type at all — see UnwrapTypeForLookup.
+        if (type is IonGenericType { IsArray: true } or IonGenericType { IsMaybe: true }
+            or IonGenericType { IsMap: true } or IonGenericType { IsSet: true })
+            return UnwrapType(type);
         return type.name.Identifier;
     }
 
@@ -285,7 +451,10 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
     {
         if (type.IsVoid)
             throw new InvalidOperationException();
-        return $"IonFormatterStorage.get<{UnwrapType(type)}>('{UnwrapType(type)}')";
+        // The generic argument is the TypeScript type; the string is the registered formatter name.
+        // Identical for every shape except `T[N]`, where the name carries the length the type
+        // cannot (`get<IonArray<number>>('f4[16]')`).
+        return $"IonFormatterStorage.get<{UnwrapType(type)}>('{UnwrapTypeForLookup(type)}')";
     }
 
     public string GenerateAllServiceClientImpl(IEnumerable<IonService> service)
@@ -313,7 +482,12 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
     public string GenerateAllFormatters(IEnumerable<IonType> types)
     {
         var candidates = types.Where(t => t is
-            { IsBuiltin: false, IsScalar: false, IsVoid: false, IsUnionCase: false, IsUnion: false }).ToArray();
+                { IsBuiltin: false, IsScalar: false, IsVoid: false, IsUnionCase: false, IsUnion: false })
+            // Typedefs are erased: `export type UserId = u4` is an alias with no distinct runtime
+            // representation, so registering a formatter under its name would be dead code that
+            // wraps the value in a 1-element CBOR array.
+            .Where(t => !IsTypedefDeclaration(t))
+            .ToArray();
         var sorted = TopoSortByDependencies(candidates);
 
         var sb = new StringBuilder();
@@ -325,6 +499,268 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         }
 
         return sb.ToCompiledString();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Partial<T> SCHEMA REGISTRATION
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Emits one <c>IonFormatterStorage.registerPartial</c> per message reached through a
+    /// <c>Partial&lt;T&gt;</c> anywhere in the compilation, or <c>""</c> when there are none.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Registration name is the lookup name <see cref="UnwrapTypeForLookup"/> produces for the
+    /// partial (<c>IonPartial&lt;Vector&gt;</c>), so the ordinary
+    /// <see cref="FormatterTemplateRef"/> output resolves it with no special-casing.
+    /// </para>
+    /// <para>
+    /// The array is in Ion declaration order, which is the order the encoder writes entries in —
+    /// that is what keeps the bytes identical to the C# and Rust runtimes.
+    /// </para>
+    /// <para>
+    /// The field formatters are looked up lazily (per read/write), so these calls may appear
+    /// before the <c>register</c> calls of the types they mention.
+    /// </para>
+    /// </remarks>
+    /// <summary>
+    /// Every registration this compilation needs at module load: the parameterised container
+    /// formatters first (<c>Map</c>, <c>Set</c>, <c>T[N]</c>, and a nested <c>T[]</c>), then one
+    /// <c>registerPartial</c> per <c>Partial&lt;T&gt;</c> target.
+    /// </summary>
+    /// <remarks>
+    /// The name is historical — it predates the containers — and is kept because it is the single
+    /// hook the browser generation path calls. Both halves are order-insensitive: every registered
+    /// formatter resolves the names it mentions lazily, on first read/write.
+    /// </remarks>
+    public string GeneratePartialRegistrations(IEnumerable<IonType> types, IEnumerable<IonService> services)
+    {
+        var typeList = types.ToList();
+        var serviceList = services.ToList();
+
+        return GenerateContainerRegistrations(typeList, serviceList)
+               + GeneratePartialSchemaRegistrations(typeList, serviceList);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Map<K,V> / Set<T> / T[N] REGISTRATION
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// One named formatter per parameterised container the schema uses, or <c>""</c> when there
+    /// are none.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Formatter lookup in this runtime is by <em>string name</em>, so a container has to be minted
+    /// under a name before anything can nest it — inside a <c>Partial</c> schema, a <c>Map</c>
+    /// value, a return type. <c>registerMap</c>/<c>registerSet</c>/<c>registerFixedArray</c> exist
+    /// for exactly that; each takes the names of its parts, so the emission below is inside-out
+    /// (post-order) purely for readability.
+    /// </para>
+    /// <para>
+    /// The odd one out is a plain <c>T[]</c> nested in a container. Everywhere else an array is
+    /// reached with its element type (<c>readArray(reader, 'User')</c>), so the runtime has no
+    /// formatter registered for <c>IonArray&lt;T&gt;</c> itself and <c>Map&lt;string, User[]&gt;</c>
+    /// would fail with "Formatter not found: IonArray&lt;User&gt;". It is registered here rather
+    /// than in <c>ion.webcore.js</c> only because the generator cannot add it there — this mirrors
+    /// the <c>Ion_nested_array_Formatter</c> the C# target emits for the same reason.
+    /// </para>
+    /// </remarks>
+    private static string GenerateContainerRegistrations(
+        IReadOnlyList<IonType> types, IReadOnlyList<IonService> services)
+    {
+        var emitted = new HashSet<string>(StringComparer.Ordinal);
+        var lines = new List<string>();
+
+        foreach (var type in types)
+        {
+            foreach (var field in type.fields)
+                Visit(field.type, false);
+
+            if (type is IonUnion union)
+                foreach (var field in union.types.SelectMany(c => c.fields))
+                    Visit(field.type, false);
+        }
+
+        foreach (var method in services.SelectMany(s => s.methods))
+        {
+            foreach (var argument in method.arguments)
+                Visit(argument.type, false);
+            Visit(method.returnType, false);
+        }
+
+        if (lines.Count == 0)
+            return "";
+
+        return string.Join("\n", lines) + "\n\n";
+
+        void Visit(IonType type, bool insideContainer)
+        {
+            if (type is not IonGenericType generic)
+                return;
+
+            var childInsideContainer = insideContainer || generic.IsMap || generic.IsSet;
+
+            // Post-order: an inner container's name must read before the outer one that mentions it.
+            foreach (var argument in generic.TypeArguments)
+                Visit(argument, childInsideContainer);
+
+            var name = UnwrapTypeForLookup(generic);
+
+            switch (generic)
+            {
+                case { IsMap: true }:
+                {
+                    if (!emitted.Add(name)) return;
+                    var key = generic.TypeArguments[0];
+                    var value = generic.TypeArguments[1];
+                    lines.Add(
+                        $"IonFormatterStorage.registerMap<{UnwrapType(key)}, {UnwrapType(value)}>(\"{name}\", \"{UnwrapTypeForLookup(key)}\", \"{UnwrapTypeForLookup(value)}\");");
+                    return;
+                }
+
+                case { IsSet: true }:
+                {
+                    if (!emitted.Add(name)) return;
+                    var element = generic.TypeArguments[0];
+                    lines.Add(
+                        $"IonFormatterStorage.registerSet<{UnwrapType(element)}>(\"{name}\", \"{UnwrapTypeForLookup(element)}\");");
+                    return;
+                }
+
+                case { IsArray: true, FixedSize: { } size }:
+                {
+                    if (!emitted.Add(name)) return;
+                    var element = generic.TypeArguments[0];
+                    lines.Add(
+                        $"IonFormatterStorage.registerFixedArray<{UnwrapType(element)}>(\"{name}\", \"{UnwrapTypeForLookup(element)}\", {size});");
+                    return;
+                }
+
+                case { IsArray: true } when insideContainer:
+                {
+                    if (!emitted.Add(name)) return;
+                    var element = generic.TypeArguments[0];
+                    lines.Add(
+                        $"IonFormatterStorage.register<{UnwrapType(generic)}>(\"{name}\", {{\n" +
+                        $"  read: (reader) => IonFormatterStorage.readArray<{UnwrapType(element)}>(reader, \"{UnwrapTypeForLookup(element)}\"),\n" +
+                        $"  write: (writer, value) => IonFormatterStorage.writeArray<{UnwrapType(element)}>(writer, value, \"{UnwrapTypeForLookup(element)}\"),\n" +
+                        "});");
+                    return;
+                }
+            }
+        }
+    }
+
+    private string GeneratePartialSchemaRegistrations(IEnumerable<IonType> types, IEnumerable<IonService> services)
+    {
+        var targets = CollectPartialTargets(types.ToList(), services.ToList());
+        if (targets.Count == 0)
+            return "";
+
+        var sb = new StringBuilder();
+
+        foreach (var target in targets)
+        {
+            var name = UnwrapType(target);
+            sb.AppendLine($"IonFormatterStorage.registerPartial<{name}>(\"{PartialTypeName}<{name}>\", [");
+            foreach (var field in target.fields)
+                sb.AppendLine($"  {PartialFieldDescriptor(field)},");
+            sb.AppendLine("]);");
+            sb.AppendLine();
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>One <c>{ name, type, kind }</c> descriptor of a <c>Partial&lt;T&gt;</c> schema.</summary>
+    /// <remarks>
+    /// <c>type</c> is the <em>element</em> formatter name for the <c>array</c>/<c>maybe</c>/
+    /// <c>nullable</c> kinds. <c>X[]?</c> is emitted as plain <c>array</c>: the codec decides
+    /// null before the field codec ever runs (<c>null</c> ⇒ cleared, and "modified to null" is
+    /// deliberately the same three bytes), so the field codec only ever sees a real array.
+    /// </remarks>
+    private static string PartialFieldDescriptor(IonField field)
+    {
+        var name = field.name.Identifier;
+
+        switch (field.type)
+        {
+            // `X[N]` and `X[N]?` are plain values, not `kind: "array"`: the `array` kind reads an
+            // unsized array with readArray, which would let a patch carry any length. The whole
+            // fixed array is one registered formatter (`f4[16]`), and that formatter is what
+            // enforces N. Same reason `X[]?` collapses to `array`: the codec decides null before
+            // the field codec runs, so the field codec only ever sees a real array.
+            case IonGenericType { IsArray: true, FixedSize: not null } fixedArray:
+                return $"{{ name: \"{name}\", type: \"{UnwrapTypeForLookup(fixedArray)}\" }}";
+
+            case IonGenericType { IsArray: true } array:
+                return $"{{ name: \"{name}\", type: \"{UnwrapTypeForLookup(array.TypeArguments[0])}\", kind: \"array\" }}";
+
+            case IonGenericType { IsMaybe: true } maybe:
+            {
+                var inner = maybe.TypeArguments[0];
+                if (inner is IonGenericType { IsArray: true, FixedSize: not null } innerFixed)
+                    return $"{{ name: \"{name}\", type: \"{UnwrapTypeForLookup(innerFixed)}\" }}";
+                if (inner is IonGenericType { IsArray: true } innerArray)
+                    return $"{{ name: \"{name}\", type: \"{UnwrapTypeForLookup(innerArray.TypeArguments[0])}\", kind: \"array\" }}";
+
+                var kind = UseMaybeWrapper ? "maybe" : "nullable";
+                return $"{{ name: \"{name}\", type: \"{UnwrapTypeForLookup(inner)}\", kind: \"{kind}\" }}";
+            }
+
+            // Includes Partial<X>, whose lookup name is IonPartial<X>.
+            default:
+                return $"{{ name: \"{name}\", type: \"{UnwrapTypeForLookup(field.type)}\" }}";
+        }
+    }
+
+    /// <summary>Every message reached through a <c>Partial&lt;T&gt;</c>, in first-seen order.</summary>
+    private static List<IonType> CollectPartialTargets(
+        IReadOnlyList<IonType> types, IReadOnlyList<IonService> services)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var targets = new List<IonType>();
+
+        foreach (var type in types)
+        {
+            foreach (var field in type.fields)
+                Visit(field.type);
+
+            if (type is IonUnion union)
+                foreach (var field in union.types.SelectMany(c => c.fields))
+                    Visit(field.type);
+        }
+
+        foreach (var method in services.SelectMany(s => s.methods))
+        {
+            foreach (var argument in method.arguments)
+                Visit(argument.type);
+            Visit(method.returnType);
+        }
+
+        return targets;
+
+        void Visit(IonType type)
+        {
+            if (type is not IonGenericType generic)
+                return;
+
+            if (generic is { IsPartial: true, TypeArguments.Count: > 0 })
+            {
+                // Resolve first: a `T~` reached only through a wrapper (`T~[]`, `T~?`,
+                // `Map<K, T~>`) still carries an IonUnresolvedType here. See IonPartialTargets.
+                var target = IonPartialTargets.Resolve(generic.TypeArguments[0], types);
+                if (target is not null and not (IonEnum or IonFlags or IonUnion or IonUnresolvedType)
+                    && seen.Add(UnwrapType(target)))
+                    targets.Add(target);
+            }
+
+            foreach (var argument in generic.TypeArguments)
+                Visit(argument);
+        }
     }
 
     private static string GenerateFormatterForEnum(IonEnum @enum) =>
@@ -397,6 +833,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         {
             { type: { IsArray: true } } => GenerateReadArrayField(field),
             { type: { IsMaybe: true } } => GenerateReadMaybeField(field),
+            { type: { IsPartial: true } } => GenerateReadPartialField(field),
             _ => $"const {field.name.Identifier} = {FormatterTemplateRef(field.type)}.read(reader);"
         };
 
@@ -405,6 +842,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         {
             { type: { IsArray: true } } => GenerateReadArrayField(argument),
             { type: { IsMaybe: true } } => GenerateReadMaybeField(argument),
+            { type: { IsPartial: true } } => GenerateReadPartialField(argument),
             _ =>
                 $"const {argument.name.Identifier} = {FormatterTemplateRef(argument.type)}.read(reader);"
         };
@@ -415,16 +853,47 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         {
             { type: { IsArray: true } } => GenerateWriteArrayField(argument),
             { type: { IsMaybe: true } } => GenerateWriteMaybeField(argument),
+            { type: { IsPartial: true } } => GenerateWritePartialField(argument),
             _ =>
                 $"{FormatterTemplateRef(argument.type)}.write(writer, {argument.name.Identifier});"
         };
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Partial<T>  ("T~")
+    // ═══════════════════════════════════════════════════════════════════
+    //
+    // A patch is a single value: the formatter registered by
+    // IonFormatterStorage.registerPartial("IonPartial<T>", …) writes the whole CBOR map.
+    // Nothing here is partial-specific beyond the lookup name, which UnwrapType already
+    // spells IonPartial<T> — the point of these arms is that the name can never silently
+    // become TypeScript's built-in `Partial<T>`.
+    //
+    // `Data~[]` / `Data~?` never reach these: Partial is the innermost wrapper, so those
+    // are array/maybe shapes whose element type is Partial<Data>.
+
+    private static string GenerateReadPartialField(ITypeWithName field)
+        => $"const {field.Name.Identifier} = {FormatterTemplateRef(field.Type)}.read(reader);";
+
+    private static string GenerateWritePartialField(ITypeWithName field)
+        => $"{FormatterTemplateRef(field.Type)}.write(writer, {field.Name.Identifier});";
+
+    /// <summary>
+    /// <c>Fixed</c> for a <c>T[N]</c>, <c>""</c> for an unsized <c>T[]</c> — the infix that selects
+    /// the length-checked <c>readFixedArray</c> / <c>writeFixedArray</c> family.
+    /// </summary>
+    private static string FixedInfix(IonGenericType array) => array.FixedSize is null ? "" : "Fixed";
+
+    /// <summary>The trailing <c>, N</c> argument of a fixed-size array call, or <c>""</c>.</summary>
+    private static string FixedLengthArg(IonGenericType array)
+        => array.FixedSize is { } size ? $", {size}" : "";
 
     private static string GenerateReadArrayField(ITypeWithName field)
     {
         if (field.Type is not IonGenericType { IsArray: true } arrayType)
             throw new InvalidOperationException();
+        var element = arrayType.TypeArguments[0];
         return
-            $"const {field.Name.Identifier} = IonFormatterStorage.readArray<{ResolveTypeName(arrayType.TypeArguments[0])}>(reader, '{ResolveTypeName(arrayType.TypeArguments[0])}');";
+            $"const {field.Name.Identifier} = IonFormatterStorage.read{FixedInfix(arrayType)}Array<{ResolveTypeName(element)}>(reader, '{UnwrapTypeForLookup(element)}'{FixedLengthArg(arrayType)});";
     }
 
     private static string GenerateReadMaybeField(ITypeWithName field)
@@ -432,10 +901,13 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         if (field.Type is not IonGenericType { IsMaybe: true } maybeType)
             throw new InvalidOperationException();
         if (maybeType.TypeArguments[0] is IonGenericType { IsArray: true } innerArray)
+        {
+            var element = innerArray.TypeArguments[0];
             return
-                $"const {field.Name.Identifier} = IonFormatterStorage.readNullableArray<{ResolveTypeName(innerArray.TypeArguments[0])}>(reader, '{ResolveTypeName(innerArray.TypeArguments[0])}');";
+                $"const {field.Name.Identifier} = IonFormatterStorage.readNullable{FixedInfix(innerArray)}Array<{ResolveTypeName(element)}>(reader, '{UnwrapTypeForLookup(element)}'{FixedLengthArg(innerArray)});";
+        }
         return
-            $"const {field.Name.Identifier} = IonFormatterStorage.{(UseMaybeWrapper ? "readMaybe" : "readNullable")}<{ResolveTypeName(maybeType.TypeArguments[0])}>(reader, '{ResolveTypeName(maybeType.TypeArguments[0])}');";
+            $"const {field.Name.Identifier} = IonFormatterStorage.{(UseMaybeWrapper ? "readMaybe" : "readNullable")}<{ResolveTypeName(maybeType.TypeArguments[0])}>(reader, '{UnwrapTypeForLookup(maybeType.TypeArguments[0])}');";
     }
 
 
@@ -443,8 +915,9 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
     {
         if (field.Type is not IonGenericType { IsArray: true } arrayType)
             throw new InvalidOperationException();
+        var element = arrayType.TypeArguments[0];
         return
-            $"IonFormatterStorage.writeArray<{ResolveTypeName(arrayType.TypeArguments[0])}>(writer, {field.Name.Identifier}, '{ResolveTypeName(arrayType.TypeArguments[0])}');";
+            $"IonFormatterStorage.write{FixedInfix(arrayType)}Array<{ResolveTypeName(element)}>(writer, {field.Name.Identifier}, '{UnwrapTypeForLookup(element)}'{FixedLengthArg(arrayType)});";
     }
 
     private static string GenerateWriteMaybeField(ITypeWithName field)
@@ -452,10 +925,13 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         if (field.Type is not IonGenericType { IsMaybe: true } maybeType)
             throw new InvalidOperationException();
         if (maybeType.TypeArguments[0] is IonGenericType { IsArray: true } innerArray)
+        {
+            var element = innerArray.TypeArguments[0];
             return
-                $"IonFormatterStorage.writeNullableArray<{ResolveTypeName(innerArray.TypeArguments[0])}>(writer, {field.Name.Identifier}, '{ResolveTypeName(innerArray.TypeArguments[0])}');";
+                $"IonFormatterStorage.writeNullable{FixedInfix(innerArray)}Array<{ResolveTypeName(element)}>(writer, {field.Name.Identifier}, '{UnwrapTypeForLookup(element)}'{FixedLengthArg(innerArray)});";
+        }
         return
-            $"IonFormatterStorage.{(UseMaybeWrapper ? "writeMaybe" : "writeNullable")}<{ResolveTypeName(maybeType.TypeArguments[0])}>(writer, {field.Name.Identifier}, '{ResolveTypeName(maybeType.TypeArguments[0])}');";
+            $"IonFormatterStorage.{(UseMaybeWrapper ? "writeMaybe" : "writeNullable")}<{ResolveTypeName(maybeType.TypeArguments[0])}>(writer, {field.Name.Identifier}, '{UnwrapTypeForLookup(maybeType.TypeArguments[0])}');";
     }
 
     private static string GenerateWriteReturnValue(IonType returnType) =>
@@ -463,6 +939,8 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         {
             { IsArray: true } => GenerateWriteReturnValueForArray(returnType),
             { IsMaybe: true } => GenerateWriteReturnValueForMaybe(returnType),
+            // Partial<T> falls through: FormatterTemplateRef resolves it to
+            // IonFormatterStorage.get<IonPartial<T>>('IonPartial<T>'), which is exactly right.
             _ => $"{FormatterTemplateRef(returnType)}.write(writer, result);"
         };
 
@@ -470,8 +948,12 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
     {
         if (returnType is not IonGenericType { IsArray: true } arrayType)
             throw new InvalidOperationException();
+        var element = arrayType.TypeArguments[0];
+        if (arrayType.FixedSize is { } size)
+            return
+                $"IonFormatterStorage.writeFixedArray<{ResolveTypeName(element)}>(writer, result, '{UnwrapTypeForLookup(element)}', {size});";
         return
-            $"{FormatterTemplateRef(arrayType.TypeArguments.First())}.writeArray(writer, result, '{FormatterTemplateRef(arrayType.TypeArguments.First())}');";
+            $"{FormatterTemplateRef(element)}.writeArray(writer, result, '{FormatterTemplateRef(element)}');";
     }
 
     private static string GenerateWriteReturnValueForMaybe(IonType returnType)
@@ -479,8 +961,11 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         if (returnType is not IonGenericType { IsMaybe: true } maybeType)
             throw new InvalidOperationException();
         if (maybeType.TypeArguments.First() is IonGenericType { IsArray: true } innerArray)
+        {
+            var element = innerArray.TypeArguments[0];
             return
-                $"IonFormatterStorage.writeNullableArray<{ResolveTypeName(innerArray.TypeArguments[0])}>(writer, result, '{ResolveTypeName(innerArray.TypeArguments[0])}');";
+                $"IonFormatterStorage.writeNullable{FixedInfix(innerArray)}Array<{ResolveTypeName(element)}>(writer, result, '{UnwrapTypeForLookup(element)}'{FixedLengthArg(innerArray)});";
+        }
         return
             $"{FormatterTemplateRef(maybeType.TypeArguments.First())}.{(UseMaybeWrapper ? "writeMaybe" : "writeNullable")}(writer, result, '{FormatterTemplateRef(maybeType.TypeArguments.First())}');";
     }
@@ -494,6 +979,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         {
             { type: { IsArray: true } } => GenerateWriteArrayField(field),
             { type: { IsMaybe: true } } => GenerateWriteMaybeField(field),
+            // Partial<T> falls through — see GenerateWriteReturnValue.
             _ => $"{FormatterTemplateRef(field.type)}.write(writer, value.{field.name.Identifier});"
         };
     }
@@ -509,8 +995,9 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
     {
         if (field.type is not IonGenericType { IsArray: true } arrayType)
             throw new InvalidOperationException();
+        var element = arrayType.TypeArguments[0];
         return
-            $"IonFormatterStorage.writeArray<{ResolveTypeName(arrayType.TypeArguments[0])}>(writer, value.{field.name.Identifier}, '{ResolveTypeName(arrayType.TypeArguments[0])}');";
+            $"IonFormatterStorage.write{FixedInfix(arrayType)}Array<{ResolveTypeName(element)}>(writer, value.{field.name.Identifier}, '{UnwrapTypeForLookup(element)}'{FixedLengthArg(arrayType)});";
     }
 
     private static string GenerateWriteMaybeField(IonField field)
@@ -518,10 +1005,13 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         if (field.type is not IonGenericType { IsMaybe: true } maybeType)
             throw new InvalidOperationException();
         if (maybeType.TypeArguments[0] is IonGenericType { IsArray: true } innerArray)
+        {
+            var element = innerArray.TypeArguments[0];
             return
-                $"IonFormatterStorage.writeNullableArray<{ResolveTypeName(innerArray.TypeArguments[0])}>(writer, value.{field.name.Identifier}, '{ResolveTypeName(innerArray.TypeArguments[0])}');";
+                $"IonFormatterStorage.writeNullable{FixedInfix(innerArray)}Array<{ResolveTypeName(element)}>(writer, value.{field.name.Identifier}, '{UnwrapTypeForLookup(element)}'{FixedLengthArg(innerArray)});";
+        }
         return
-            $"IonFormatterStorage.{(UseMaybeWrapper ? "writeMaybe" : "writeNullable")}<{ResolveTypeName(maybeType.TypeArguments[0])}>(writer, value.{field.name.Identifier}, '{ResolveTypeName(maybeType.TypeArguments[0])}');";
+            $"IonFormatterStorage.{(UseMaybeWrapper ? "writeMaybe" : "writeNullable")}<{ResolveTypeName(maybeType.TypeArguments[0])}>(writer, value.{field.name.Identifier}, '{UnwrapTypeForLookup(maybeType.TypeArguments[0])}');";
     }
 
     private static IReadOnlyList<IonType> TopoSortByDependencies(IReadOnlyList<IonType> types)
@@ -602,6 +1092,68 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
           }
         """;
 
+    /// <summary>
+    /// <c>T[]?</c> — <c>Maybe&lt;Array&lt;T&gt;&gt;</c>.
+    /// </summary>
+    /// <remarks>
+    /// This shape used to reuse <see cref="ServiceClientMethodDeclNullable"/>, which is wrong twice
+    /// over: <c>callAsyncNullableT&lt;T&gt;</c> is typed <c>Promise&lt;T | null&gt;</c> against a
+    /// declared <c>Promise&lt;IonArray&lt;T&gt; | null&gt;</c> (a type error), and at runtime it
+    /// decodes one element instead of the array. <c>callAsyncNullableArrayT</c> is the
+    /// transport-side counterpart of the <c>X[]?</c> field path's
+    /// <c>IonFormatterStorage.readNullableArray</c>.
+    /// </remarks>
+    private static readonly string ServiceClientMethodDeclNullableArray =
+        """
+        {methodDoc}  async {methodName}({args}): Promise<{methodReturnType}> {
+            const req = new IonRequest(this.ctx, "I{serviceTypename}", "{methodName}");
+
+            const writer = new CborWriter();
+
+            writer.writeStartArray({argSize});
+
+            {argsWrite}
+
+            writer.writeEndArray();
+
+            return await req.callAsyncNullableArrayT<{methodReturnTypeInner}>("{methodReturnTypeInner}", writer.data, this.signal);
+          }
+        """;
+
+    /// <summary>
+    /// <c>T[N]?</c> — <c>Maybe&lt;Array&lt;T, N&gt;&gt;</c>.
+    /// </summary>
+    /// <remarks>
+    /// Neither array neighbour fits. <see cref="ServiceClientMethodDeclNullableArray"/> calls
+    /// <c>callAsyncNullableArrayT</c>, which is <c>readNullableArray</c> over the <em>element</em>
+    /// name and therefore accepts any length — the one thing <c>T[N]</c> exists to reject. The
+    /// whole fixed array is a single registered formatter instead (<c>f4[16]</c>), so the plain
+    /// nullable call resolves it and the length check happens inside it. That is also why the type
+    /// and the lookup name are two placeholders here: <c>f4[16]</c> is a formatter name, not a
+    /// TypeScript type.
+    /// <para>
+    /// The non-nullable <c>T[N]</c> needs no template of its own —
+    /// <see cref="ServiceClientMethodDecl"/> already keeps the two apart as
+    /// <c>{methodReturnType}</c> and <c>{methodReturnTypeLookup}</c>.
+    /// </para>
+    /// </remarks>
+    private static readonly string ServiceClientMethodDeclNullableFixedArray =
+        """
+        {methodDoc}  async {methodName}({args}): Promise<{methodReturnType}> {
+            const req = new IonRequest(this.ctx, "I{serviceTypename}", "{methodName}");
+
+            const writer = new CborWriter();
+
+            writer.writeStartArray({argSize});
+
+            {argsWrite}
+
+            writer.writeEndArray();
+
+            return await req.callAsyncNullableT<{methodReturnTypeInner}>("{methodReturnTypeInnerLookup}", writer.data, this.signal);
+          }
+        """;
+
     private static readonly string ServiceClientMethodDeclNoReturn =
         """
         {methodDoc}  async {methodName}({args}): Promise<void> {
@@ -662,9 +1214,15 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
                     ? ServiceClientMethodDeclStream
                     : method.returnType.IsVoid
                         ? ServiceClientMethodDeclNoReturn
-                        : method.returnType.IsMaybe
-                            ? ServiceClientMethodDeclNullable
-                            : ServiceClientMethodDecl;
+                        // Before IsNullableArray, which `T[N]?` also answers: taking the unsized
+                        // branch would drop the length check silently rather than fail to compile.
+                        : IsNullableFixedArray(method.returnType)
+                            ? ServiceClientMethodDeclNullableFixedArray
+                            : IsNullableArray(method.returnType)
+                                ? ServiceClientMethodDeclNullableArray
+                                : method.returnType.IsMaybe
+                                    ? ServiceClientMethodDeclNullable
+                                    : ServiceClientMethodDecl;
 
             if (inputStreamType is not null)
                 template = template.Replace("{streamReturnTemplate}",
@@ -673,9 +1231,17 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
                 template = template.Replace("{streamReturnTemplate}",
                     "ws.callServerStreaming<{methodReturnType}>(\"{methodReturnTypeLookup}\", writer.data, this.signal)");
 
+            // TypeScript cannot narrow the visibility of a member the `implements I{Service}`
+            // clause requires, so an internal method stays on the class and is marked `@internal`
+            // instead: `tsc --stripInternal` drops it from the emitted .d.ts, which is the
+            // published client surface.
+            var methodDoc = MethodDoc(method, new string(' ', 2), ClientArgumentDocName);
+            if (method.IsInternal())
+                methodDoc = InternalJsDoc(methodDoc, new string(' ', 2));
+
             var templateMethod =
                 template
-                    .Replace("{methodDoc}", MethodDoc(method, new string(' ', 2), ClientArgumentDocName))
+                    .Replace("{methodDoc}", methodDoc)
                     .Replace("{serviceTypename}", serviceTypename)
                     .Replace("{methodName}", methodName)
                     .Replace("{argSize}", argSize.ToString())
@@ -692,10 +1258,23 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
                 if (method.returnType is IonGenericType { IsMaybe: true } maybeRet)
                 {
                     var innerType = maybeRet.TypeArguments[0];
-                    var innerTypeName = innerType is IonGenericType { IsArray: true } innerArr
-                        ? UnwrapType(innerArr.TypeArguments[0])
-                        : UnwrapType(innerType);
-                    templateMethod = templateMethod.Replace("{methodReturnTypeInner}", innerTypeName);
+
+                    // `T[N]?` keeps the WHOLE array as the transport's unit — the fixed formatter
+                    // is registered under one name and is what checks the length — while `T[]?`
+                    // hands callAsyncNullableArrayT the element, which is what readNullableArray
+                    // wants. Peeling in the fixed case would reinstate the unsized read.
+                    var (innerTypeName, innerLookupName) = innerType switch
+                    {
+                        IonGenericType { IsArray: true, FixedSize: not null } innerFixed =>
+                            (UnwrapType(innerFixed), UnwrapTypeForLookup(innerFixed)),
+                        IonGenericType { IsArray: true } innerArr =>
+                            (UnwrapType(innerArr.TypeArguments[0]), UnwrapTypeForLookup(innerArr.TypeArguments[0])),
+                        _ => (UnwrapType(innerType), UnwrapTypeForLookup(innerType))
+                    };
+
+                    templateMethod = templateMethod
+                        .Replace("{methodReturnTypeInnerLookup}", innerLookupName)
+                        .Replace("{methodReturnTypeInner}", innerTypeName);
                 }
             }
 
@@ -704,7 +1283,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         }
 
         return builder
-            .Replace("{serviceDoc}", Doc(service.Doc))
+            .Replace("{serviceDoc}", Doc(service.Doc, attributes: service.attributes))
             .Replace("{MethodInfoDecls}", methodInfoDecl.ToString())
             .Replace("{body}", methodsBuilder.ToString())
             .Replace("{serviceTypename}", serviceTypename);
@@ -754,7 +1333,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 
         var unionInterface =
             Union_InterfaceBody
-                .Replace("{unionDoc}", Doc(union.Doc))
+                .Replace("{unionDoc}", Doc(union.Doc, attributes: union.attributes))
                 .Replace("{unionName}", union.name.Identifier)
                 .Replace("{checks}", checkBuilder.ToString())
                 .Replace("{abstractSharedFields}", absBuilder.ToString());
@@ -802,7 +1381,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
             builder.AppendLine();
             builder.AppendLine(Union_CaseBody
                 .Replace("{caseDoc}",
-                    Doc(type.Doc, "", type.fields.Select(f => new DocParam(f.name.Identifier, f.Doc)).ToList()))
+                    Doc(type.Doc, "", type.fields.Select(f => new DocParam(f.name.Identifier, f.Doc)).ToList(), type.attributes))
                 .Replace("{fields}", fields.ToString())
                 .Replace("{caseTypeName}", type.name.Identifier)
                 .Replace("{unionName}", union.name.Identifier)

@@ -35,7 +35,7 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
       "fields": [
         {'{'} "index": 0, "name": "id", "type": "u4" {'}'},
         {'{'} "index": 1, "name": "name", "type": "string" {'}'},
-        {'{'} "index": 2, "name": "email", "type": "Maybe<string>" {'}'}
+        {'{'} "index": 2, "name": "email", "type": "Maybe&lt;string&gt;" {'}'}
       ]
     {'}'},
     "UserService": {'{'}
@@ -153,6 +153,57 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
         <li>Adding new members to an enum or flags (at the end)</li>
         <li>Adding new union cases (at the end)</li>
         <li>Adding entirely new types/services/definitions</li>
+        <li>Adding, renaming or removing a <a href="/guides/typedefs/" class="text-accent hover:underline">typedef</a> — see below</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 id="typedefs" class="text-xl font-bold mb-4">Typedefs Are Not Locked</h2>
+      <p class="text-sm text-text-secondary mb-3">A typedef is a transparent alias, erased before the lock is generated, so it has <strong>no entry in <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">definitions</code></strong> at all. What the lock records is the <em>underlying</em> type at every use site.</p>
+      <p class="text-sm text-text-secondary mb-3">Two consequences:</p>
+      <ul class="list-disc list-inside space-y-1 text-sm text-text-secondary mb-3">
+        <li>Adding, renaming or deleting a typedef leaves the lock byte-identical and does not bump the lock version.</li>
+        <li>Repointing a typedef is reported against each field that used it. Changing <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">typedef UserId = u4</code> to <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">= u8</code> raises <a href="/guides/diagnostics/#ION0022" class="text-accent hover:underline">ION0022</a> once per affected field, naming the messages rather than the alias.</li>
+      </ul>
+      <p class="text-sm text-text-secondary">This is the intended behaviour: the wire contract is what the lock guards, and an alias is not part of the wire contract.</p>
+    </section>
+
+    <section>
+      <h2 id="canonical-names" class="text-xl font-bold mb-4">Canonical Type Names</h2>
+      <p class="text-sm text-text-secondary mb-4">Every <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">type</code> string in the lock is written in one uniform shape — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Name</code> or <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Name&lt;args&gt;</code> — never in the suffix spelling the source used. A reader and a differ only ever have to know that one form:</p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-oled-border-subtle">
+              <th class="text-left py-2 px-3 text-text-muted font-medium">Written in <code class="font-mono">.ion</code></th>
+              <th class="text-left py-2 px-3 text-text-muted font-medium">Recorded in the lock</th>
+            </tr>
+          </thead>
+          <tbody class="text-text-secondary">
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono text-xs type-keyword">string?</td><td class="py-2 px-3 font-mono text-xs">Maybe&lt;string&gt;</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono text-xs type-keyword">User[]</td><td class="py-2 px-3 font-mono text-xs">Array&lt;User&gt;</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono text-xs type-keyword">User~</td><td class="py-2 px-3 font-mono text-xs">Partial&lt;User&gt;</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono text-xs type-keyword">Map&lt;string, Document&gt;</td><td class="py-2 px-3 font-mono text-xs">Map&lt;string, Document&gt;</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono text-xs type-keyword">Set&lt;i4&gt;</td><td class="py-2 px-3 font-mono text-xs">Set&lt;i4&gt;</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono text-xs type-keyword">f4[16]</td><td class="py-2 px-3 font-mono text-xs">Array&lt;f4, 16&gt;</td></tr>
+            <tr><td class="py-2 px-3 font-mono text-xs type-keyword">f4[16]?</td><td class="py-2 px-3 font-mono text-xs">Maybe&lt;Array&lt;f4, 16&gt;&gt;</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-sm text-text-secondary mt-4">A fixed-size array's length is written <em>inside</em> the angle brackets rather than as a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">[16]</code> suffix, so that the one <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Name&lt;args&gt;</code> shape still holds in nested position. A suffix form would have to be parsed back out of the middle of a string.</p>
+
+      <div class="glass rounded-xl p-4 mt-4 border-l-2 border-status-degraded/40">
+        <p class="text-sm font-medium mb-1">Changing <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">N</code> is a breaking change</p>
+        <p class="text-xs text-text-secondary">Because the size is part of the recorded type, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">f4[16]</code> → <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">f4[8]</code> is <a href="/guides/diagnostics/#ION0022" class="text-accent hover:underline">ION0022</a>, exactly like changing the element type. It has to be: an old writer emits 16 elements and a new reader demands 8, and the decode fails outright. This is also why the size is recorded at all — without it <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Array&lt;f4&gt;</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Array&lt;f4, 16&gt;</code> would print identically and the change would be invisible.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="mixins-inline" class="text-xl font-bold mb-4">Mixins and Inline Types</h2>
+      <p class="text-sm text-text-secondary mb-3">Two declaration forms sit on opposite sides of the lock boundary:</p>
+      <ul class="list-disc list-inside space-y-2 text-sm text-text-secondary mb-3">
+        <li>A <a href="/guides/mixins/" class="text-accent hover:underline"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">mixin</code></a> gets <strong>no entry</strong>, like a typedef. It has no wire identity — what the lock sees is the <em>expanded</em> field list of each message that includes it. So adding a field to a mixin is invisible on the mixin and appears as <a href="/guides/diagnostics/#ION0021" class="text-accent hover:underline">ION0021</a> on every includer, because the mixin's fields sit ahead of the includer's own and everything after them shifts index.</li>
+        <li>A hoisted <a href="/guides/inline-types/" class="text-accent hover:underline">inline type</a> gets a <strong>full entry</strong> under its derived <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'{'}Owner{'}'}{'{'}PascalCasedFieldName{'}'}</code> name, indistinguishable from a message you declared by hand. Renaming the field therefore renames the type, which reads as <a href="/guides/diagnostics/#ION0023" class="text-accent hover:underline">ION0023</a> (definition removed) on top of the <a href="/guides/diagnostics/#ION0020" class="text-accent hover:underline">ION0020</a> the field rename produces anyway.</li>
       </ul>
     </section>
 

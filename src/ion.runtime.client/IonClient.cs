@@ -616,6 +616,25 @@ public class IonRequest(IonClientContext context, Type interfaceName, MethodInfo
             IonFormatterStorage<TResponse>.ReadArray,
             ct);
 
+    /// <summary>
+    /// Reads a <c>T[]?</c> response — <c>Maybe&lt;Array&lt;T&gt;&gt;</c>.
+    /// </summary>
+    /// <remarks>
+    /// The <typeparamref name="TResponse"/> is the array <em>element</em>, matching
+    /// <see cref="CallAsyncWithArray{TResponse}"/>. Neither neighbour can serve this shape:
+    /// <see cref="CallAsyncWithArray{TResponse}"/> cannot produce <c>null</c>, and
+    /// <c>CallAsyncNullable&lt;IonArray&lt;T&gt;&gt;</c> would need a formatter registered for
+    /// <c>IonArray&lt;T&gt;</c> itself, which nothing registers. Mirrors
+    /// <c>IonUnaryRequest.callAsyncNullableArrayT</c> in ion.webcore.js.
+    /// </remarks>
+    public Task<IonArray<TResponse>?> CallAsyncNullableArray<TResponse>(
+        ReadOnlyMemory<byte> payload,
+        CancellationToken ct = default)
+        => CallCoreAsync<TResponse, IonArray<TResponse>?>(
+            payload,
+            IonFormatterStorage<TResponse>.ReadNullableArray,
+            ct);
+
     public Task<TResponse?> CallAsyncNullable<TResponse>(
         ReadOnlyMemory<byte> payload,
         _StructTag<TResponse> _ = default,

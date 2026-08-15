@@ -1,0 +1,3 @@
+# Wire dumps written by the three runtimes' golden test suites for the cross-runtime
+# byte-equality diff. Generated artefacts, not vectors.
+.dump/

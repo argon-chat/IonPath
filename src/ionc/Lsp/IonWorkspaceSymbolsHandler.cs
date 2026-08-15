@@ -73,6 +73,13 @@ public class IonWorkspaceSymbolsHandler(IonWorkspace workspace) : WorkspaceSymbo
                 if (Matches(attr.Name.Identifier, query))
                     symbols.Add(MakeSymbol(attr.Name.Identifier, SymbolKind.Property, fileUri, attr));
             }
+
+            // `Interface`, matching the document outline: a mixin is a contract, not a value type.
+            foreach (var mixin in file.mixinSyntaxes)
+            {
+                if (Matches(mixin.Name.Identifier, query))
+                    symbols.Add(MakeSymbol(mixin.Name.Identifier, SymbolKind.Interface, fileUri, mixin));
+            }
         }
 
         return Task.FromResult<Container<WorkspaceSymbol>?>(new Container<WorkspaceSymbol>(symbols));

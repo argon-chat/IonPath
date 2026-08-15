@@ -1,96 +1,509 @@
 ---
 import DocsLayout from '../../layouts/DocsLayout.astro';
+
+const toc = [
+  { id: 'declaring', title: 'Declaring an attribute' },
+  { id: 'applying', title: 'Applying an attribute' },
+  { id: 'literals', title: 'Literal syntax' },
+  { id: 'named', title: 'Named arguments' },
+  { id: 'optional', title: 'Optional parameters' },
+  { id: 'targets', title: 'Targets — the on clause' },
+  { id: 'builtin', title: 'Built-in attributes' },
+  { id: 'deprecated', title: 'Deprecation' },
+  { id: 'generated', title: 'Generated output' },
+  { id: 'diagnostics', title: 'Diagnostics' },
+];
 ---
 
-<DocsLayout title="Attributes — IonPath" current="/guides/attributes/">
+<DocsLayout title="Attributes — IonPath" current="/guides/attributes/" toc={toc}>
   <div class="animate-fade-in-up">
     <h1 class="text-3xl font-bold tracking-tight mb-2">Attributes</h1>
-    <p class="text-text-secondary mb-8">Attributes are annotations that attach metadata to types, fields, and methods. IonPath supports both built-in and custom attributes.</p>
+    <p class="text-text-secondary mb-8">An attribute attaches typed metadata to a declaration. Every attribute must be declared before it is used, its arguments are checked against that declaration for count, name, type and range, and its <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">on</code> clause decides which kinds of declaration may carry it.</p>
   </div>
 
   <div class="space-y-12 animate-fade-in-up-delay-1">
 
     <section>
-      <h2 id="declaring" class="text-xl font-bold mb-4">Declaring Custom Attributes</h2>
-      <p class="text-sm text-text-secondary mb-4">Declare a custom attribute with the <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">attribute</code> keyword:</p>
+      <h2 id="declaring" class="text-xl font-bold mb-4">Declaring an attribute</h2>
+      <p class="text-sm text-text-secondary mb-4">A declaration is the <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">attribute</code> keyword, an <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}name</code>, a parameter list, an optional <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">on</code> clause, and a semicolon:</p>
       <div class="code-block text-[13px]">
-        <pre><span class="text-accent-3">attribute</span> <span class="type-name">{'@'}deprecated</span>(version: <span class="type-keyword">string</span>, reason: <span class="type-keyword">string</span>);
-<span class="text-accent-3">attribute</span> <span class="type-name">{'@'}description</span>(text: <span class="type-keyword">string</span>);
-<span class="text-accent-3">attribute</span> <span class="type-name">{'@'}maxLength</span>(n: <span class="type-keyword">i4</span>);</pre>
+        <pre><span class="text-accent-3">attribute</span> <span class="type-name">{'@'}description</span>(text: <span class="type-keyword">string</span>);
+<span class="text-accent-3">attribute</span> <span class="type-name">{'@'}length</span>(min: <span class="type-keyword">u4</span>, max: <span class="type-keyword">u4</span>) <span class="text-accent-3">on</span> field;
+<span class="text-accent-3">attribute</span> <span class="type-name">{'@'}retry</span>(maxAttempts: <span class="type-keyword">u1</span>, backoffMs: <span class="type-keyword">u4</span>?) <span class="text-accent-3">on</span> method, service;
+<span class="text-accent-3">attribute</span> <span class="type-name">{'@'}marker</span>();</pre>
       </div>
-      <p class="text-sm text-text-secondary mt-3">Attribute arguments can only be <strong>scalar types</strong> — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">string</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">i4</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">bool</code>, etc. Using a non-scalar type triggers <a href="/guides/diagnostics/" class="text-accent hover:underline">ION0004</a>.</p>
-    </section>
+      <p class="text-sm text-text-secondary mt-3">The parentheses are <strong>not optional in a declaration</strong>, even when there are no parameters — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">attribute {'@'}marker;</code> is a parse error, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">attribute {'@'}marker();</code> is the form. At the <em>use</em> site they are optional in exactly the opposite way: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}marker</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}marker()</code> are both accepted.</p>
 
-    <section>
-      <h2 id="applying" class="text-xl font-bold mb-4">Applying Attributes</h2>
-      <p class="text-sm text-text-secondary mb-4">Apply attributes with the <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">@</code> prefix before a declaration:</p>
-      <div class="code-block text-[13px]">
-        <pre><span class="text-accent-3">{'@'}deprecated</span>(<span class="text-accent-2">"2.0"</span>, <span class="text-accent-2">"Use UserV2 instead"</span>)
-<span class="text-accent-3">msg</span> <span class="type-name">User</span> {'{'}
-    <span class="text-accent-3">{'@'}description</span>(<span class="text-accent-2">"The unique user identifier"</span>)
-    id: <span class="type-keyword">u4</span>;
-    name: <span class="type-keyword">string</span>;
-{'}'}
-
-<span class="text-accent-3">{'@'}deprecated</span>(<span class="text-accent-2">"3.0"</span>, <span class="text-accent-2">"Use NewService"</span>)
-<span class="text-accent-3">service</span> <span class="type-name">OldService</span>() {'{'}
-    DoThing(): <span class="type-keyword">void</span>;
-{'}'}</pre>
+      <div class="mt-4 flex items-start gap-3 rounded-xl border border-status-down/20 bg-status-down-subtle p-4">
+        <span class="text-status-down text-sm mt-0.5">✕</span>
+        <div>
+          <p class="text-sm font-medium mb-1">You cannot redeclare a std attribute</p>
+          <p class="text-sm text-text-secondary">Attribute resolution consults the standard library before anything the project declares, so a declaration that reuses a std name is <em>unreachable</em> — every use of that name still binds to the built-in signature. Writing <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">attribute {'@'}deprecated(x: string);</code> used to be a silent no-op: it parsed, it was accepted, and it changed nothing, so a use that matched your signature but not the built-in one failed with a confusing arity or type error pointing at the use site.</p>
+          <p class="text-sm text-text-secondary mt-2">It is now reported on the declaration, for the same reason and in the same style as <a href="/guides/diagnostics/#ION0031" class="text-accent hover:underline">ION0031</a> reports a type that shadows a builtin: a declaration nothing can reach is a mistake, not a redefinition. Pick a different name. The names this applies to are the built-ins listed under <a href="#builtin" class="text-accent hover:underline">Built-in attributes</a> below, and only while the feature that declares them is enabled — an <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">orleans</code>-gated name is free in a project that does not enable <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">orleans</code>.</p>
+        </div>
       </div>
-    </section>
 
-    <section>
-      <h2 id="builtin" class="text-xl font-bold mb-4">Built-in Attributes</h2>
-      <p class="text-sm text-text-secondary mb-4">These attributes are provided by the standard library and used internally by the compiler:</p>
+      <h3 class="text-lg font-semibold mt-8 mb-3">Which types a parameter may have</h3>
+      <p class="text-sm text-text-secondary mb-3">A parameter's type must be a standard builtin that has a literal form, optionally suffixed with <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">[]</code> and/or <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">?</code>:</p>
       <div class="type-grid">
         <div class="type-grid-header">
-          <span>Attribute</span>
-          <span>Description</span>
+          <span>Allowed</span>
+          <span>Notes</span>
         </div>
         <div class="type-grid-row">
-          <span class="font-mono text-[12px] type-keyword">{'@'}builtin</span>
-          <span class="text-[12px] text-text-secondary">Marks a type as part of the standard library. Internal use only.</span>
+          <span class="font-mono text-[12px] type-keyword">bool</span>
+          <span class="text-[12px] text-text-secondary">Written <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">true</code> / <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">false</code>.</span>
         </div>
         <div class="type-grid-row">
-          <span class="font-mono text-[12px] type-keyword">{'@'}scalar</span>
-          <span class="text-[12px] text-text-secondary">Marks a type as scalar (no indirection). Used for primitives.</span>
+          <span class="font-mono text-[12px] type-keyword">i1 i2 i4 i8 i16 · u1 u2 u4 u8 u16 · bigint</span>
+          <span class="text-[12px] text-text-secondary">Integer literal, range-checked against the declared width (<a href="/guides/diagnostics/#ION0034" class="text-accent hover:underline">ION0034</a>). <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">bigint</code> has no range.</span>
         </div>
         <div class="type-grid-row">
-          <span class="font-mono text-[12px] type-keyword">{'@'}tag(n)</span>
-          <span class="text-[12px] text-text-secondary">CBOR tag annotation — wraps the encoded value with a CBOR tag number.</span>
+          <span class="font-mono text-[12px] type-keyword">f2 f4 f8</span>
+          <span class="text-[12px] text-text-secondary">Float literal, or an integer literal that widens into it.</span>
         </div>
         <div class="type-grid-row">
-          <span class="font-mono text-[12px] type-keyword">{'@'}deadline(ms)</span>
-          <span class="text-[12px] text-text-secondary">Request timeout in milliseconds. Applied to service methods.</span>
+          <span class="font-mono text-[12px] type-keyword">string</span>
+          <span class="text-[12px] text-text-secondary">String literal.</span>
         </div>
         <div class="type-grid-row">
-          <span class="font-mono text-[12px] type-keyword">{'@'}deprecated</span>
-          <span class="text-[12px] text-text-secondary">Marks a type, field, or method as deprecated.</span>
+          <span class="font-mono text-[12px] type-keyword">guid datetime dateonly timeonly uri duration</span>
+          <span class="text-[12px] text-text-secondary">Written as a <em>string literal</em> and parsed with the invariant culture. An unparseable value is <a href="/guides/diagnostics/#ION0033" class="text-accent hover:underline">ION0033</a>, not a parse error.</span>
         </div>
         <div class="type-grid-row">
-          <span class="font-mono text-[12px] type-keyword">{'@'}internal</span>
-          <span class="text-[12px] text-text-secondary">Marks a declaration as internal/hidden.</span>
+          <span class="font-mono text-[12px] type-keyword">T[] · T? · T[]?</span>
+          <span class="text-[12px] text-text-secondary">Any of the above, arrayed and/or made optional.</span>
+        </div>
+      </div>
+      <p class="text-sm text-text-secondary mt-4">Everything else is rejected in the <em>declaration</em>, not at each use site:</p>
+      <div class="type-grid mt-4">
+        <div class="type-grid-header">
+          <span>Rejected</span>
+          <span>Why, and which code</span>
         </div>
         <div class="type-grid-row">
-          <span class="font-mono text-[12px] type-keyword">{'@'}bits(n)</span>
-          <span class="text-[12px] text-text-secondary">Specifies the bit count for numeric types.</span>
+          <span class="font-mono text-[12px] type-keyword">void · bytes</span>
+          <span class="text-[12px] text-text-secondary">Builtins with no literal syntax, so no use site could ever supply one — <a href="/guides/diagnostics/#ION0004" class="text-accent hover:underline">ION0004</a>.</span>
         </div>
         <div class="type-grid-row">
-          <span class="font-mono text-[12px] type-keyword">{'@'}union</span>
-          <span class="text-[12px] text-text-secondary">Automatically applied to union types.</span>
+          <span class="font-mono text-[12px] type-keyword">Maybe Array Partial</span>
+          <span class="text-[12px] text-text-secondary">Named bare, they are wrappers with nothing to wrap — <a href="/guides/diagnostics/#ION0004" class="text-accent hover:underline">ION0004</a>. Write <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T?</code> / <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T[]</code> instead.</span>
         </div>
         <div class="type-grid-row">
-          <span class="font-mono text-[12px] type-keyword">{'@'}unionCase</span>
-          <span class="text-[12px] text-text-secondary">Automatically applied to union case types.</span>
+          <span class="font-mono text-[12px] type-keyword">T~</span>
+          <span class="text-[12px] text-text-secondary">A <a href="/guides/partial/" class="text-accent hover:underline">partial</a> is a runtime patch object; it has no constant form — <a href="/guides/diagnostics/#ION0004" class="text-accent hover:underline">ION0004</a>.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]">a msg, enum, flags, union or typedef name</span>
+          <span class="text-[12px] text-text-secondary">Attribute declarations are lowered before any other definition exists, so the name cannot be resolved there at all — <a href="/guides/diagnostics/#ION0003" class="text-accent hover:underline">ION0003</a>.</span>
+        </div>
+      </div>
+
+      <div class="glass rounded-xl p-4 mt-4 border-l-2 border-accent/40">
+        <p class="text-sm font-medium mb-1">A rejected parameter keeps its slot</p>
+        <p class="text-xs text-text-secondary">A parameter whose type was rejected is still counted. Dropping it would renumber every parameter after it and turn one declaration error into an arity error at every use site, so the declaration reports once and use sites stay quiet about that slot.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="applying" class="text-xl font-bold mb-4">Applying an attribute</h2>
+      <p class="text-sm text-text-secondary mb-4">Write <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}name</code> before the declaration it annotates. Several attributes may stack, and they may be interleaved with <a href="/guides/comments/" class="text-accent hover:underline">doc comments</a> in any order:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">attribute</span> <span class="type-name">{'@'}description</span>(text: <span class="type-keyword">string</span>);
+<span class="text-accent-3">attribute</span> <span class="type-name">{'@'}length</span>(min: <span class="type-keyword">u4</span>, max: <span class="type-keyword">u4</span>) <span class="text-accent-3">on</span> field;
+
+<span class="text-accent-3">{'@'}description</span>(<span class="text-accent-2">"A user account."</span>)
+<span class="text-accent-3">msg</span> <span class="type-name">User</span> {'{'}
+    <span class="text-accent-2">/// Stable identity.</span>
+    <span class="text-accent-3">{'@'}description</span>(<span class="text-accent-2">"Never reused."</span>)
+    id: <span class="type-keyword">u4</span>;
+
+    <span class="text-accent-3">{'@'}length</span>(3, 32)
+    name: <span class="type-keyword">string</span>;
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">The argument list is fully lexed: string literals, nested array literals and comments inside the parentheses are all understood, so a comma inside a string no longer splits an argument. A <strong>trailing comma is rejected</strong>, matching every other comma-separated list in the language, and an unclosed <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">(</code> is a parse error rather than degrading to "attribute with no arguments".</p>
+      <div class="code-block text-[13px] mt-4">
+        <pre><span class="text-accent-3">{'@'}description</span>(<span class="text-accent-2">"Names may contain commas, e.g. \"Smith, J\""</span>)   <span class="text-text-muted">// one argument</span>
+<span class="text-accent-3">{'@'}length</span>(3, <span class="text-text-muted">/* upper bound */</span> 32)                          <span class="text-text-muted">// two arguments</span>
+<span class="text-accent-3">{'@'}length</span>(3, 32,)                                            <span class="text-status-down">// parse error: trailing comma</span></pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="literals" class="text-xl font-bold mb-4">Literal syntax</h2>
+      <p class="text-sm text-text-secondary mb-4">An argument is always a literal. This is the complete grammar — there is no arithmetic, and a bare identifier is not accepted, because a constant reference has no syntax yet.</p>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Form</span>
+          <span>Examples and rules</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-property">Integer</span>
+          <span class="text-[12px] text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">42</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">-7</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">0xFF</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">0b1010</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">1_000_000</code>. Hex accepts <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">0x</code> or <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">0X</code>, binary <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">0b</code> or <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">0B</code>. A <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">_</code> separator must sit between digits — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">1_</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">_1</code> do not parse. The spelling you wrote is preserved, so a diagnostic echoes <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">0xFF</code> back rather than <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">255</code>.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-property">Float</span>
+          <span class="text-[12px] text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">1.5</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">-0.25</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">1e10</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">1.5e-3</code>. A leading-dot <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">.5</code> and a trailing-dot <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">1.</code> are both rejected: the fraction is only recognised when the <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">.</code> is directly followed by a digit, which is what keeps the dot of <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Status.Active</code> from being swallowed.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-property">String</span>
+          <span class="text-[12px] text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">"text"</code>. Escapes are <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">\"</code> <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">\\</code> <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">\n</code> <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">\r</code> <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">\t</code> <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">\0</code> <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">\uXXXX</code> (exactly four hex digits); anything else after a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">\</code> is an error. A raw line break cannot appear inside a string, so an unterminated one is reported on its own line instead of swallowing the rest of the file.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-property">Boolean</span>
+          <span class="text-[12px] text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">true</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">false</code>. Terminated by a word boundary, so <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">trueish</code> is an identifier and not a boolean.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-property">Null</span>
+          <span class="text-[12px] text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">null</code>. Legal only in a slot declared <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T?</code>; see <a href="#optional" class="text-accent hover:underline">optional parameters</a>.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-property">Array</span>
+          <span class="text-[12px] text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">[1, 2, 3]</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">[]</code>, nested up to 32 levels. No trailing comma.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-property">Enum reference</span>
+          <span class="text-[12px] text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Status.Active</code> — <strong>parses, but never binds.</strong> See the note below.</span>
+        </div>
+      </div>
+
+      <div class="mt-4 flex items-start gap-3 rounded-xl border border-status-degraded/20 bg-status-degraded-subtle p-4">
+        <span class="text-status-degraded text-sm mt-0.5">⚠</span>
+        <p class="text-sm text-text-secondary"><strong>An enum reference is grammar-only today.</strong> <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Status.Active</code> is a well-formed literal and the parser produces a node for it, but no attribute parameter can have an enum type — parameter types are restricted to std builtins. Writing one therefore always ends in <a href="/guides/diagnostics/#ION0033" class="text-accent hover:underline">ION0033</a>. The form exists because the literal grammar is shared, and it is where enum constants will land when default values arrive.</p>
+      </div>
+
+      <p class="text-sm text-text-secondary mt-4">Also deliberately not accepted: a bare identifier (a constant reference), and a sign separated from its digits — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">- 5</code> is a parse error, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">-5</code> is not.</p>
+    </section>
+
+    <section>
+      <h2 id="named" class="text-xl font-bold mb-4">Named arguments</h2>
+      <p class="text-sm text-text-secondary mb-4">An argument may be given by name, in any order:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">attribute</span> <span class="type-name">{'@'}cache</span>(duration: <span class="type-keyword">i4</span>, key: <span class="type-keyword">string</span>) <span class="text-accent-3">on</span> msg;
+
+<span class="text-accent-3">{'@'}cache</span>(300, <span class="text-accent-2">"user"</span>)                    <span class="text-text-muted">// positional</span>
+<span class="text-accent-3">{'@'}cache</span>(duration: 300, key: <span class="text-accent-2">"user"</span>)   <span class="text-text-muted">// named</span>
+<span class="text-accent-3">{'@'}cache</span>(key: <span class="text-accent-2">"user"</span>, duration: 300)   <span class="text-text-muted">// named, reordered — identical</span>
+<span class="text-accent-3">{'@'}cache</span>(300, key: <span class="text-accent-2">"user"</span>)               <span class="text-text-muted">// mixed: positional first</span></pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">The C# rule applies: <strong>once an argument is named, every argument after it must be named too.</strong> A positional argument following a named one is <a href="/guides/diagnostics/#ION0037" class="text-accent hover:underline">ION0037</a>. Supplying the same parameter twice — twice by name, or once positionally and again by name — is <a href="/guides/diagnostics/#ION0036" class="text-accent hover:underline">ION0036</a>, and a name that matches no parameter is <a href="/guides/diagnostics/#ION0035" class="text-accent hover:underline">ION0035</a>, with a "did you mean" suggestion when one is close enough.</p>
+      <div class="code-block text-[13px] mt-4">
+        <pre><span class="text-accent-3">{'@'}cache</span>(key: <span class="text-accent-2">"user"</span>, 300)     <span class="text-status-down">// ION0037 — positional after named</span>
+<span class="text-accent-3">{'@'}cache</span>(300, duration: 60)      <span class="text-status-down">// ION0036 — already supplied positionally</span>
+<span class="text-accent-3">{'@'}cache</span>(300, keyy: <span class="text-accent-2">"user"</span>)     <span class="text-status-down">// ION0035 — did you mean 'key'?</span></pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">Ordering is a <em>semantic</em> rule rather than a grammar one on purpose: the parser accepts the mistake so that the compiler can say "positional argument 2 follows a named argument" instead of failing with an unhelpful "expected <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">)</code>".</p>
+      <p class="text-sm text-text-secondary mt-3">However they are written, arguments are normalised into declaration order before anything downstream sees them, so <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}cache(key: "user", duration: 300)</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}cache(300, "user")</code> produce byte-identical generated code.</p>
+    </section>
+
+    <section>
+      <h2 id="optional" class="text-xl font-bold mb-4">Optional parameters</h2>
+      <p class="text-sm text-text-secondary mb-4">A parameter declared <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T?</code> may be omitted at the use site. This is the <strong>only</strong> way to make an argument omittable — there is no <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">= default</code> syntax.</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">attribute</span> <span class="type-name">{'@'}retry</span>(maxAttempts: <span class="type-keyword">u1</span>, backoffMs: <span class="type-keyword">u4</span>?, label: <span class="type-keyword">string</span>?) <span class="text-accent-3">on</span> method;
+
+<span class="text-accent-3">{'@'}retry</span>(3)                          <span class="text-text-muted">// backoffMs and label omitted</span>
+<span class="text-accent-3">{'@'}retry</span>(3, 250)                     <span class="text-text-muted">// label omitted</span>
+<span class="text-accent-3">{'@'}retry</span>(3, label: <span class="text-accent-2">"slow path"</span>)     <span class="text-text-muted">// backoffMs skipped by naming the next one</span>
+<span class="text-accent-3">{'@'}retry</span>(3, null, <span class="text-accent-2">"slow path"</span>)      <span class="text-text-muted">// explicit null — same as omitting backoffMs</span></pre>
+      </div>
+
+      <div class="mt-4 flex items-start gap-3 rounded-xl border border-status-down/20 bg-status-down-subtle p-4">
+        <span class="text-status-down text-sm mt-0.5">✕</span>
+        <p class="text-sm text-text-secondary"><strong>Optional parameters must be trailing.</strong> <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">attribute {'@'}a(x: string?, y: i4);</code> is <a href="/guides/diagnostics/#ION0039" class="text-accent hover:underline">ION0039</a>. An argument list can only be truncated from the end, so a required parameter behind an optional one could never actually be reached — the declaration would be promising something the grammar cannot express. It is rejected at the declaration rather than at every use, where it would look like an arity bug in the caller's code.</p>
+      </div>
+
+      <p class="text-sm text-text-secondary mt-4">Omitting an optional and writing <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">null</code> for it are indistinguishable, which is deliberate: both mean "no value". Passing <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">null</code> to a parameter that is <em>not</em> optional is <a href="/guides/diagnostics/#ION0033" class="text-accent hover:underline">ION0033</a>, and the message names the fix — declare it <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T?</code>.</p>
+    </section>
+
+    <section>
+      <h2 id="targets" class="text-xl font-bold mb-4">Targets — the <code class="font-mono text-[16px]">on</code> clause</h2>
+      <p class="text-sm text-text-secondary mb-4">An <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">on</code> clause restricts an attribute to particular kinds of declaration:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">attribute</span> <span class="type-name">{'@'}idx</span>(n: <span class="type-keyword">u4</span>) <span class="text-accent-3">on</span> field, unionCase;</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3"><strong>Omitting the clause means "any target".</strong> That is not the same as an empty list — there is no way to write an attribute that is forbidden everywhere, and it is what keeps every attribute written before the clause existed compiling unchanged. At least one target is required after <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">on</code>; a bare <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">on;</code> is a parse error.</p>
+
+      <p class="text-sm text-text-secondary mt-4">The twelve targets, and the source positions each one covers:</p>
+      <div class="type-grid mt-4">
+        <div class="type-grid-header">
+          <span>Target</span>
+          <span>Positions it covers</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">msg</span>
+          <span class="text-[12px] text-text-secondary">A <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg</code> declaration.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">field</span>
+          <span class="text-[12px] text-text-secondary">A field of a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg</code>, a union's shared field, <em>and</em> a field of an inline union case. The last two are fields rather than arguments because that is what they lower to.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">enum</span>
+          <span class="text-[12px] text-text-secondary">An <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">enum</code> declaration.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">flags</span>
+          <span class="text-[12px] text-text-secondary">A <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">flags</code> declaration.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">enumMember</span>
+          <span class="text-[12px] text-text-secondary">A member of an <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">enum</code> or of a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">flags</code>.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">union</span>
+          <span class="text-[12px] text-text-secondary">A <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">union</code> declaration.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">unionCase</span>
+          <span class="text-[12px] text-text-secondary">A case of a union, inline (<code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Ok(x: i4)</code>) or a type reference (<code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Data</code>).</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">service</span>
+          <span class="text-[12px] text-text-secondary">A <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">service</code> declaration.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">method</span>
+          <span class="text-[12px] text-text-secondary">A method of a service.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">argument</span>
+          <span class="text-[12px] text-text-secondary">A service base argument, a method argument, or a parameter of an <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">attribute</code> declaration.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">typedef</span>
+          <span class="text-[12px] text-text-secondary">A <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">typedef</code> declaration.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">attribute</span>
+          <span class="text-[12px] text-text-secondary">An <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">attribute</code> declaration — an attribute written on another attribute's declaration.</span>
+        </div>
+      </div>
+
+      <p class="text-sm text-text-secondary mt-4">Writing an attribute somewhere its clause forbids is <a href="/guides/diagnostics/#ION0038" class="text-accent hover:underline">ION0038</a>, and the message quotes the declared clause back. A word in the clause that is not one of the twelve is also ION0038, reported on the declaration; the compiler then <em>drops</em> the unknown word rather than failing the declaration, and a clause left with nothing legal in it falls back to "any target". Duplicates collapse silently.</p>
+
+      <div class="glass rounded-xl p-4 mt-4 border-l-2 border-accent/40">
+        <p class="text-sm font-medium mb-1">Three positions used to be checked and then discarded</p>
+        <p class="text-xs text-text-secondary">Attributes on <strong>enum / flags members</strong>, on <strong>union shared fields</strong>, and on the <strong>parameters of an attribute declaration</strong> were parsed and fully validated — arity, types, targets — and then dropped during lowering, because the compiler built each of those nodes with a hardcoded empty attribute list. They reached no generator and drove no behaviour. This is fixed: attributes in all three positions now survive into the compiler's model and reach the generators like any other.</p>
+        <p class="text-xs text-text-secondary mt-2">The visible consequence is that <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}deprecated</code> on an enum member finally does something. It previously produced no warning at its use sites and no output in any target language; it now emits the deprecation marker for each target on the generated member.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="builtin" class="text-xl font-bold mb-4">Built-in attributes</h2>
+      <p class="text-sm text-text-secondary mb-4">These come from the built-in modules and need no declaration. <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}grainId</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}oneWay</code> require the <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">orleans</code> feature; the rest come from <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">std</code>. A built-in wins name resolution over a project declaration of the same name.</p>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Signature</span>
+          <span>Targets, and what it actually does</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">{'@'}deprecated(since: string?, reason: string?)</span>
+          <span class="text-[12px] text-text-secondary"><strong>All twelve targets.</strong> Warns at every reference (<a href="/guides/diagnostics/#ION1004" class="text-accent hover:underline">ION1004</a>) and emits a deprecation marker in each generated language. See <a href="#deprecated" class="text-accent hover:underline">Deprecation</a>.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">{'@'}bits(bitCount: i4)</span>
+          <span class="text-[12px] text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg, enum, flags, typedef</code>. Records the wire width of a numeric type. Read back for size computation, for enum value formatting, and by the TypeScript generator to decide when a value needs <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">bigint</code>.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">{'@'}deadline(time: i4)</span>
+          <span class="text-[12px] text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">service, method</code>. Emitted into C# as <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">[Deadline(n)]</code>. See the note below on its unit.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">{'@'}internal()</span>
+          <span class="text-[12px] text-text-secondary">Everything except <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">argument</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">attribute</code>. <strong>Currently inert</strong> — nothing reads it, and every generated type is <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">public</code>. The <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">internal</code> <em>method modifier</em> is a separate, unrelated keyword.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">{'@'}builtin()</span>
+          <span class="text-[12px] text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg, typedef</code>. Compiler-internal: attached by hand to the standard library's own definitions and consumed by type resolution. Declared so that writing it resolves and lands somewhere sane rather than being a silently accepted no-op.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">{'@'}scalar()</span>
+          <span class="text-[12px] text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg, typedef</code>. As above; consumed by cycle detection and by the <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T~</code> validity check.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">{'@'}union()</span>
+          <span class="text-[12px] text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">union</code>. Synthesized by the compiler onto every union; you do not write it. Writing it explicitly is harmless but redundant — it used to leave the union carrying two extra instances alongside the synthesized one, which is fixed; the compiler now keeps exactly one however many times it is written.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">{'@'}unionCase()</span>
+          <span class="text-[12px] text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">unionCase</code>. Synthesized onto every inline union case.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">{'@'}grainId()</span>
+          <span class="text-[12px] text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">argument, field</code> — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">orleans</code> feature. Marks the value carrying the grain key. <strong>Currently inert</strong> — no generator reads it.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">{'@'}oneWay()</span>
+          <span class="text-[12px] text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">method</code> — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">orleans</code> feature. Marks one-way dispatch. <strong>Currently inert</strong> — no generator reads it.</span>
+        </div>
+      </div>
+
+      <div class="mt-4 flex items-start gap-3 rounded-xl border border-status-degraded/20 bg-status-degraded-subtle p-4">
+        <span class="text-status-degraded text-sm mt-0.5">⚠</span>
+        <p class="text-sm text-text-secondary"><strong><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}deadline</code> has no enforced unit, and no runtime behaviour.</strong> The parameter is called <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">time</code> and the compiler attaches no meaning to it. The generated C# <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">[Deadline(n)]</code> binds to <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ion.runtime.DeadlineAttribute</code>, whose single property is named <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Seconds</code> — but no client, server or transport reads that attribute, so the value currently has no effect on any request. Treat it as a declaration of intent until it is wired up.</p>
+      </div>
+
+      <p class="text-sm text-text-secondary mt-4">"Currently inert" above means precisely this: the attribute is declared, its use is checked exactly like any other, and its value is carried into the compiler's model — but no generator and no runtime reads it back, so writing it changes nothing about the output. It is listed rather than hidden so that the numbers and names are not reused.</p>
+
+      <div class="mt-4 flex items-start gap-3 rounded-xl border border-status-degraded/20 bg-status-degraded-subtle p-4">
+        <span class="text-status-degraded text-sm mt-0.5">⚠</span>
+        <div>
+          <p class="text-sm font-medium mb-1"><code class="font-mono text-[12px]">{'@'}tag</code> has been removed</p>
+          <p class="text-sm text-text-secondary">A built-in <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}tag(tagId: i4)</code> used to be declared on <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg, enum, flags, union, unionCase, typedef</code>, intended to carry a CBOR semantic tag number. It was parsed, validated, modelled and surfaced on the IR — and read by nothing, in any generator or any runtime. It has been deleted rather than left inert, along with the IR property that exposed it. Writing <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}tag(…)</code> is now <a href="/guides/diagnostics/#ION0005" class="text-accent hover:underline">ION0005</a>, "attribute not found".</p>
+          <p class="text-sm text-text-secondary mt-2">If you need it, declare your own — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">attribute {'@'}tag(tagId: i4) on msg, enum;</code> — which behaves exactly as the built-in did, i.e. it is recorded and nothing reads it. A real CBOR semantic-tag feature, with encoder and decoder support in every runtime, can be added deliberately later; the name is free.</p>
         </div>
       </div>
     </section>
 
     <section>
-      <h2 id="validation" class="text-xl font-bold mb-4">Validation</h2>
-      <ul class="list-disc list-inside space-y-2 text-sm text-text-secondary">
-        <li><strong>ION0004</strong> — Using a non-scalar type in attribute arguments (e.g., a message type)</li>
-        <li><strong>ION0005</strong> — Referencing an attribute that is not declared or imported</li>
+      <h2 id="deprecated" class="text-xl font-bold mb-4">Deprecation</h2>
+      <p class="text-sm text-text-secondary mb-4"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}deprecated(since: string?, reason: string?)</code> is the one built-in attribute that changes both what the compiler says and what the generators emit. Both parameters are optional and trailing, so all four forms are legal against the single declaration:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">{'@'}deprecated</span>
+<span class="text-accent-3">{'@'}deprecated</span>(<span class="text-accent-2">"2.0"</span>)
+<span class="text-accent-3">{'@'}deprecated</span>(reason: <span class="text-accent-2">"use GetUserV2"</span>)
+<span class="text-accent-3">{'@'}deprecated</span>(<span class="text-accent-2">"2.0"</span>, <span class="text-accent-2">"use GetUserV2"</span>)</pre>
+      </div>
+
+      <h3 class="text-lg font-semibold mt-8 mb-3">Deprecate, then remove</h3>
+      <p class="text-sm text-text-secondary mb-3">Deprecation is advice about a schema that still compiles — it is a <strong>warning</strong>, never an error, because the whole point is that the old name keeps working while callers migrate. The intended sequence is:</p>
+      <ul class="text-sm text-text-secondary space-y-2 mt-3 ml-4">
+        <li>• Add the replacement alongside the old declaration.</li>
+        <li>• Mark the old one <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}deprecated("&lt;version&gt;", "&lt;what to use instead&gt;")</code>. Every schema that still references it now reports <a href="/guides/diagnostics/#ION1004" class="text-accent hover:underline">ION1004</a>, and every generated client gets its language's deprecation marker, so downstream builds surface the warning without any coordination.</li>
+        <li>• Once the references are gone, delete the declaration. That is a breaking change to the wire contract and the <a href="/guides/schema-lock/" class="text-accent hover:underline">schema lock</a> will say so — <a href="/guides/diagnostics/#ION0023" class="text-accent hover:underline">ION0023</a> for a removed definition, <a href="/guides/diagnostics/#ION0020" class="text-accent hover:underline">ION0020</a> for a removed field, <a href="/guides/diagnostics/#ION0025" class="text-accent hover:underline">ION0025</a> for a removed method.</li>
+      </ul>
+
+      <h3 class="text-lg font-semibold mt-8 mb-3">What ION1004 flags</h3>
+      <p class="text-sm text-text-secondary mb-3">Every <em>written reference</em> to a deprecated declaration: a field's type, a method's return type or argument, a service base argument, a union's shared field, a union case, a typedef's underlying type, an enum or flags base type, and an attribute parameter's type. Plus one thing that is not a type — a <em>use</em> of an attribute whose own declaration is deprecated, which is what makes <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}deprecated</code> <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">on attribute</code> mean something.</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">{'@'}deprecated</span>(<span class="text-accent-2">"2.0"</span>, <span class="text-accent-2">"use UserV2"</span>)
+<span class="text-accent-3">msg</span> <span class="type-name">User</span> {'{'}
+    id: <span class="type-keyword">u4</span>;
+    name: <span class="type-keyword">string</span>;      <span class="text-text-muted">// silent — inside the deprecated type itself</span>
+{'}'}
+
+<span class="text-accent-3">msg</span> <span class="type-name">Document</span> {'{'}
+    owner: <span class="type-name">User</span>;        <span class="text-status-down">// ION1004: 'User' is deprecated since '2.0' and is referenced</span>
+{'}'}                        <span class="text-status-down">//          by the field 'owner' of msg 'Document'. use UserV2.</span></pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">Three things are deliberately <strong>not</strong> flagged:</p>
+      <ul class="text-sm text-text-secondary space-y-2 mt-3 ml-4">
+        <li>• <strong>The deprecated declaration itself.</strong> Only references are walked, so <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}deprecated msg Old {'{'} … {'}'}</code> is silent about itself.</li>
+        <li>• <strong>A reference made from inside something that is itself deprecated</strong> — a field of a deprecated msg, an argument of a deprecated method. Whoever wrote the deprecation already knows, and the alternative is that deprecating a type floods its own body with warnings about itself.</li>
+        <li>• <strong>Service method calls.</strong> Ion has no call sites; a service is the boundary and the consumer is in another language. The generated deprecation marker is what reaches them.</li>
+      </ul>
+      <p class="text-sm text-text-secondary mt-3">A <a href="/guides/typedefs/" class="text-accent hover:underline">typedef</a> is warned once, at the typedef itself: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">typedef Alias = OldMsg;</code> reports, and the fields that then use <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Alias</code> are using a live alias and are not the ones that need changing.</p>
+    </section>
+
+    <section>
+      <h2 id="generated" class="text-xl font-bold mb-4">Generated output</h2>
+
+      <h3 class="text-lg font-semibold mb-3">Deprecation, in all three targets</h3>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Target</span>
+          <span>Emitted for <code class="font-mono">{'@'}deprecated("2.0", "use GetUserV2")</code></span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-property">C#</span>
+          <span class="text-[12px] text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">[Obsolete("Since 2.0: use GetUserV2")]</code> — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">since</code> is folded into the message because <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ObsoleteAttribute</code> has no slot for it. The <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">bool error</code> overload is never used: that would turn every use site into a build break rather than a deprecation.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-property">TypeScript</span>
+          <span class="text-[12px] text-text-secondary">A JSDoc <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}deprecated since 2.0: use GetUserV2</code> tag.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-property">Rust</span>
+          <span class="text-[12px] text-text-secondary"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#[deprecated(since = "2.0", note = "use GetUserV2")]</code> — the only target that keeps the two halves structurally separate. Either key is omitted when it was not written.</span>
+        </div>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">All three render four cases, because <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">since</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">reason</code> are independently optional. With only a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">since</code> the text is <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">since 2.0.</code>; with only a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">reason</code> it is the reason alone; with neither, C# emits a bare <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">[Obsolete]</code> and Rust a bare <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#[deprecated]</code>.</p>
+
+      <h3 class="text-lg font-semibold mt-8 mb-3">Every other attribute: C# only</h3>
+      <p class="text-sm text-text-secondary mb-3">C# is the only one of the three targets with a general-purpose declaration annotation that survives to runtime, so it is the only one that emits anything besides deprecation. A Rust <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#[Cache(30)]</code> is a hard compile error rather than an ignored annotation; TypeScript decorators do not apply to <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">interface</code> or <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">type</code> declarations.</p>
+      <p class="text-sm text-text-secondary mb-3">Each attribute you declare also generates a C# attribute class:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// attribute @cache(duration: i4, key: string) on msg;</span>
+[AttributeUsage(AttributeTargets.All)]
+<span class="text-accent-3">public sealed class</span> <span class="type-name">cacheAttribute</span>(<span class="type-keyword">i4</span> duration, <span class="type-keyword">string</span> key) : System.Attribute
+{'{'}
+    <span class="text-accent-3">public</span> <span class="type-keyword">i4</span> Duration =&gt; duration;
+    <span class="text-accent-3">public</span> <span class="type-keyword">string</span> Key =&gt; key;
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">Parameter types that C# cannot accept as attribute arguments are lowered to the nearest legal type, and the emitted values match: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">bigint</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">i16</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">u16</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">guid</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">datetime</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">dateonly</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">timeonly</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">uri</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">duration</code> become their invariant <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">string</code> form, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">f2</code> widens to <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">f8</code>, and an optional value type becomes <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">object?</code> because <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Nullable&lt;T&gt;</code> is not a legal attribute parameter type.</p>
+      <p class="text-sm text-text-secondary mt-3">Built-in attributes that the compiler consumes rather than exposes emit <strong>nothing</strong> in C#: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}builtin</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}scalar</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}union</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}unionCase</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}bits</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}internal</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}grainId</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}oneWay</code>. <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}bits</code> is already baked into the generated formatter, so an attribute would be a second, unread copy of a decision the codegen has made.</p>
+    </section>
+
+    <section>
+      <h2 id="diagnostics" class="text-xl font-bold mb-4">Diagnostics</h2>
+      <p class="text-sm text-text-secondary mb-4">Every message names the attribute, the parameter it is about, and what was expected against what was written — an attribute's signature is not visible at the use site, so the reader cannot see what they got wrong without being told.</p>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Code</span>
+          <span>Cause</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]"><a href="/guides/diagnostics/#ION0003" class="text-accent hover:underline">ION0003</a></span>
+          <span class="text-[12px] text-text-secondary">A parameter's type is not a standard builtin. Declaration side.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]"><a href="/guides/diagnostics/#ION0004" class="text-accent hover:underline">ION0004</a></span>
+          <span class="text-[12px] text-text-secondary">A parameter's type is a builtin with no literal form — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">void</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">bytes</code>, a bare wrapper, or <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T~</code>. Declaration side.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]"><a href="/guides/diagnostics/#ION0005" class="text-accent hover:underline">ION0005</a></span>
+          <span class="text-[12px] text-text-secondary">The attribute is not declared, or is missing an import or a feature. Checking stops here: nothing is known about the parameters, so an arity or type complaint would be invented rather than derived.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]"><a href="/guides/diagnostics/#ION0032" class="text-accent hover:underline">ION0032</a></span>
+          <span class="text-[12px] text-text-secondary">Too few or too many arguments. Suppressed when a per-argument error already fired, so a misnamed argument is not also reported as a missing one.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]"><a href="/guides/diagnostics/#ION0033" class="text-accent hover:underline">ION0033</a></span>
+          <span class="text-[12px] text-text-secondary">The literal cannot convert to the declared type at all — including <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">null</code> in a non-optional slot, and an enum reference anywhere.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]"><a href="/guides/diagnostics/#ION0034" class="text-accent hover:underline">ION0034</a></span>
+          <span class="text-[12px] text-text-secondary">The right kind of literal, wrong magnitude — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}bits(300)</code> on a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">u1</code>.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]"><a href="/guides/diagnostics/#ION0035" class="text-accent hover:underline">ION0035</a></span>
+          <span class="text-[12px] text-text-secondary">No parameter of that name.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]"><a href="/guides/diagnostics/#ION0036" class="text-accent hover:underline">ION0036</a></span>
+          <span class="text-[12px] text-text-secondary">The same parameter supplied twice.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]"><a href="/guides/diagnostics/#ION0037" class="text-accent hover:underline">ION0037</a></span>
+          <span class="text-[12px] text-text-secondary">A positional argument after a named one.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]"><a href="/guides/diagnostics/#ION0038" class="text-accent hover:underline">ION0038</a></span>
+          <span class="text-[12px] text-text-secondary">Written on a position the <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">on</code> clause forbids, or an unknown keyword inside the clause.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]"><a href="/guides/diagnostics/#ION0039" class="text-accent hover:underline">ION0039</a></span>
+          <span class="text-[12px] text-text-secondary">A required parameter declared after an optional one. Declaration side.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]"><a href="/guides/diagnostics/#ION1004" class="text-accent hover:underline">ION1004</a></span>
+          <span class="text-[12px] text-text-secondary">A reference to something carrying <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}deprecated</code>. A warning, not an error.</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="editor" class="text-xl font-bold mb-4">In the editor</h2>
+      <p class="text-sm text-text-secondary mb-4">Now that arguments are typed, the language server can answer for them:</p>
+      <ul class="text-sm text-text-secondary space-y-2 mt-3 ml-4">
+        <li>• <strong>Hover</strong> over an attribute use shows the declared signature, the <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">on</code> clause, the declaration's doc comment, and which parameter each written argument bound to. Hover over the declaration shows the signature with its clause.</li>
+        <li>• <strong>Signature help</strong> inside <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}Foo(</code> highlights the parameter the cursor is on, following the <em>name</em> for a named argument rather than the comma count.</li>
+        <li>• <strong>Completion</strong> offers attribute names after <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">@</code>, filtered to the ones whose targets permit the position; parameter names inside a call; and the target keywords after <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">on</code>.</li>
+        <li>• <strong>Inlay hints</strong> name each positional argument, so <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}cache(300, "user")</code> reads as <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'@'}cache(duration: 300, key: "user")</code>.</li>
       </ul>
     </section>
 

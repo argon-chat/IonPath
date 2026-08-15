@@ -33,8 +33,30 @@ public class IonCodeLensHandler(IonWorkspace workspace) : CodeLensHandlerBase
 
         var lenses = new List<CodeLens>();
 
+        // A mixin's only possible reference is a `with` clause entry, which is why it needs a lens
+        // at all: "0 references" on a mixin means the ION1001 hint is about to fire, and there is
+        // no other way to see that from the declaration.
+        foreach (var mixin in file.mixinSyntaxes)
+        {
+            var range = ToRange(mixin);
+            var refs = IonLspHelpers.FindReferences(mixin.Name.Identifier, workspace, false);
+            lenses.Add(MakeRefLens(range, refs.Count));
+
+            var expanded = IonMixinLsp.Expand(mixin, IonMixinLsp.Declarations(workspace));
+
+            lenses.Add(MakeInfoLens(range, expanded.Count == mixin.Fields.Count
+                ? $"{expanded.Count} field{(expanded.Count == 1 ? "" : "s")}"
+                : $"{expanded.Count} fields ({mixin.Fields.Count} own)"));
+        }
+
         foreach (var msg in file.messageSyntaxes)
         {
+            // Nothing to count on a hoisted inline type: the "declaration" is the `msg { … }` the
+            // author wrote inline, and it has exactly one reference by construction — the field it
+            // was written on. A lens there would sit on the field's own line saying "1 reference".
+            if (IonLspHelpers.IsHoistedInlineType(msg))
+                continue;
+
             var range = ToRange(msg);
             var refs = IonLspHelpers.FindReferences(msg.Name.Identifier, workspace, false);
             lenses.Add(MakeRefLens(range, refs.Count));
@@ -85,6 +107,18 @@ public class IonCodeLensHandler(IonWorkspace workspace) : CodeLensHandlerBase
             var range = ToRange(un);
             var refs = IonLspHelpers.FindReferences(un.unionName.Identifier, workspace, false);
             lenses.Add(MakeRefLens(range, refs.Count));
+        }
+
+        foreach (var td in file.typedefSyntaxes)
+        {
+            var range = ToRange(td);
+            var refs = IonLspHelpers.FindReferences(td.TypeName.Name.Identifier, workspace, false);
+            lenses.Add(MakeRefLens(range, refs.Count));
+
+            // No size lens: the alias is erased, so a use site is exactly as wide as the
+            // underlying type. Show what it aliases instead.
+            if (td.BaseType is not null)
+                lenses.Add(MakeInfoLens(range, $"alias for {FormatTypeName(td.BaseType)}"));
         }
 
         Console.WriteLine($"[ionc] CodeLens: returning {lenses.Count} lens(es)");
@@ -140,13 +174,17 @@ public class IonCodeLensHandler(IonWorkspace workspace) : CodeLensHandlerBase
 
     private static int? GetBits(IonType type, HashSet<string> visited, IReadOnlyList<IonType> allDefs)
     {
-        if (type.IsMaybe || type.IsArray || type.IsPartial) return null;
+        // Variable-width wrappers. A `Partial<T>` encodes as a CBOR map of only the touched
+        // fields, so it is never the fixed width of `T`.
+        if (type.IsMaybe || type.IsArray || type.IsPartial || type.IsMap || type.IsSet) return null;
         var name = type.name.Identifier;
         return name switch
         {
-            "bool" => 8, "guid" => 128, "datetime" => 64, "dateonly" => 32,
+            "bool" => 8, "guid" => 128, "dateonly" => 32,
             "timeonly" => 64, "duration" => 64, "void" => 0,
-            "string" or "bytes" or "bigint" or "uri" => null,
+            // `datetime` was 64 here. It is tag 0 + RFC 3339 text now, and `decimal` is tag 4 over
+            // a variable-length mantissa; neither has a fixed width. See IonInlayHintsHandler.
+            "string" or "bytes" or "bigint" or "uri" or "datetime" or "decimal" => null,
             _ => type.HasBitsAttribute ? type.Bits : ResolveNested(name, visited, allDefs)
         };
     }
@@ -172,6 +210,10 @@ public class IonCodeLensHandler(IonWorkspace workspace) : CodeLensHandlerBase
         visited.Remove(name);
         return total;
     }
+
+    /// <inheritdoc cref="IonLspHelpers.FormatTypeSyntax"/>
+    private static string FormatTypeName(IonUnderlyingTypeSyntax type)
+        => IonLspHelpers.FormatTypeSyntax(type);
 
     private static Range ToRange(IonSyntaxBase node)
         => IonLspHelpers.ToLspRange(node);

@@ -4,6 +4,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using System.Collections.Immutable;
+using ion.runtime;
 using ion.syntax;
 
 public class IonSemanticTokensHandler(IonWorkspace workspace) : SemanticTokensFullHandlerBase
@@ -27,7 +28,20 @@ public class IonSemanticTokensHandler(IonWorkspace workspace) : SemanticTokensFu
         "decorator",      // 13 - attributes
         "namespace",      // 14 - #use paths
         "macro",          // 15 - #feature, #use directives
+        "parameter",      // 16 - attribute parameters and named attribute arguments
     ];
+
+    // Named so the attribute-argument emitters below read as classification rather than as
+    // arithmetic. Appended, never renumbered: the legend index is the wire format, and a client
+    // that cached the old legend would recolour the whole file if these moved.
+    private const int TokenTypeType = 0;
+    private const int TokenTypeKeyword = 1;
+    private const int TokenTypeEnumMember = 5;
+    private const int TokenTypeString = 7;
+    private const int TokenTypeNumber = 8;
+    private const int TokenTypeInterface = 10;
+    private const int TokenTypeDecorator = 13;
+    private const int TokenTypeParameter = 16;
 
     private static readonly string[] TokenModifiers =
     [
@@ -81,6 +95,10 @@ public class IonSemanticTokensHandler(IonWorkspace workspace) : SemanticTokensFu
         if (file is null)
             return Task.FromResult<SemanticTokens?>(new SemanticTokens { Data = builder.Build() });
 
+        // Workspace-wide, not file-local: a `with` clause may name a mixin declared in any file of
+        // the project, exactly as a field may reference a type from any file.
+        var declaredMixins = IonMixinLsp.Declarations(workspace).Keys.ToHashSet(StringComparer.Ordinal);
+
         // Directives
         foreach (var use in file.useSyntaxes)
             EmitToken(builder, use, 15 /* macro */, use.Path.Length + 6); // #use "..."
@@ -91,19 +109,51 @@ public class IonSemanticTokensHandler(IonWorkspace workspace) : SemanticTokensFu
         // Attribute definitions
         foreach (var attr in file.attributeDefSyntaxes)
         {
-            EmitToken(builder, attr.Name, 13 /* decorator */, attr.Name.Identifier.Length);
+            EmitToken(builder, attr.Name, TokenTypeDecorator, attr.Name.Identifier.Length);
+
             foreach (var arg in attr.Args)
             {
-                EmitToken(builder, arg.argName, 4 /* variable */, arg.argName.Identifier.Length);
+                EmitToken(builder, arg.argName, TokenTypeParameter, arg.argName.Identifier.Length);
                 EmitTypeRef(builder, arg.type);
+            }
+
+            // `on field, unionCase` — a closed keyword vocabulary, so it colours as keywords.
+            // An unknown word is left uncoloured rather than dressed up as a valid target: the
+            // absence of highlighting is the first hint that ION0038 is about to fire.
+            foreach (var target in attr.Targets ?? [])
+                if (IonAttributeTargets.TryParse(target.Identifier, out _))
+                    EmitToken(builder, target, TokenTypeKeyword, target.Identifier.Length);
+        }
+
+        // Messages. A hoisted inline type is skipped as a *declaration* — there is no name token
+        // in the file to colour, only the `msg { … }` its synthesized name borrowed the span of —
+        // but its fields are real source and are classified like any others.
+        foreach (var msg in file.messageSyntaxes)
+        {
+            if (!IonLspHelpers.IsHoistedInlineType(msg))
+            {
+                EmitToken(builder, msg.Name, TokenTypeType, msg.Name.Identifier.Length, 0b11 /* declaration|definition */);
+                    EmitWithClause(builder, msg.Mixins, declaredMixins);
+            }
+
+            foreach (var field in msg.Fields)
+            {
+                EmitToken(builder, field.Name, 3 /* property */, field.Name.Identifier.Length);
+                EmitTypeRef(builder, field.Type);
             }
         }
 
-        // Messages
-        foreach (var msg in file.messageSyntaxes)
+        // Mixins. Previously invisible to the tokenizer altogether: a whole declaration form went
+        // out uncoloured, name, `with` clause and fields alike.
+        foreach (var mixin in file.mixinSyntaxes)
         {
-            EmitToken(builder, msg.Name, 0 /* type */, msg.Name.Identifier.Length, 0b11 /* declaration|definition */);
-            foreach (var field in msg.Fields)
+            // `interface`, not `type`: a mixin is not a type, and colouring it as one is the
+            // misconception ION0066 exists to correct. It shares the token type with `service`,
+            // the other declaration that is a contract rather than a value.
+            EmitToken(builder, mixin.Name, TokenTypeInterface, mixin.Name.Identifier.Length, 0b11);
+            EmitWithClause(builder, mixin.Mixins, declaredMixins);
+
+            foreach (var field in mixin.Fields)
             {
                 EmitToken(builder, field.Name, 3 /* property */, field.Name.Identifier.Length);
                 EmitTypeRef(builder, field.Type);
@@ -174,19 +224,33 @@ public class IonSemanticTokensHandler(IonWorkspace workspace) : SemanticTokensFu
             }
         }
 
-        // Typedefs
+        // Typedefs. The name on the left of `=` is a *declaration*, not a reference — emitting it
+        // through EmitTypeRef would colour it like a use site (and mis-classify a typedef whose
+        // name happens to collide with a builtin as `struct`).
         foreach (var td in file.typedefSyntaxes)
         {
-            EmitTypeRef(builder, td.TypeName);
+            EmitToken(builder, td.TypeName.Name, 0 /* type */,
+                td.TypeName.Name.Identifier.Length, 0b11 /* declaration|definition */);
             if (td.BaseType is not null)
                 EmitTypeRef(builder, td.BaseType);
         }
 
-        // Attribute usages on definitions
-        foreach (var def in file.Definitions)
+        // Attribute usages, everywhere one can be written. `file.Definitions` only reaches the
+        // top level declarations, so an attribute on a field, an enum member, a method or a union
+        // case used to be the one identifier in the file with no token at all — the `@` name went
+        // uncoloured and the arguments were a single undifferentiated run of plain text.
+        foreach (var site in IonAttributeLsp.Sites(file))
         {
-            foreach (var attr in def.Attributes)
-                EmitToken(builder, attr.Name, 13 /* decorator */, attr.Name.Identifier.Length);
+            var attr = site.Attribute;
+            EmitToken(builder, attr.Name, TokenTypeDecorator, attr.Name.Identifier.Length);
+
+            foreach (var argument in attr.Args)
+            {
+                if (argument.Name is { } name)
+                    EmitToken(builder, name, TokenTypeParameter, name.Identifier.Length);
+
+                EmitLiteral(builder, argument.Value);
+            }
         }
 
         return Task.FromResult<SemanticTokens?>(new SemanticTokens
@@ -195,17 +259,64 @@ public class IonSemanticTokensHandler(IonWorkspace workspace) : SemanticTokensFu
         });
     }
 
-    // Builtin type names for coloring
-    private static readonly HashSet<string> BuiltinTypeNames = new(StringComparer.OrdinalIgnoreCase)
+    /// <summary>
+    /// Classifies one attribute argument value. Every literal node carries its own start and end,
+    /// so the span is the written text — which matters most for a string, whose decoded
+    /// <c>Value</c> is not the same length as its source (escapes, quotes).
+    /// </summary>
+    private static void EmitLiteral(SemanticTokensBuilder builder, IonLiteralSyntax literal)
     {
-        "i1", "i2", "i4", "i8", "i16",
-        "u1", "u2", "u4", "u8", "u16",
-        "f2", "f4", "f8",
-        "bool", "void", "string", "bytes", "guid",
-        "datetime", "dateonly", "timeonly", "duration", "uri", "bigint",
-        "Maybe", "Array", "Partial",
-        "vec2f", "vec3f", "vec4f", "vec2d", "vec3d", "vec4d", "vec2h", "vec3h", "vec4h"
-    };
+        switch (literal)
+        {
+            case IonIntegerLiteralSyntax or IonFloatLiteralSyntax:
+                EmitSpan(builder, literal, TokenTypeNumber);
+                break;
+
+            case IonStringLiteralSyntax:
+                EmitSpan(builder, literal, TokenTypeString);
+                break;
+
+            // `true` / `false` / `null` are keywords in the literal grammar, terminated by a word
+            // boundary, so `trueish` is an identifier and is deliberately not coloured here.
+            case IonBoolLiteralSyntax or IonNullLiteralSyntax:
+                EmitSpan(builder, literal, TokenTypeKeyword);
+                break;
+
+            case IonEnumRefLiteralSyntax enumRef:
+                EmitToken(builder, enumRef.TypeName, TokenTypeType, enumRef.TypeName.Identifier.Length);
+                EmitToken(builder, enumRef.Member, TokenTypeEnumMember, enumRef.Member.Identifier.Length);
+                break;
+
+            // The brackets themselves get no token; only the elements are classified, so a nested
+            // array colours element by element rather than as one blue run.
+            case IonArrayLiteralSyntax array:
+                foreach (var item in array.Items)
+                    EmitLiteral(builder, item);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Emits a token covering a node's own start/end span. Multi-line nodes are skipped: the LSP
+    /// token encoding cannot express one, and the only literal that can span lines is an array,
+    /// whose elements are emitted individually anyway.
+    /// </summary>
+    private static void EmitSpan(SemanticTokensBuilder builder, IonSyntaxBase node, int tokenType)
+    {
+        var start = node.StartPosition;
+
+        if (start.Line <= 0 || start.Col <= 0 || node.EndPosition is not { } end)
+            return;
+
+        if (end.Line != start.Line || end.Col <= start.Col)
+            return;
+
+        builder.Push(start.Line - 1, start.Col - 1, end.Col - start.Col, tokenType, 0);
+    }
+
+    // The builtin list lives on IonLspHelpers now. Two hand-maintained copies had already drifted
+    // apart from the std module and from each other — this one was missing `decimal`, `Map` and
+    // `Set`, so all three coloured as user-defined types.
 
     /// <summary>
     /// Emits one `comment` token per line covered by each comment. Doc comments
@@ -235,15 +346,64 @@ public class IonSemanticTokensHandler(IonWorkspace workspace) : SemanticTokensFu
         }
     }
 
+    /// <summary>
+    /// The names in a <c>with</c> clause.
+    /// </summary>
+    /// <remarks>
+    /// Coloured as <c>interface</c>, the same as the mixin declarations they point at, so a clause
+    /// entry visibly is not a type reference. An entry that names nothing declared is left
+    /// uncoloured rather than dressed up as valid — the missing highlight is the first hint that
+    /// ION0063 is coming, exactly as it is for an unknown attribute target.
+    /// </remarks>
+    private static void EmitWithClause(
+        SemanticTokensBuilder builder, List<IonIdentifier>? clause, HashSet<string> declared)
+    {
+        foreach (var entry in clause ?? [])
+            if (declared.Contains(entry.Identifier))
+                EmitToken(builder, entry, TokenTypeInterface, entry.Identifier.Length);
+    }
+
+    /// <summary>
+    /// Classifies a written type reference and everything nested inside it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The recursion is what makes a nested argument visible at all. This used to emit one
+    /// <c>typeParameter</c> token per argument, positioned at the argument's <em>head</em> name,
+    /// so in <c>Map&lt;string, Array&lt;Document&gt;&gt;</c> the <c>Array</c> coloured and the
+    /// <c>Document</c> inside it got no token — the one identifier in the line that names a
+    /// user-defined type was the one left uncoloured.
+    /// </para>
+    /// <para>
+    /// An argument is now classified by what it <em>is</em> — builtin, or user-defined — rather
+    /// than as <c>typeParameter</c>, which is the LSP type for a declaration's own <c>T</c> and
+    /// not for an argument at a use site. Ion has no generic declarations, so nothing else can
+    /// claim that token type; if 2.3 lands, the parameter list is where it belongs.
+    /// </para>
+    /// <para>
+    /// A hoisted inline type is skipped. Its synthesized name token carries the span of the whole
+    /// <c>msg { … }</c> body but the length of the derived identifier, so emitting it painted an
+    /// arbitrary 13-character run starting at the <c>msg</c> keyword — <c>'msg { address'</c> —
+    /// twice over. The body's own fields are classified when the hoisted message is walked.
+    /// </para>
+    /// </remarks>
     private static void EmitTypeRef(SemanticTokensBuilder builder, IonUnderlyingTypeSyntax type)
     {
-        var tokenType = BuiltinTypeNames.Contains(type.Name.Identifier)
+        if (type.IsInline || IonLspHelpers.IsSynthesizedSpan(type.Name))
+            return;
+
+        var tokenType = IonLspHelpers.IsBuiltinTypeName(type.Name.Identifier)
             ? 9  // struct (builtin)
             : 0; // type (user-defined)
         EmitToken(builder, type.Name, tokenType, type.Name.Identifier.Length);
 
         foreach (var gen in type.generics)
-            EmitToken(builder, gen.Name, 12 /* typeParameter */, gen.Name.Identifier.Length);
+        {
+            if (gen.Type is { } written)
+                EmitTypeRef(builder, written);
+            else
+                EmitToken(builder, gen.Name, TokenTypeType, gen.Name.Identifier.Length);
+        }
     }
 
     private static void EmitToken(SemanticTokensBuilder builder, IonSyntaxBase node, int tokenType, int length, int modifiers = 0)

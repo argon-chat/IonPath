@@ -93,11 +93,26 @@ public sealed class RustCodeGenerator : CodeGeneratorBase
         var members = e.members.Select(m => new EnumMember(
             m.name.Identifier,
             FormatEnumValue(m.constantValue, m.type),
-            m.Doc
+            m.Doc,
+            AttributeEmission.DeprecationOf(m.attributes)
         ));
         var baseType = _rustResolver.ResolvePrimitive(e.baseType.name.Identifier);
-        return Emitter.EnumDeclaration(e.name.Identifier, members, new EnumOptions(baseType), e.Doc);
+        return Emitter.EnumDeclaration(e.name.Identifier, members, new EnumOptions(baseType), e.Doc,
+            AttributeEmission.DeprecationOf(e.attributes));
     }
+
+    /// <summary>
+    /// Rust carries <c>@deprecated</c> and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// A Rust <c>#[…]</c> has to be known to the compiler or supplied by a proc-macro, so
+    /// <c>#[Cache(30, "users")]</c> is <c>error[E0658]: cannot find attribute</c>, not an ignored
+    /// annotation the way an unknown C# attribute would simply fail to bind. Every other attribute
+    /// is therefore dropped, and <c>#[deprecated]</c> is emitted structurally by
+    /// <see cref="Emitters.RustEmitter"/> from <see cref="IonDeprecation"/> instead of going
+    /// through this string path.
+    /// </remarks>
+    protected override string? FormatAttribute(IonAttributeInstance attr) => null;
 
     // ═══════════════════════════════════════════════════════════════════
     // SERVICE CLIENT IMPL
@@ -154,6 +169,12 @@ public sealed class RustCodeGenerator : CodeGeneratorBase
             else
                 template = Templates.ServiceClientMethodTemplate;
 
+            // `internal` — drop `pub` so the method is crate private. The client struct implements
+            // no trait, so nothing obliges it to stay public: a peer service in the same crate can
+            // still call it, while the crate's public API no longer carries it.
+            if (method.IsInternal())
+                template = template.Replace("pub async fn {methodName}(", "async fn {methodName}(");
+
             var returnTypeName = TypeResolver.Resolve(method.returnType);
 
             var ctx = new TemplateContext()
@@ -181,10 +202,27 @@ public sealed class RustCodeGenerator : CodeGeneratorBase
 
         var classCtx = new TemplateContext()
             .Set("serviceName", serviceName)
-            .Set("serviceDoc", Emitter.DocComment(service.Doc))
+            .Set("serviceDoc", ServiceDoc(service))
             .Set("methods", methodsBuilder.ToString());
 
         return classCtx.Apply(Templates.ServiceClientClassTemplate);
+    }
+
+    /// <summary>
+    /// Rustdoc for the generated client struct, plus the service's <c>#[deprecated]</c>.
+    /// </summary>
+    /// <remarks>
+    /// A deprecated <c>service</c> marks the client struct: it is the only Rust item the service
+    /// becomes (there is no trait on this path), so it is where a use site can be told.
+    /// </remarks>
+    private string ServiceDoc(IonService service)
+    {
+        var doc = Emitter.DocComment(service.Doc);
+
+        if (AttributeEmission.DeprecationOf(service.attributes) is { } deprecation)
+            doc += $"{AttributeEmission.RustDeprecated(deprecation)}{Environment.NewLine}";
+
+        return doc;
     }
 
     /// <summary>
@@ -198,7 +236,15 @@ public sealed class RustCodeGenerator : CodeGeneratorBase
             .Select(a => new DocParam(ToSnakeCase(a.name.Identifier), a.Doc))
             .ToList();
 
-        return Emitter.DocComment(method.Doc, Emitter.Indent(1), parameters);
+        var doc = Emitter.DocComment(method.Doc, Emitter.Indent(1), parameters);
+
+        // `{methodDoc}` sits immediately before the indented `pub async fn`, so the attribute is
+        // appended here rather than threaded through the templates — all five of which would
+        // otherwise need their own placeholder.
+        if (AttributeEmission.DeprecationOf(method.attributes) is { } deprecation)
+            doc += $"{Emitter.Indent(1)}{AttributeEmission.RustDeprecated(deprecation)}{Environment.NewLine}";
+
+        return doc;
     }
 
     private string GenerateStreamingMethod(string serviceName, IonMethod method, string methodNameRust)
@@ -337,6 +383,12 @@ public sealed class RustCodeGenerator : CodeGeneratorBase
     // FIELD READ/WRITE
     // ═══════════════════════════════════════════════════════════════════
 
+    // `Map<K,V>`, `Set<T>` and `T[N]` need no arms of their own anywhere below. ion.rustcore
+    // blanket-impls IonFormat for HashMap/HashSet and — via a const generic — for `[T; N]`, so the
+    // default `<Type as IonFormat>::ion_read(d)?` arm already routes them through read_map /
+    // read_set / read_fixed_array::<T>(d, N). The `IsArray` arms exist only because `Vec<T>`'s impl
+    // is reached the same way; a FIXED array must NOT take them, since read_array is unsized and
+    // would drop the length check, so each one is guarded on `FixedSize: null`.
     protected override string GenerateReadField(IonField field)
     {
         var varName = ToSnakeCase(field.name.Identifier);
@@ -345,7 +397,7 @@ public sealed class RustCodeGenerator : CodeGeneratorBase
         {
             IonGenericType { IsMaybe: true } maybe =>
                 $"let {varName} = ion_rustcore::formatter::read_maybe::<{TypeResolver.Resolve(maybe.TypeArguments[0])}>(d)?;",
-            IonGenericType { IsArray: true } array =>
+            IonGenericType { IsArray: true, FixedSize: null } array =>
                 $"let {varName} = ion_rustcore::formatter::read_array::<{TypeResolver.Resolve(array.TypeArguments[0])}>(d)?;",
             _ =>
                 $"let {varName} = <{TypeResolver.Resolve(field.type)} as IonFormat>::ion_read(d)?;"
@@ -360,7 +412,7 @@ public sealed class RustCodeGenerator : CodeGeneratorBase
         {
             IonGenericType { IsMaybe: true } =>
                 $"ion_rustcore::formatter::write_maybe(e, &{fieldAccess})?;",
-            IonGenericType { IsArray: true } =>
+            IonGenericType { IsArray: true, FixedSize: null } =>
                 $"ion_rustcore::formatter::write_array(e, &{fieldAccess})?;",
             _ when IsRefType(field.type) =>
                 $"{fieldAccess}.ion_write(e)?;",
@@ -377,7 +429,7 @@ public sealed class RustCodeGenerator : CodeGeneratorBase
         {
             IonGenericType { IsMaybe: true } maybe =>
                 $"let {varName} = ion_rustcore::formatter::read_maybe::<{TypeResolver.Resolve(maybe.TypeArguments[0])}>(d)?;",
-            IonGenericType { IsArray: true } array =>
+            IonGenericType { IsArray: true, FixedSize: null } array =>
                 $"let {varName} = ion_rustcore::formatter::read_array::<{TypeResolver.Resolve(array.TypeArguments[0])}>(d)?;",
             _ =>
                 $"let {varName} = <{TypeResolver.Resolve(arg.type)} as IonFormat>::ion_read(d)?;"
@@ -392,7 +444,7 @@ public sealed class RustCodeGenerator : CodeGeneratorBase
         {
             IonGenericType { IsMaybe: true } =>
                 $"ion_rustcore::formatter::write_maybe(&mut e, &{varName})?;",
-            IonGenericType { IsArray: true } =>
+            IonGenericType { IsArray: true, FixedSize: null } =>
                 $"ion_rustcore::formatter::write_array(&mut e, &{varName})?;",
             _ when IsRefType(arg.type) =>
                 $"{varName}.ion_write(&mut e)?;",
@@ -405,8 +457,15 @@ public sealed class RustCodeGenerator : CodeGeneratorBase
     // SINGLE FILE GENERATION (for Rust we generate a single lib.rs)
     // ═══════════════════════════════════════════════════════════════════
 
+    /// <summary>
+    /// The whole crate as one <c>lib.rs</c>, or <c>""</c> when a construct could not be emitted
+    /// (see <see cref="GeneratePartials"/>) — writing a file that cannot compile is worse than
+    /// writing none, and the diagnostics on <paramref name="ctx"/> say why.
+    /// </summary>
     public string GenerateSingleFile(CompilationContext ctx)
     {
+        var diagnosticsBefore = ctx.Diagnostics.Count;
+
         var sb = new StringBuilder();
         sb.AppendLine(FileHeader());
 
@@ -430,20 +489,29 @@ public sealed class RustCodeGenerator : CodeGeneratorBase
             .DistinctBy(t => t.name.Identifier)
             .ToList();
 
+        var allServices = ctx.ProcessedModules
+            .SelectMany(m => m.Services)
+            .DistinctBy(s => s.name.Identifier)
+            .ToList();
+
         sb.AppendLine("// ═══════════════ Types ═══════════════");
         sb.AppendLine();
         sb.AppendLine(GenerateTypes(allTypes));
+
+        // Patch structs for every `T~`. Rust items are order-independent, but keeping them
+        // next to the types they patch is what a reader expects.
+        var partials = GeneratePartials(allTypes, allServices, ctx);
+        if (partials.Length > 0)
+        {
+            sb.AppendLine("// ═══════════════ Partials ═══════════════");
+            sb.AppendLine();
+            sb.AppendLine(partials);
+        }
 
         // All formatters
         sb.AppendLine("// ═══════════════ Formatters ═══════════════");
         sb.AppendLine();
         sb.AppendLine(GenerateAllFormatters(allTypes));
-
-        // All service clients
-        var allServices = ctx.ProcessedModules
-            .SelectMany(m => m.Services)
-            .DistinctBy(s => s.name.Identifier)
-            .ToList();
 
         if (allServices.Count > 0)
         {
@@ -452,8 +520,119 @@ public sealed class RustCodeGenerator : CodeGeneratorBase
             sb.AppendLine(GenerateAllServiceClientImpl(allServices));
         }
 
+        var refused = ctx.Diagnostics
+            .Skip(diagnosticsBefore)
+            .Any(d => d.Severity == IonDiagnosticSeverity.Error);
+
+        return refused ? "" : sb.ToString();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Partial<T>  ("T~")
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// One <c>ion_rustcore::ion_partial!</c> invocation per message reached through a
+    /// <c>Partial&lt;T&gt;</c>, or <c>""</c> when there are none.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The macro expands to the patch struct, <c>impl IonPartialFields</c> (the field names and
+    /// their order), <c>impl IonPartialSchema for T</c> — which is what makes
+    /// <c>ion_rustcore::IonPartial&lt;T&gt;</c> name this struct — and <c>impl IonFormat</c>.
+    /// </para>
+    /// <para>
+    /// Field idents are the Ion field names <em>verbatim</em>, not snake_cased like the message
+    /// struct's: the macro turns each ident into the CBOR map key with <c>stringify!</c>, so
+    /// snake_casing <c>displayName</c> here would silently rename the key and break interop with
+    /// the C# and TypeScript runtimes. Hence the <c>#[allow(non_snake_case)]</c>.
+    /// </para>
+    /// </remarks>
+    private string GeneratePartials(
+        IReadOnlyList<IonType> types, IReadOnlyList<IonService> services, CompilationContext ctx)
+    {
+        var targets = CollectPartialTargets(types, services);
+        if (targets.Count == 0)
+            return "";
+
+        var sb = new StringBuilder();
+
+        foreach (var target in targets)
+        {
+            var name = target.name.Identifier;
+
+            // `stringify!` keeps the r# of a raw identifier, so a keyword-named field would put
+            // "r#type" on the wire. Refuse rather than emit a silently divergent encoding.
+            var keyword = target.fields.FirstOrDefault(f => IsRustKeyword(f.name.Identifier));
+            if (keyword is not null)
+            {
+                ctx.Diagnostics.Add(
+                    IonCodeGenDiagnostics.PartialFieldIsRustKeyword(name, keyword.name.Identifier));
+                continue;
+            }
+
+            sb.AppendLine("ion_rustcore::ion_partial! {");
+            sb.Append(Emitter.DocComment($"Sparse patch over [`{name}`] (Ion `{name}~`).", Emitter.Indent(1)));
+            sb.AppendLine($"{Emitter.Indent(1)}#[allow(non_snake_case)]");
+            sb.AppendLine($"{Emitter.Indent(1)}pub struct {name}Patch for {name} {{");
+            foreach (var field in target.fields)
+                sb.AppendLine(
+                    $"{Emitter.Indent(2)}{field.name.Identifier}: {TypeResolver.Resolve(field.type)},");
+            sb.AppendLine($"{Emitter.Indent(1)}}}");
+            sb.AppendLine("}");
+            sb.AppendLine();
+        }
+
         return sb.ToString();
     }
+
+    /// <summary>Every message reached through a <c>Partial&lt;T&gt;</c>, in first-seen order.</summary>
+    private static List<IonType> CollectPartialTargets(
+        IReadOnlyList<IonType> types, IReadOnlyList<IonService> services)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var targets = new List<IonType>();
+
+        foreach (var type in types)
+        {
+            foreach (var field in type.fields)
+                Visit(field.type);
+
+            if (type is IonUnion union)
+                foreach (var field in union.types.SelectMany(c => c.fields))
+                    Visit(field.type);
+        }
+
+        foreach (var method in services.SelectMany(s => s.methods))
+        {
+            foreach (var argument in method.arguments)
+                Visit(argument.type);
+            Visit(method.returnType);
+        }
+
+        return targets;
+
+        void Visit(IonType type)
+        {
+            if (type is not IonGenericType generic)
+                return;
+
+            if (generic is { IsPartial: true, TypeArguments.Count: > 0 })
+            {
+                // Resolve first: a `T~` reached only through a wrapper (`T~[]`, `T~?`,
+                // `Map<K, T~>`) still carries an IonUnresolvedType here. See IonPartialTargets.
+                var target = IonPartialTargets.Resolve(generic.TypeArguments[0], types);
+                if (target is not null and not (IonEnum or IonFlags or IonUnion or IonUnresolvedType)
+                    && seen.Add(target.name.Identifier))
+                    targets.Add(target);
+            }
+
+            foreach (var argument in generic.TypeArguments)
+                Visit(argument);
+        }
+    }
+
+    private static bool IsRustKeyword(string identifier) => EscapeRustKeyword(identifier) != identifier;
 
     // ═══════════════════════════════════════════════════════════════════
     // HELPERS
@@ -495,6 +674,11 @@ public sealed class RustCodeGenerator : CodeGeneratorBase
         return type.name.Identifier switch
         {
             "string" or "guid" or "bytes" or "datetime" or "dateonly" or "timeonly" or "duration" => true,
+            // `ion_rustcore::IonDecimal` is `#[derive(Copy)]` over an i32 and an i128, so it goes
+            // by value like the other scalars. Stated explicitly rather than left to the
+            // `IsBuiltin`/`IsScalar` fallback below, so the generated signature does not depend on
+            // which marker attributes the builtin happens to be declared with.
+            "decimal" => false,
             _ => !type.IsBuiltin && !type.IsScalar
         };
     }

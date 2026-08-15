@@ -401,12 +401,6 @@
 					<key>name</key>
 					<string>support.type.ionpath</string>
 				</dict>
-				<dict>
-					<key>match</key>
-					<string>\b(vec2f|vec3f|vec4f|vec2d|vec3d|vec4d|vec2h|vec3h|vec4h)\b</string>
-					<key>name</key>
-					<string>support.type.vector.ionpath</string>
-				</dict>
 			</array>
 		</dict>
 		<key>unionCases</key>

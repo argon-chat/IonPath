@@ -92,7 +92,11 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
         </div>
         <div class="type-grid-row">
           <span class="font-mono text-[12px] type-keyword">datetime</span>
-          <span class="text-[12px] text-text-secondary">CBOR tag 0 text string (ISO 8601 → Date)</span>
+          <span class="text-[12px] text-text-secondary">CBOR tag 0 text string, RFC 3339 with an explicit offset and exactly 7 fractional digits → <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">IonDateTime</code>. <strong>Not <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Date</code>:</strong> <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Date</code> is millisecond-resolution and holds no offset, so it truncated every value a C# peer wrote. See <a href="/guides/primitive-types/#datetime" class="text-accent hover:underline">Primitive Types</a>.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">decimal</span>
+          <span class="text-[12px] text-text-secondary">CBOR tag 4 <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">[exponent, mantissa]</code> → <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">IonDecimal</code></span>
         </div>
         <div class="type-grid-row">
           <span class="font-mono text-[12px] type-keyword">uri</span>

@@ -2,8 +2,6 @@ namespace ion.compiler;
 
 using ion.runtime;
 using ion.syntax;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 
 /// <summary>
@@ -18,6 +16,14 @@ public sealed class ModuleResolver
     /// <summary>
     /// Resolved module with its parsed files and metadata.
     /// </summary>
+    /// <remarks>
+    /// <c>ContentHash</c> — a SHA-256 over the concatenated source of every <c>.ion</c> file in the
+    /// module — used to be the last member. Nothing ever compared it: it was computed on every
+    /// resolve, stored here, and read by no one, and ION0046 ("content hash has changed since last
+    /// lock") could not fire because there was nowhere to record the expected value. Module pinning
+    /// is a worthwhile feature, and when it is built it needs somewhere to keep that expectation;
+    /// until then a hash nobody checks is worse than no hash, because it reads like a guarantee.
+    /// </remarks>
     public sealed record ResolvedModule(
         string Name,
         string ProjectName,
@@ -25,8 +31,7 @@ public sealed class ModuleResolver
         string RootPath,
         IReadOnlyList<IonFileSyntax> Files,
         IReadOnlyList<string> Features,
-        IReadOnlyDictionary<string, string> ChildModules,
-        string ContentHash);
+        IReadOnlyDictionary<string, string> ChildModules);
 
     /// <summary>
     /// Resolve all modules declared in the given config, relative to the project root.
@@ -88,24 +93,19 @@ public sealed class ModuleResolver
             // Parse all .ion files in the module
             var ionFiles = Directory.GetFiles(moduleRoot, "*.ion", SearchOption.AllDirectories);
             var parsedFiles = new List<IonFileSyntax>();
-            var contentBuilder = new StringBuilder();
 
             foreach (var file in ionFiles.OrderBy(f => f))
             {
                 var fi = new FileInfo(file);
                 try
                 {
-                    var parsed = IonParser.Parse(fi);
-                    parsedFiles.Add(parsed);
-                    contentBuilder.Append(File.ReadAllText(file));
+                    parsedFiles.Add(IonParser.Parse(fi));
                 }
                 catch
                 {
                     // Skip unparseable files in external modules
                 }
             }
-
-            var hash = ComputeHash(contentBuilder.ToString());
 
             var childModules = config.Modules ?? new Dictionary<string, string>();
 
@@ -116,8 +116,7 @@ public sealed class ModuleResolver
                 RootPath: moduleRoot,
                 Files: parsedFiles,
                 Features: config.Features ?? [],
-                ChildModules: childModules,
-                ContentHash: hash);
+                ChildModules: childModules);
 
             _resolved[name] = resolved;
 
@@ -131,13 +130,6 @@ public sealed class ModuleResolver
         {
             _resolving.Remove(name);
         }
-    }
-
-    private static string ComputeHash(string content)
-    {
-        var bytes = Encoding.UTF8.GetBytes(content);
-        var hash = SHA256.HashData(bytes);
-        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
     private static IonConfigFile? ParseModuleConfig(string path)

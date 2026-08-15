@@ -1,0 +1,554 @@
+{
+  "$format": "ionpath/collections-golden/1",
+  "$comment": [
+    "Cross-runtime golden vectors for Ion's three new container types:",
+    "Map<K,V>, Set<T> and the fixed-size array T[N].",
+    "  C#   src/tests/IonTestClientServer/CollectionGoldenTests.cs",
+    "  TS   packages/ion.webcore.js/test/collections.golden.test.ts",
+    "  Rust packages/ion.rustcore/tests/collections_golden.rs"
+  ],
+  "$minimalIntegerHeads": [
+    "RESOLVED HERE, and worth recording because it is the float-shrinking bug's twin.",
+    "Canonical ordering is defined over ENCODED bytes, so a key's encoding has to be the same in",
+    "every runtime before the sort can be. It was not: packages/ion.webcore.js's",
+    "CborWriter.writeTypeAndLength jumped straight to the 8-byte head (0x1b/0x3b) whenever it was",
+    "handed a bigint, so TypeScript wrote i8 -1 as '3b0000000000000000' where C#'s CborWriter and",
+    "Rust's minicbor both write '20'. Like the float shrinking, it only ever surfaced for values",
+    "small enough to fit a shorter head, and it silently made i8/u8 fields non-byte-identical",
+    "across runtimes long before Map<K,V> existed. The map vector 'i8-keys-wide' is what caught",
+    "it: with a 9-byte encoding for -1 the length-first sort produced a different key order, not",
+    "merely different bytes. TypeScript now emits the minimal head for bigints too, which",
+    "converges it onto the other two rather than the reverse."
+  ],
+  "canonicalOrdering": {
+    "rule": "RFC 8949 §4.2.1 'length-first' ordering: compare the ENCODED byte length first, then compare the encoded bytes lexicographically.",
+    "appliesTo": "Map keys and Set elements. Array<T> and T[N] keep their authored order.",
+    "why": "A C# Dictionary, a JavaScript Map and a Rust HashMap have three different iteration orders. Without a total order on the wire the same logical map produces three different byte strings, which defeats byte-identity and any future signing, hashing or content-addressing of payloads.",
+    "notLexicographicOnly": "Length-first is NOT the same as plain bytewise comparison. Integer keys make the difference visible: -1 encodes as '20' (1 byte) and 1000 as '1903e8' (3 bytes), so length-first puts -1 first while bytewise puts 1000 first (0x19 < 0x20). See map vector 'i4-keys-length-beats-lexicographic'."
+  },
+  "keyTypes": {
+    "permitted": "The compiler restricts Map keys to scalar / string / guid / enum types.",
+    "enums": "An enum key encodes exactly as its underlying integer, so the i4/u4/i8 vectors cover it; there is no separate enum vector because it would add a generated type to three test suites without exercising a new code path.",
+    "unsupportedKeys": "The formatters do NOT re-validate the key type — they encode whatever the registered key formatter produces and sort by the resulting bytes. Hand one a composite key and it still yields a deterministic map, but duplicate detection then depends on that runtime's notion of key equality, so the compiler restriction is the real guarantee."
+  },
+  "duplicates": {
+    "mapKeys": "REJECTED with a typed error. Identity is the canonical encoded key bytes, which for every permitted key type coincides with value equality.",
+    "setElements": "REJECTED with a typed error, same identity rule.",
+    "rejected": "last-wins / first-wins / silent-collapse — all of them make the decoded value depend on wire order or hide a size change from the caller."
+  },
+  "map": {
+    "wireFormat": {
+      "container": "Definite-length CBOR map on write. Readers MUST also accept an indefinite-length map (0xBF ... 0xFF).",
+      "order": "Keys sorted by the canonical ordering above.",
+      "value": "The value type's ordinary Ion encoding."
+    },
+    "vectors": [
+      {
+        "name": "empty",
+        "keyType": "string",
+        "valueType": "i4",
+        "entries": [],
+        "canonicalKeyOrder": [],
+        "hex": "a0",
+        "notes": "Definite-length map with zero entries."
+      },
+      {
+        "name": "single-entry",
+        "keyType": "string",
+        "valueType": "i4",
+        "entries": [
+          {
+            "key": "a",
+            "value": 1
+          }
+        ],
+        "canonicalKeyOrder": [
+          "6161"
+        ],
+        "hex": "a1616101"
+      },
+      {
+        "name": "string-keys-out-of-order",
+        "keyType": "string",
+        "valueType": "i4",
+        "entries": [
+          {
+            "key": "b",
+            "value": 2
+          },
+          {
+            "key": "a",
+            "value": 1
+          }
+        ],
+        "canonicalKeyOrder": [
+          "6161",
+          "6162"
+        ],
+        "hex": "a2616101616202",
+        "notes": "Authored b-then-a; written a-then-b. This is what makes a C# Dictionary, a JS Map and a Rust HashMap — three different iteration orders — produce the same bytes."
+      },
+      {
+        "name": "string-keys-length-first",
+        "keyType": "string",
+        "valueType": "i4",
+        "entries": [
+          {
+            "key": "aaa",
+            "value": 4
+          },
+          {
+            "key": "zz",
+            "value": 3
+          },
+          {
+            "key": "a",
+            "value": 2
+          },
+          {
+            "key": "",
+            "value": 1
+          }
+        ],
+        "canonicalKeyOrder": [
+          "60",
+          "6161",
+          "627a7a",
+          "63616161"
+        ],
+        "hex": "a46001616102627a7a036361616104",
+        "notes": "Length-first ordering over text keys: '' (1 wire byte) < 'a' (2) < 'zz' (3) < 'aaa' (4). For text strings the CBOR header byte grows with the length, so length-first and plain bytewise ordering happen to agree; see 'i4-keys-length-beats-lexicographic' for the case where they do NOT."
+      },
+      {
+        "name": "i4-keys-length-beats-lexicographic",
+        "keyType": "i4",
+        "valueType": "i4",
+        "entries": [
+          {
+            "key": 1000,
+            "value": 1
+          },
+          {
+            "key": -1,
+            "value": 2
+          },
+          {
+            "key": 24,
+            "value": 3
+          },
+          {
+            "key": 0,
+            "value": 4
+          }
+        ],
+        "canonicalKeyOrder": [
+          "00",
+          "20",
+          "1818",
+          "1903e8"
+        ],
+        "hex": "a4000420021818031903e801",
+        "notes": "THE ORDERING VECTOR. Encoded keys are 1000->'1903e8' (3 bytes), -1->'20' (1), 24->'1818' (2), 0->'00' (1). RFC 8949 §4.2.1 sorts by encoded LENGTH first, giving [0, -1, 24, 1000]. A naive bytewise-only sort would give [0, 24, 1000, -1] because 0x20 > 0x19. Any runtime that gets this vector right is sorting length-first."
+      },
+      {
+        "name": "u4-keys-every-header-width",
+        "keyType": "u4",
+        "valueType": "i4",
+        "entries": [
+          {
+            "key": 65536,
+            "value": 5
+          },
+          {
+            "key": 256,
+            "value": 4
+          },
+          {
+            "key": 255,
+            "value": 3
+          },
+          {
+            "key": 24,
+            "value": 2
+          },
+          {
+            "key": 23,
+            "value": 1
+          },
+          {
+            "key": 0,
+            "value": 0
+          }
+        ],
+        "canonicalKeyOrder": [
+          "00",
+          "17",
+          "1818",
+          "18ff",
+          "190100",
+          "1a00010000"
+        ],
+        "hex": "a60000170118180218ff03190100041a0001000005",
+        "notes": "One key per CBOR unsigned-int header width: inline (0, 23), +1 byte (24, 255), +2 (256), +4 (65536)."
+      },
+      {
+        "name": "i8-keys-wide",
+        "keyType": "i8",
+        "valueType": "i4",
+        "entries": [
+          {
+            "key": -1,
+            "value": 1
+          },
+          {
+            "key": "1099511627776",
+            "value": 2
+          },
+          {
+            "key": "-1099511627776",
+            "value": 3
+          }
+        ],
+        "canonicalKeyOrder": [
+          "20",
+          "1b0000010000000000",
+          "3b000000ffffffffff"
+        ],
+        "hex": "a320011b0000010000000000023b000000ffffffffff03",
+        "notes": "8-byte keys: 2^40 encodes as '1b...' and -2^40 as '3b...', both 9 bytes, so they tie on length and fall through to the bytewise comparison — 0x1b < 0x3b puts the positive first. -1 is a single byte and sorts ahead of both."
+      },
+      {
+        "name": "guid-keys",
+        "keyType": "guid",
+        "valueType": "i4",
+        "entries": [
+          {
+            "key": "ffffffff-0000-0000-0000-000000000000",
+            "value": 1
+          },
+          {
+            "key": "00000000-0000-0000-0000-0000000000ff",
+            "value": 3
+          },
+          {
+            "key": "00000000-ffff-0000-0000-000000000000",
+            "value": 2
+          }
+        ],
+        "canonicalKeyOrder": [
+          "50000000000000000000000000000000ff",
+          "5000000000ffff00000000000000000000",
+          "50ffffffff000000000000000000000000"
+        ],
+        "hex": "a350000000000000000000000000000000ff035000000000ffff000000000000000000000250ffffffff00000000000000000000000001",
+        "notes": "Guid keys are 16-byte CBOR byte strings, so all keys tie on length (17 wire bytes) and order is purely bytewise over the big-endian guid bytes."
+      },
+      {
+        "name": "bool-keys",
+        "keyType": "bool",
+        "valueType": "i4",
+        "entries": [
+          {
+            "key": true,
+            "value": 1
+          },
+          {
+            "key": false,
+            "value": 0
+          }
+        ],
+        "canonicalKeyOrder": [
+          "f4",
+          "f5"
+        ],
+        "hex": "a2f400f501",
+        "notes": "false (0xf4) sorts before true (0xf5)."
+      },
+      {
+        "name": "string-values",
+        "keyType": "string",
+        "valueType": "string",
+        "entries": [
+          {
+            "key": "k2",
+            "value": "v2"
+          },
+          {
+            "key": "k1",
+            "value": "v1"
+          }
+        ],
+        "canonicalKeyOrder": [
+          "626b31",
+          "626b32"
+        ],
+        "hex": "a2626b31627631626b32627632",
+        "notes": "Values are encoded with their own formatter and are never part of the ordering."
+      }
+    ],
+    "decodeOnly": [
+      {
+        "name": "reads-indefinite-length-map",
+        "keyType": "string",
+        "valueType": "i4",
+        "hex": "bf616101616202ff",
+        "reencodedHex": "a2616101616202",
+        "notes": "LENIENCY, and a direct callback to the Partial<T> bug: a reader that treated a null length as zero read no entries and then desynchronised on the closing break. Writers always emit a definite length."
+      },
+      {
+        "name": "reads-unsorted-wire-order",
+        "keyType": "i4",
+        "valueType": "i4",
+        "hex": "a31903e80120020003",
+        "reencodedHex": "a3000320021903e801",
+        "notes": "LENIENCY. A peer that did not sort still decodes; re-encoding puts the keys in canonical order."
+      }
+    ],
+    "malformed": [
+      {
+        "name": "duplicate-keys",
+        "keyType": "string",
+        "valueType": "i4",
+        "hex": "a2616101616102",
+        "notes": "REJECTED with a typed error. Last-wins would make the decoded value depend on wire order, which is exactly the non-determinism the canonical ordering exists to remove; first-wins has the same defect. A duplicate key is a malformed payload."
+      },
+      {
+        "name": "duplicate-keys-indefinite",
+        "keyType": "i4",
+        "valueType": "i4",
+        "hex": "bf07010702ff",
+        "notes": "The duplicate check applies to indefinite-length maps too."
+      }
+    ]
+  },
+  "set": {
+    "wireFormat": {
+      "container": "CBOR tag 258 (the IANA-registered set tag) wrapping a definite-length array. Readers also accept an indefinite-length inner array and an unsorted wire order, but NOT a missing tag.",
+      "order": "Elements sorted by the canonical ordering above.",
+      "whyTagged": "The tag is what distinguishes Set<T> from Array<T> on the wire. They are distinct Ion types with distinct schema-lock entries, so an untagged capture would be ambiguous to anything that does not already hold the schema — which is why the tag is required on READ as well as written. Accepting an untagged array would erase the distinction at the only point where it can still be checked."
+    },
+    "vectors": [
+      {
+        "name": "empty",
+        "elementType": "i4",
+        "elements": [],
+        "hex": "d9010280",
+        "notes": "Tag 258 + a definite-length array of zero items."
+      },
+      {
+        "name": "single",
+        "elementType": "i4",
+        "elements": [
+          1
+        ],
+        "hex": "d901028101"
+      },
+      {
+        "name": "insertion-order-a",
+        "elementType": "i4",
+        "elements": [
+          3,
+          1,
+          2
+        ],
+        "hex": "d9010283010203",
+        "notes": "ORDER-INDEPENDENCE PAIR (1 of 2). Must produce exactly the same bytes as 'insertion-order-b'."
+      },
+      {
+        "name": "insertion-order-b",
+        "elementType": "i4",
+        "elements": [
+          2,
+          3,
+          1
+        ],
+        "hex": "d9010283010203",
+        "notes": "ORDER-INDEPENDENCE PAIR (2 of 2). Same bytes as 'insertion-order-a'. A Rust HashSet and a JS Set iterate in different orders; sorting by encoded element bytes is what makes them agree."
+      },
+      {
+        "name": "length-beats-lexicographic",
+        "elementType": "i4",
+        "elements": [
+          1000,
+          -1,
+          24,
+          0
+        ],
+        "hex": "d9010284002018181903e8",
+        "notes": "Same length-first rule as map keys, applied to elements: [0, -1, 24, 1000], not [0, 24, 1000, -1]."
+      },
+      {
+        "name": "strings",
+        "elementType": "string",
+        "elements": [
+          "b",
+          "a",
+          ""
+        ],
+        "hex": "d90102836061616162"
+      },
+      {
+        "name": "guids",
+        "elementType": "guid",
+        "elements": [
+          "ffffffff-0000-0000-0000-000000000000",
+          "00000000-0000-0000-0000-0000000000ff",
+          "00000000-ffff-0000-0000-000000000000"
+        ],
+        "hex": "d901028350000000000000000000000000000000ff5000000000ffff0000000000000000000050ffffffff000000000000000000000000"
+      }
+    ],
+    "decodeOnly": [
+      {
+        "name": "reads-indefinite-length-inner-array",
+        "elementType": "i4",
+        "hex": "d901029f0102ff",
+        "reencodedHex": "d90102820102",
+        "notes": "LENIENCY. Writers always emit a definite length."
+      },
+      {
+        "name": "reads-unsorted-wire-order",
+        "elementType": "i4",
+        "hex": "d9010283030102",
+        "reencodedHex": "d9010283010203",
+        "notes": "LENIENCY. Re-encoding sorts."
+      }
+    ],
+    "malformed": [
+      {
+        "name": "duplicate-elements",
+        "elementType": "i4",
+        "hex": "d9010283010102",
+        "notes": "REJECTED with a typed error. Silently collapsing duplicates would make |set| depend on the payload rather than on the sender's intent, and would let a 3-element wire array decode as a 2-element set — a length mismatch a caller can neither see nor guard against. A duplicate element is a malformed payload."
+      },
+      {
+        "name": "wrong-tag",
+        "elementType": "i4",
+        "hex": "d901038101",
+        "notes": "Tag 259 is the map-with-any-key tag. Anything that is not 258 is rejected."
+      },
+      {
+        "name": "missing-tag",
+        "elementType": "i4",
+        "hex": "83010203",
+        "notes": "An untagged array is REJECTED. This is the one place leniency is NOT free: a bare array is exactly the encoding of Array<T>, and Set<T> and Array<T> are distinct Ion types with distinct schema-lock entries. Accepting it on read would erase, at the only point where it can still be checked, the very distinction the tag exists to carry."
+      }
+    ]
+  },
+  "fixedArray": {
+    "wireFormat": {
+      "container": "A definite-length CBOR array of EXACTLY N items. Readers also accept an indefinite-length array whose item count turns out to be N.",
+      "order": "Authored order. A fixed array is not a set and is not sorted.",
+      "lengthCheck": "A wire length other than N is a TYPED error naming both the declared N and the length received. That check is the entire point of the feature.",
+      "noU1SpecialCase": "u1[N] is an array of N integers, NOT a CBOR byte string. See the 'u1-n4' vector.",
+      "nIsAParameter": "N is passed to the formatter at the call site, never baked into a per-length type."
+    },
+    "vectors": [
+      {
+        "name": "i4-n3",
+        "elementType": "i4",
+        "length": 3,
+        "elements": [
+          1,
+          2,
+          3
+        ],
+        "hex": "83010203"
+      },
+      {
+        "name": "i4-n0",
+        "elementType": "i4",
+        "length": 0,
+        "elements": [],
+        "hex": "80",
+        "notes": "A zero-length fixed array is a definite-length empty array."
+      },
+      {
+        "name": "i4-n1-wide-element",
+        "elementType": "i4",
+        "length": 1,
+        "elements": [
+          255
+        ],
+        "hex": "8118ff"
+      },
+      {
+        "name": "u1-n4",
+        "elementType": "u1",
+        "length": 4,
+        "elements": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "hex": "8401020304",
+        "notes": "NO-BYTE-STRING GUARD. u1[4] is an ARRAY OF FOUR INTEGERS (0x84 ...), NOT a 4-byte CBOR byte string (0x44 01020304). Special-casing u1[N] into a byte string would save three bytes here and make the wire type of a fixed array depend on its element type, which no reader could predict from the schema alone."
+      },
+      {
+        "name": "string-n2",
+        "elementType": "string",
+        "length": 2,
+        "elements": [
+          "a",
+          "b"
+        ],
+        "hex": "8261616162"
+      },
+      {
+        "name": "guid-n1",
+        "elementType": "guid",
+        "length": 1,
+        "elements": [
+          "ffffffff-0000-0000-0000-000000000000"
+        ],
+        "hex": "8150ffffffff000000000000000000000000"
+      }
+    ],
+    "decodeOnly": [
+      {
+        "name": "reads-indefinite-length-array-of-correct-length",
+        "elementType": "i4",
+        "length": 3,
+        "hex": "9f010203ff",
+        "reencodedHex": "83010203",
+        "notes": "LENIENCY. An indefinite-length array is accepted as long as the item count turns out to be exactly N. Writers always emit a definite length."
+      }
+    ],
+    "malformed": [
+      {
+        "name": "too-short",
+        "elementType": "i4",
+        "length": 3,
+        "actualLength": 2,
+        "hex": "820102",
+        "notes": "THE POINT OF THE FEATURE. Declared N=3, wire length 2. The typed error must NAME BOTH LENGTHS — an error that says only 'wrong length' cannot tell a caller whether the peer is on an older schema or the payload is truncated."
+      },
+      {
+        "name": "too-long",
+        "elementType": "i4",
+        "length": 3,
+        "actualLength": 4,
+        "hex": "8401020304",
+        "notes": "Declared N=3, wire length 4. Extra items are NOT skipped for forward compatibility: the declared length is the contract."
+      },
+      {
+        "name": "too-short-indefinite",
+        "elementType": "i4",
+        "length": 3,
+        "actualLength": 2,
+        "hex": "9f0102ff",
+        "notes": "The length check applies to indefinite-length arrays too, after counting."
+      }
+    ]
+  },
+  "howToConsume": [
+    "map.vectors      — build the container from `entries` IN THE GIVEN (unsorted) ORDER, write it,",
+    "                   expect `hex`; then read `hex`, re-encode, expect `hex`.",
+    "set.vectors      — same, from `elements`.",
+    "fixedArray.vectors — same, from `elements`, passing `length` to the formatter.",
+    "*.decodeOnly     — read `hex`, re-encode, expect `reencodedHex`.",
+    "*.malformed      — reading `hex` must raise the runtime's TYPED decode error. For fixedArray,",
+    "                   the error must mention both `length` and `actualLength`."
+  ]
+}

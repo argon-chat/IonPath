@@ -38,7 +38,7 @@ public class InitCommand : Command<InitOptions>
             new MultiSelectionPrompt<string>()
                 .Title("Select [cyan]features[/]:")
                 .Required()
-                .AddChoices("std", "vector", "orleans")
+                .AddChoices("std", "orleans")
                 .Select("std"));
 
         // Interactive platform selection
@@ -46,7 +46,7 @@ public class InitCommand : Command<InitOptions>
             new MultiSelectionPrompt<string>()
                 .Title("Select [cyan]target platforms[/]:")
                 .Required()
-                .AddChoices("dotnet", "browser", "go")
+                .AddChoices("dotnet", "browser", "rust")
                 .Select("dotnet"));
 
         // Build generators config
@@ -74,17 +74,24 @@ public class InitCommand : Command<InitOptions>
                         outputFile = $"./{name}.generated.ts"
                     };
                     break;
-                case "go":
-                    var goFeatures = AnsiConsole.Prompt(
+                // Only 'models' and 'client' are offered: RustFeature has no Server member, and
+                // the Rust generator emits no server surface.
+                case "rust":
+                    var rustFeatures = AnsiConsole.Prompt(
                         new MultiSelectionPrompt<string>()
-                            .Title($"Select [cyan]go[/] features:")
-                            .AddChoices("models", "client", "server")
+                            .Title($"Select [cyan]rust[/] features:")
+                            .AddChoices("models", "client")
                             .Select("models"));
-                    generators["go"] = new
+                    generators["rust"] = new
                     {
-                        features = goFeatures,
-                        outputs = "./",
-                        packageName = name.ToLowerInvariant().Replace(".", "").Replace("-", "")
+                        features = rustFeatures,
+                        outputs = "./gen-rust",
+                        // A crate name is a Cargo package name: '.' is not allowed, '-' is.
+                        crateName = name.ToLowerInvariant().Replace(".", "-"),
+                        // Points at the ion.rustcore crate the generated code depends on. The
+                        // scaffold cannot know where it lives, so this is a placeholder the
+                        // author edits — the same relative-path shape the repo's own fixture uses.
+                        rustcorePath = "../packages/ion.rustcore"
                     };
                     break;
             }

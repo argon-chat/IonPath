@@ -8,9 +8,9 @@
     { "include": "#keywords" },
     { "include": "#modifiers" },
     { "include": "#attributes" },
+    { "include": "#withClause" },
     { "include": "#genericBuiltinTypes" },
     { "include": "#builtinTypes" },
-    { "include": "#vectorTypes" },
     { "include": "#strings" },
     { "include": "#quotedStrings" },
     { "include": "#numbers" },
@@ -132,8 +132,32 @@
     "keywords": {
       "patterns": [
         {
+          "comment": "`with` is here rather than in #modifiers because it introduces a clause, like `from` in an #import, not a property of the declaration. `mixin` is a declaration keyword like `msg`, even though a mixin is not a type.",
           "name": "keyword.control.ionpath",
-          "match": "\\b(msg|flags|enum|typedef|service|union|attribute)\\b"
+          "match": "\\b(msg|mixin|with|flags|enum|typedef|service|union|attribute)\\b"
+        }
+      ]
+    },
+    "withClause": {
+      "comment": "The names in `with Audited, Traced`. Scoped as entity.name.type so they read as references to a declaration; without this rule they fall through to #fieldNames or to nothing, because a clause entry is not followed by a ':' or a '('.",
+      "patterns": [
+        {
+          "begin": "\\b(with)\\s+",
+          "end": "(?=\\{)|$",
+          "beginCaptures": {
+            "1": { "name": "keyword.control.ionpath" }
+          },
+          "patterns": [
+            {
+              "name": "entity.name.type.mixin.ionpath",
+              "match": "\\b[A-Za-z_][A-Za-z0-9_]*\\b"
+            },
+            {
+              "name": "punctuation.separator.comma.ionpath",
+              "match": ","
+            },
+            { "include": "#comments" }
+          ]
         }
       ]
     },
@@ -158,26 +182,20 @@
       ]
     },
     "builtinTypes": {
+      "comment": "Kept in step with IonModule.GetStdModule. The retired `vector` feature's vec2f..vec4h lived here after the types were deleted; anything listed that the compiler does not declare is a name the editor recommends and the build then rejects.",
       "patterns": [
         {
           "name": "storage.type.primitive.ionpath",
-          "match": "\\b(i1|i2|i4|i8|i16|u1|u2|u4|u8|u16|f2|f4|f8|void|bool|string|bytes|guid|datetime|dateonly|timeonly|duration|uri|bigint)\\b"
+          "match": "\\b(i1|i2|i4|i8|i16|u1|u2|u4|u8|u16|f2|f4|f8|void|bool|string|bytes|guid|decimal|datetime|dateonly|timeonly|duration|uri|bigint)\\b"
         }
       ]
     },
     "genericBuiltinTypes": {
+      "comment": "Map and Set have no suffix spelling — there is no T{} — so unlike Maybe/Array/Partial they are always written by name and always reach this rule.",
       "patterns": [
         {
           "name": "support.type.ionpath",
-          "match": "\\b(Maybe|Array|Partial)\\b"
-        }
-      ]
-    },
-    "vectorTypes": {
-      "patterns": [
-        {
-          "name": "support.type.vector.ionpath",
-          "match": "\\b(vec2f|vec3f|vec4f|vec2d|vec3d|vec4d|vec2h|vec3h|vec4h)\\b"
+          "match": "\\b(Maybe|Array|Partial|Map|Set)\\b"
         }
       ]
     },
@@ -230,7 +248,8 @@
     "entityNames": {
       "patterns": [
         {
-          "match": "\\b(msg|enum|flags|service|typedef|union)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "comment": "`mixin` included so `mixin Audited` colours its name like every other declaration. An inline `msg {` has no name and correctly does not match.",
+          "match": "\\b(msg|mixin|enum|flags|service|typedef|union)\\s+([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
             "1": { "name": "keyword.control.ionpath" },
             "2": { "name": "entity.name.type.ionpath" }
@@ -253,8 +272,7 @@
           "patterns": [
             { "include": "#builtinTypes" },
             { "include": "#genericBuiltinTypes" },
-            { "include": "#vectorTypes" },
-            {
+                    {
               "name": "entity.name.type.parameter.ionpath",
               "match": "\\b[A-Z][A-Za-z0-9_]*\\b"
             },

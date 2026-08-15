@@ -1,0 +1,118 @@
+//! `datetime` and `decimal` contracts.
+//!
+//! Both primitives exist for one reason — not silently rounding a value off — so both are
+//! exercised here in every position a generator has to spell: bare, optional, array,
+//! optional array, as a typedef target, inside a `Partial<T>` target, and in a service
+//! signature (argument, return, and the service level bound operand).
+//!
+//! * `datetime` is CBOR tag 0 + RFC 3339 text, always with an explicit numeric offset and
+//!   always with exactly seven fractional digits. It maps to `System.DateTimeOffset`,
+//!   `IonDateTime` and `chrono::DateTime<chrono::FixedOffset>` — never to `System.DateTime`,
+//!   which has no offset field and decodes `-05:00` back as UTC, and never to a JavaScript
+//!   `Date`, which is millisecond resolution and cannot hold a 100ns tick.
+//! * `decimal` is CBOR tag 4, `[exponent, mantissa]`. It maps to `System.Decimal`,
+//!   `IonDecimal` and `ion_rustcore::IonDecimal` — never to `f8`, which cannot represent
+//!   `0.1` at all.
+//!
+//! The integration tests round-trip a non-UTC offset, a sub-millisecond tick and a decimal
+//! that `double` cannot hold, because those are the three values that tell a correct
+//! mapping apart from one that merely compiles.
+
+/// An instant.
+///
+/// The alias exists to pin the *resolved* type name in each target. A field is emitted as
+/// the primitive's own spelling, so only a typedef makes a generator write out what
+/// `datetime` actually resolves to: `System.DateTimeOffset` in C# (never `System.DateTime`,
+/// which has no offset field), `IonDateTime` in TypeScript, and
+/// `chrono::DateTime<chrono::FixedOffset>` in Rust.
+typedef Timestamp = datetime;
+
+/// An exact monetary amount.
+///
+/// Same job as `Timestamp`, one primitive over: `System.Decimal`, `IonDecimal` and
+/// `ion_rustcore::IonDecimal` — never a binary float.
+typedef Money = decimal;
+
+/// One ledger entry: both new primitives under every modifier stacking.
+msg LedgerEntry {
+    /// Bare `datetime`. Round-tripped with a non-UTC offset and a 100ns tick.
+    bookedAt: datetime;
+
+    /// Bare `decimal`. Round-tripped with a value binary floating point cannot represent.
+    amount: decimal;
+
+    /// `datetime?` — `System.Nullable<DateTimeOffset>`, `IonDateTime | null`,
+    /// `Option<chrono::DateTime<FixedOffset>>`. Both new primitives are value types in C#,
+    /// so this is the `NullableValue` path, not `NullableRef`.
+    settledAt: datetime?;
+
+    /// `decimal?`.
+    fee: decimal?;
+
+    /// `datetime[]`.
+    revisions: datetime[];
+
+    /// `decimal[]`.
+    adjustments: decimal[];
+
+    /// `decimal[]?` — the two collapsing wrappers stacked, read through a single
+    /// `ReadNullableArray` rather than a nullable of an array.
+    corrections: decimal[]?;
+
+    /// A typedef over a builtin is transparent: this is an ordinary `datetime` on the wire,
+    /// and the generated field is spelled with the primitive, not with the alias.
+    openedAt: Timestamp;
+
+    /// The same, over `decimal`.
+    openingBalance: Money;
+}
+
+/// The `Partial<T>` target.
+///
+/// Separate from `LedgerEntry` so the patch schema stays small enough to assert field by
+/// field, and separate from `PartialInteraction.ion`'s `PatchTarget` so that the byte
+/// comparable golden shape over there is not disturbed. What it adds over that one is a
+/// value-typed *builtin struct* field: `IonPartialSchema<T>.Field<datetime>` and
+/// `.NullableValue<datetime>` are different descriptors from the `i4`/`string` cases, and
+/// only a `datetime`/`decimal` field reaches them.
+msg LedgerPatch {
+    /// `.Field<datetime>` — clearing it must encode as `null`, not as `0001-01-01`.
+    bookedAt: datetime;
+
+    /// `.Field<decimal>` — clearing it must encode as `null`, not as `0`.
+    amount: decimal;
+
+    /// `.NullableValue<datetime>`: `DateTimeOffset` is a struct, so a nullable one is
+    /// `Nullable<DateTimeOffset>` and needs the value-typed descriptor.
+    settledAt: datetime?;
+
+    /// `.Array<decimal>`.
+    adjustments: decimal[];
+}
+
+/// Round-trip surface for `datetime` and `decimal`.
+///
+/// The service level operand is itself a `datetime`, so every generated method signature
+/// carries one — that is the position that would have gone unnoticed if only fields were
+/// covered.
+service LedgerInteraction(openedAt: datetime) {
+    /// `datetime` in both argument and return position. The one method whose result proves
+    /// the offset and the sub-millisecond tick survived the wire.
+    Echo(at: datetime): datetime;
+
+    /// `decimal` in both argument and return position.
+    EchoAmount(amount: decimal): decimal;
+
+    /// The whole message, so every field shape above goes over a real transport.
+    Roundtrip(entry: LedgerEntry): LedgerEntry;
+
+    /// Optional in argument and return position: `Maybe<datetime>` / `Maybe<decimal>`.
+    /// A null `amount` returns null, so the null branch is reachable.
+    EchoMaybe(at: datetime?, amount: decimal?): decimal?;
+
+    /// Arrays of both, with an array return.
+    EchoMany(instants: datetime[], amounts: decimal[]): datetime[];
+
+    /// A `Partial<T>` whose target is made of the new primitives, in both positions.
+    Patch(patch: LedgerPatch~): LedgerPatch~;
+}

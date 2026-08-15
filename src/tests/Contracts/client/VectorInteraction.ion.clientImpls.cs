@@ -26,8 +26,14 @@ public sealed class Ion_VectorMathInteraction_ClientImpl(IonClientContext contex
         typeof(IVectorMathInteraction).GetMethod(nameof(AndNot), BindingFlags.Public | BindingFlags.Instance)!);
     private static readonly Lazy<MethodInfo> Clamp_Ref = new(() =>
         typeof(IVectorMathInteraction).GetMethod(nameof(Clamp), BindingFlags.Public | BindingFlags.Instance)!);
+    private static readonly Lazy<MethodInfo> Component_Ref = new(() =>
+        typeof(IVectorMathInteraction).GetMethod(nameof(Component), BindingFlags.Public | BindingFlags.Instance)!);
     private static readonly Lazy<MethodInfo> Do_Ref = new(() =>
         typeof(IVectorMathInteraction).GetMethod(nameof(Do), BindingFlags.Public | BindingFlags.Instance)!);
+    private static readonly Lazy<MethodInfo> Repeat_Ref = new(() =>
+        typeof(IVectorMathInteraction).GetMethod(nameof(Repeat), BindingFlags.Public | BindingFlags.Instance)!);
+    private static readonly Lazy<MethodInfo> Spread_Ref = new(() =>
+        typeof(IVectorMathInteraction).GetMethod(nameof(Spread), BindingFlags.Public | BindingFlags.Instance)!);
 
 
     
@@ -103,6 +109,27 @@ public sealed class Ion_VectorMathInteraction_ClientImpl(IonClientContext contex
     
         return await req.CallAsync<Vector>(writer.Encode(), ct: ct);
     }
+    /// <summary>
+    /// Exercises a typedef in both argument and return position.
+    /// </summary>
+    [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+    public async Task<f4> Component(Vector __leftoperand, u1 __index, CancellationToken ct = default)
+    {
+        var req = new IonRequest(context, typeof(IVectorMathInteraction), Component_Ref.Value);
+    
+        var writer = new CborWriter();
+        
+        const int argsSize = 2;
+    
+        writer.WriteStartArray(argsSize);
+        
+        IonFormatterStorage<Vector>.Write(writer, __leftoperand);
+        IonFormatterStorage<u1>.Write(writer, __index);
+        
+        writer.WriteEndArray();
+    
+        return await req.CallAsync<f4>(writer.Encode(), ct: ct);
+    }
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public async Task<VectorOfVectorOfVector> Do(Vector __leftoperand, CancellationToken ct = default)
     {
@@ -119,6 +146,52 @@ public sealed class Ion_VectorMathInteraction_ClientImpl(IonClientContext contex
         writer.WriteEndArray();
     
         return await req.CallAsync<VectorOfVectorOfVector>(writer.Encode(), ct: ct);
+    }
+    /// <summary>
+    /// `T[]` return over a message element, beside `Spread` below.
+    /// </summary>
+    [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+    public async Task<IonArray<Vector>> Repeat(Vector __leftoperand, u1 __count, CancellationToken ct = default)
+    {
+        var req = new IonRequest(context, typeof(IVectorMathInteraction), Repeat_Ref.Value);
+    
+        var writer = new CborWriter();
+        
+        const int argsSize = 2;
+    
+        writer.WriteStartArray(argsSize);
+        
+        IonFormatterStorage<Vector>.Write(writer, __leftoperand);
+        IonFormatterStorage<u1>.Write(writer, __count);
+        
+        writer.WriteEndArray();
+    
+        return await req.CallAsyncWithArray<Vector>(writer.Encode(), ct: ct);
+    }
+    /// <summary>
+    /// `T[]?` return over a message element: `count` of 0 returns null, not an empty array.
+    ///
+    /// The null case is the one that matters — an implementation that decodes the response as a
+    /// single `Vector` instead of a nullable array still "works" on a non-null payload of length
+    /// one, so only null-vs-empty-vs-populated together pin the wire shape.
+    /// </summary>
+    [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+    public async Task<IonArray<Vector>?> Spread(Vector __leftoperand, u1 __count, CancellationToken ct = default)
+    {
+        var req = new IonRequest(context, typeof(IVectorMathInteraction), Spread_Ref.Value);
+
+        var writer = new CborWriter();
+
+        const int argsSize = 2;
+
+        writer.WriteStartArray(argsSize);
+
+        IonFormatterStorage<Vector>.Write(writer, __leftoperand);
+        IonFormatterStorage<u1>.Write(writer, __count);
+
+        writer.WriteEndArray();
+
+        return await req.CallAsyncNullableArray<Vector>(writer.Encode(), ct: ct);
     }
 
 }

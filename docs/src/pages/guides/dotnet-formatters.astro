@@ -63,21 +63,34 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
 
     <section>
       <h2 id="ion-partial" class="text-xl font-bold mb-4">IonPartial&lt;T&gt;</h2>
-      <p class="text-sm text-text-secondary mb-4">Tracks field modifications for sparse (PATCH-like) updates. Only modified fields are serialized:</p>
+      <p class="text-sm text-text-secondary mb-4">A per-field tri-state patch for sparse (PATCH-like) updates. Every field is <em>untouched</em>, <em>modified</em>, or <em>cleared</em>, and only the fields you touch are serialized. Per-field state is carried by <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">PartialField&lt;T&gt;</code>:</p>
       <div class="code-block text-[13px]">
         <pre><span class="text-accent-3">var</span> patch = <span class="text-accent-3">new</span> <span class="type-name">IonPartial</span>&lt;<span class="type-name">User</span>&gt;();
 
-<span class="text-text-muted">// Set specific fields</span>
-patch.Set(u => u.name, <span class="text-accent-2">"New Name"</span>);
-patch.Set(u => u.email, <span class="text-accent-2">"new{'@'}example.com"</span>);
+<span class="text-text-muted">// Modify a field</span>
+patch.Modify(u => u.name, <span class="text-accent-2">"New Name"</span>);
 
-<span class="text-text-muted">// Check if a field was modified</span>
-<span class="text-accent-3">bool</span> modified = patch.IsSet(u => u.name);  <span class="text-text-muted">// true</span>
-<span class="text-accent-3">bool</span> untouched = patch.IsSet(u => u.id);  <span class="text-text-muted">// false</span>
+<span class="text-text-muted">// Clear a field — writes an explicit CBOR null</span>
+patch.Remove(u => u.email);
 
-<span class="text-text-muted">// On the wire: only 'name' and 'email' are serialized</span>
+<span class="text-text-muted">// Or set the state explicitly</span>
+patch.SetField(u => u.name, <span class="type-name">PartialField</span>&lt;<span class="type-keyword">string</span>&gt;.Modified(<span class="text-accent-2">"New Name"</span>));
+
+<span class="text-text-muted">// Read a field back: State is None | Modified | Removed</span>
+<span class="text-accent-3">var</span> name = patch.GetField(u => u.name);
+<span class="text-accent-3">if</span> (name.State == <span class="type-name">PartialState</span>.Modified)
+    Console.WriteLine(name.Value);
+
+<span class="text-text-muted">// On the wire: only 'name' and 'email' appear; 'id' is absent (untouched)</span>
 <span class="text-accent-3">await</span> userService.UpdateUser(42, patch);</pre>
       </div>
+      <p class="text-sm text-text-secondary mt-3">To apply an incoming patch, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">On(...)</code> runs the handler only for fields that were modified or cleared — untouched fields are skipped — and chains:</p>
+      <div class="code-block text-[13px]">
+        <pre>patch
+    .On(u => u.name,  v => user = user <span class="text-accent-3">with</span> {'{'} name = v {'}'})
+    .On(u => u.email, v => user = user <span class="text-accent-3">with</span> {'{'} email = v {'}'});</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">On the wire this is a CBOR map keyed by field name, not a positional array. See the <a href="/guides/partial/" class="text-accent hover:underline">Partial&lt;T&gt;</a> guide.</p>
     </section>
 
     <section>

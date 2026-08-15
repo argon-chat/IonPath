@@ -8,22 +8,362 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 #![allow(dead_code, unused_imports, non_camel_case_types)]
+//! Attribute emission fixtures.
+//!
+//! Nothing here is called by the integration tests: this module exists so that every
+//! shape the code generators have to render for an attribute appears in checked-in
+//! generated output, where a regression is a diff rather than a silent behaviour change.
+//!
+//! Two families are covered.
+//!
+//! * A **user declared** attribute, `@Cache`, with one parameter of each kind the
+//!   attribute binder can produce — an integer, a string, a bool, an array, and a
+//!   trailing optional — used with the optional written and with it omitted. Only C#
+//!   has a general purpose annotation mechanism, so `@Cache` is expected to appear in
+//!   the C# output alone.
+//! * **`@deprecated`**, in all four argument shapes (none, `since` only, `reason` only,
+//!   both), on a msg, a field, an enum, an enum member, a service and a method. This one
+//!   is expected in every target, each in its own idiom: `[Obsolete]`, a `@deprecated`
+//!   JSDoc tag, `#[deprecated]`, and a `// Deprecated:` doc paragraph.
+//!
+//! `Map<K,V>`, `Set<T>` and the fixed-size array `T[N]` contracts.
+//!
+//! One file per shape would hide the interesting half. What has to hold here is that the
+//! three containers behave like every other Ion type in *every* position a generator has
+//! to spell — a message field, a method argument, a method return — and that they still
+//! behave when stacked with the modifiers (`?`, `[]`, `~`) and with each other.
+//!
+//! What each container buys, and therefore what the integration tests assert:
+//!
+//! * `Map<K,V>` is a definite-length CBOR map whose keys are sorted in canonical
+//!   RFC 8949 §4.2.1 order — byte length first, then lexicographically. The sort is the
+//!   whole feature: a C# `Dictionary`, a JavaScript `Map` and a Rust `HashMap` have three
+//!   different iteration orders, so without a total order the same logical map would
+//!   produce three different byte strings.
+//! * `Set<T>` is CBOR tag 258 wrapping a definite-length array, elements under the same
+//!   ordering. The tag is what tells it apart from `Array<T>` on the wire; without it a
+//!   captured payload would be ambiguous to anything that does not already hold the schema.
+//! * `T[N]` is a definite-length array of exactly N, and a wrong length is a typed decode
+//!   error naming both lengths — not a truncation, and not a silent pad.
+//!
 //! Binary payload round-trip contracts.
 //!
 //! These services exist to exercise the `bytes` primitive across every method
 //! shape the runtime supports: void return, single round-trip, and repeated
 //! round-trips over the same connection.
 //!
+//! `datetime` and `decimal` contracts.
+//!
+//! Both primitives exist for one reason — not silently rounding a value off — so both are
+//! exercised here in every position a generator has to spell: bare, optional, array,
+//! optional array, as a typedef target, inside a `Partial<T>` target, and in a service
+//! signature (argument, return, and the service level bound operand).
+//!
+//! * `datetime` is CBOR tag 0 + RFC 3339 text, always with an explicit numeric offset and
+//!   always with exactly seven fractional digits. It maps to `System.DateTimeOffset`,
+//!   `IonDateTime` and `chrono::DateTime<chrono::FixedOffset>` — never to `System.DateTime`,
+//!   which has no offset field and decodes `-05:00` back as UTC, and never to a JavaScript
+//!   `Date`, which is millisecond resolution and cannot hold a 100ns tick.
+//! * `decimal` is CBOR tag 4, `[exponent, mantissa]`. It maps to `System.Decimal`,
+//!   `IonDecimal` and `ion_rustcore::IonDecimal` — never to `f8`, which cannot represent
+//!   `0.1` at all.
+//!
+//! The integration tests round-trip a non-UTC offset, a sub-millisecond tick and a decimal
+//! that `double` cannot hold, because those are the three values that tell a correct
+//! mapping apart from one that merely compiles.
+//!
 //! Arithmetic RPC surface used by the IonPath integration tests.
 //!
 //! Every service in this module is stateless: the left-hand operand is bound
 //! once, as a service argument, and reused by every method call on that client.
+//!
+//! `Partial<T>` ("T~") contracts.
+//!
+//! Exercises every shape the generators have to emit for a partial: as a message
+//! field, as a method argument, as a method return, and under each of the four
+//! modifier stackings (`T~`, `T~[]`, `T~?`, `T~[]?`).
 
 use ion_rustcore::formatter::IonFormat;
 use ion_rustcore::{Decoder, Encoder, IonError};
 pub use futures_util::StreamExt;
 
 // ═══════════════ Types ═══════════════
+
+/// An instant.
+///
+/// The alias exists to pin the *resolved* type name in each target. A field is emitted as
+/// the primitive's own spelling, so only a typedef makes a generator write out what
+/// `datetime` actually resolves to: `System.DateTimeOffset` in C# (never `System.DateTime`,
+/// which has no offset field), `IonDateTime` in TypeScript, and
+/// `chrono::DateTime<chrono::FixedOffset>` in Rust.
+pub type Timestamp = chrono::DateTime<chrono::FixedOffset>;
+
+/// An exact monetary amount.
+///
+/// Same job as `Timestamp`, one primitive over: `System.Decimal`, `IonDecimal` and
+/// `ion_rustcore::IonDecimal` — never a binary float.
+pub type Money = ion_rustcore::IonDecimal;
+
+/// A single vector component.
+///
+/// A typedef is a transparent alias: on the wire this is an ordinary `f4`, and every
+/// generated field below is emitted as `f4`. The alias exists only so hand written code
+/// can name it.
+pub type Scalar = f32;
+
+/// A component count, used as a service operand.
+pub type Rank = u8;
+
+/// The request shape that `CacheProbe` replaced.
+///
+/// `@deprecated` with no arguments: the bare form, and the one where every target has to
+/// avoid emitting an empty argument list.
+#[deprecated]
+#[derive(Debug, Clone, PartialEq)]
+pub struct LegacyRequest {
+    /// The pre-0.4 identifier.
+    ///
+    /// `@deprecated` with only `since`. On a field, because a C# positional record has to
+    /// route the attribute to the generated property rather than the constructor parameter.
+    #[deprecated(since = "0.4")]
+    pub old_id: i32,
+    /// Not deprecated, so the neighbouring field proves the marker is per-member.
+    pub name: String,
+}
+
+
+/// Carries `@Cache` on the declaration and on one of its fields.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CacheProbe {
+    /// Every argument written, including the trailing optional.
+    pub hits: i32,
+    /// The optional omitted and the array empty — the two shapes that used to emit
+    /// `[Cache(0,misses,)]` and an untyped `new[] { }`.
+    pub misses: i32,
+    /// Undecorated, to keep an unannotated field in the same record.
+    pub total: i32,
+}
+
+
+/// Where a cached entry lives.
+///
+/// `@deprecated` with both arguments, on the enum itself.
+#[deprecated(since = "0.5", note = "regions were replaced by explicit key parts")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(i32)]
+pub enum CacheRegion {
+    /// Never produced any more. Bare `@deprecated` on an enum member.
+    #[deprecated]
+    None = 0,
+    /// `@deprecated` with only `since`, on an enum member.
+    #[deprecated(since = "0.5")]
+    Local = 1,
+    /// `@deprecated` with both arguments, on an enum member.
+    #[deprecated(since = "0.5", note = "use Shared")]
+    Session = 2,
+    /// The surviving member.
+    Shared = 3,
+}
+
+
+/// Plain message used as a `Map` value and a `Set`-adjacent element.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Member {
+    pub id: uuid::Uuid,
+    pub name: String,
+}
+
+
+/// The `Partial<T>` target, so `Map<string, Doc~>` has something to patch.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Doc {
+    pub title: String,
+    pub revision: i32,
+}
+
+
+/// Every key type ION0061 allows, one field each.
+///
+/// The compiler's rule is: the ten integral builtins, `bool`, `duration`, `string`, `guid`,
+/// and any enum. Nothing else — a float key would gain or lose entries on decode (`-0.0`
+/// and `0.0` encode differently but compare equal, `NaN` does not compare equal to itself),
+/// and `bytes`/`datetime` map to reference-equality types in at least one target.
+///
+/// `duration` is deliberately absent despite being legal: `ion_rustcore::IonDuration` is
+/// `#[derive(Debug, Clone, PartialEq)]` with no `Eq` and no `Hash`, so
+/// `HashMap<IonDuration, i32>` does not compile. See the codegen report — the fix is one
+/// derive in `packages/ion.rustcore/src/types.rs`, which is out of this change's scope.
+#[derive(Debug, Clone, PartialEq)]
+pub struct KeyMatrix {
+    /// The narrow signed integrals. `i1` also pins the length-first rule at its most
+    /// visible: `-1` encodes as one byte (`20`) and `1000` as three (`1903e8`), so
+    /// canonical order puts `-1` first where a bytewise sort would put `1000` first.
+    pub by_i1: std::collections::HashMap<i8, i32>,
+    pub by_i2: std::collections::HashMap<i16, i32>,
+    pub by_i4: std::collections::HashMap<i32, i32>,
+    pub by_i8: std::collections::HashMap<i64, i32>,
+    /// `i16`/`u16` are `Int128`/`UInt128` in C#, `bigint` in TypeScript and `i128`/`u128`
+    /// in Rust — three different key representations over one wire encoding.
+    pub by_i16: std::collections::HashMap<i128, i32>,
+    pub by_u1: std::collections::HashMap<u8, i32>,
+    pub by_u2: std::collections::HashMap<u16, i32>,
+    pub by_u4: std::collections::HashMap<u32, i32>,
+    pub by_u8: std::collections::HashMap<u64, i32>,
+    pub by_u16: std::collections::HashMap<u128, i32>,
+    /// Two keys only, and the one case where the encoded key is a single byte in both arms.
+    pub by_bool: std::collections::HashMap<bool, i32>,
+    /// The common case, and the only key whose canonical order is *not* the same as the
+    /// target's natural string order: `"z"` (2 bytes encoded) sorts before `"aa"` (3).
+    pub by_string: std::collections::HashMap<String, i32>,
+    /// A 16-byte byte string on the wire; every target has a value-equal guid type.
+    pub by_guid: std::collections::HashMap<uuid::Uuid, i32>,
+    /// The non-builtin key.
+    pub by_enum: std::collections::HashMap<Tier, i32>,
+}
+
+
+/// The three containers as ordinary message fields, plus every stacking.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ContainerShapes {
+    /// `Map<K,V>` — `Dictionary<string,i4>` / `Map<string,i4>` / `HashMap<String,i32>`.
+    pub tags: std::collections::HashMap<String, i32>,
+    /// `Set<T>` — `HashSet<i4>` / `Set<i4>` / `HashSet<i32>`.
+    pub ids: std::collections::HashSet<i32>,
+    /// `T[N]` — the one shape a target's type system can express only in Rust
+    /// (`[f32; 16]`); C# and TypeScript carry the length in the formatter call instead.
+    pub coords: [f32; 16],
+    /// `Map<K,V>?` — `Maybe<Map<…>>`. Null and empty are different values, and the
+    /// integration tests keep them apart.
+    pub members_by_name: Option<std::collections::HashMap<String, Member>>,
+    /// `Set<T>[]` — `Array<Set<i4>>`. A set inside an array is still one item to the
+    /// array codec, tag and all.
+    pub groups: Vec<std::collections::HashSet<i32>>,
+    /// The same shape written as an explicit generic. It must lock, and generate,
+    /// identically to `groups` above — the suffix form is sugar, not a second type.
+    pub layers: Vec<std::collections::HashSet<i32>>,
+    /// `T[N]?` — `Maybe<Array<f4, 16>>`. Two collapsing wrappers, read through a single
+    /// nullable-fixed call rather than a nullable of an array.
+    pub offsets: Option<[f32; 16]>,
+    /// `Map<K, T~>` — a container over a sparse patch. The `Partial<Doc>` schema has to be
+    /// registered for this to resolve, and it is reached only through the Map's type
+    /// argument, never through a field of its own.
+    pub patches: std::collections::HashMap<String, ion_rustcore::IonPartial<Doc>>,
+    /// `Map<K, T[]>` — the one nesting neither the C# nor the TypeScript runtime can serve
+    /// unaided. Everywhere else an array is reached with its *element* type
+    /// (`ReadArray<Member>`), so neither runtime registers a formatter for the array type
+    /// itself; a Map resolves its value by type/name alone. The generators emit the missing
+    /// adapter (`Ion_nested_array_Formatter<T>`, and a named `IonArray<Member>` registration)
+    /// for exactly this shape. Rust needs nothing — `Vec<T>: IonFormat` is blanket.
+    pub rosters: std::collections::HashMap<String, Vec<Member>>,
+    /// A `Set` nested in a `Map` value: the same adapter question, one container over.
+    pub cohorts: std::collections::HashMap<Tier, std::collections::HashSet<i32>>,
+}
+
+
+/// Key type for the enum arm of `KeyMatrix`.
+///
+/// An enum is the one non-builtin the compiler admits as a `Map` key (ION0061): an integral
+/// base type and a closed set of named values, which every target can hash. It is also the
+/// arm most likely to break on a target-by-target basis — a generated Rust enum has to
+/// derive `Eq + Hash` for `HashMap<Tier, V>` to compile at all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum Tier {
+    Free = 0,
+    Paid = 1,
+    Trial = 2,
+}
+
+
+/// One ledger entry: both new primitives under every modifier stacking.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LedgerEntry {
+    /// Bare `datetime`. Round-tripped with a non-UTC offset and a 100ns tick.
+    pub booked_at: chrono::DateTime<chrono::FixedOffset>,
+    /// Bare `decimal`. Round-tripped with a value binary floating point cannot represent.
+    pub amount: ion_rustcore::IonDecimal,
+    /// `datetime?` — `System.Nullable<DateTimeOffset>`, `IonDateTime | null`,
+    /// `Option<chrono::DateTime<FixedOffset>>`. Both new primitives are value types in C#,
+    /// so this is the `NullableValue` path, not `NullableRef`.
+    pub settled_at: Option<chrono::DateTime<chrono::FixedOffset>>,
+    /// `decimal?`.
+    pub fee: Option<ion_rustcore::IonDecimal>,
+    /// `datetime[]`.
+    pub revisions: Vec<chrono::DateTime<chrono::FixedOffset>>,
+    /// `decimal[]`.
+    pub adjustments: Vec<ion_rustcore::IonDecimal>,
+    /// `decimal[]?` — the two collapsing wrappers stacked, read through a single
+    /// `ReadNullableArray` rather than a nullable of an array.
+    pub corrections: Option<Vec<ion_rustcore::IonDecimal>>,
+    /// A typedef over a builtin is transparent: this is an ordinary `datetime` on the wire,
+    /// and the generated field is spelled with the primitive, not with the alias.
+    pub opened_at: chrono::DateTime<chrono::FixedOffset>,
+    /// The same, over `decimal`.
+    pub opening_balance: ion_rustcore::IonDecimal,
+}
+
+
+/// The `Partial<T>` target.
+///
+/// Separate from `LedgerEntry` so the patch schema stays small enough to assert field by
+/// field, and separate from `PartialInteraction.ion`'s `PatchTarget` so that the byte
+/// comparable golden shape over there is not disturbed. What it adds over that one is a
+/// value-typed *builtin struct* field: `IonPartialSchema<T>.Field<datetime>` and
+/// `.NullableValue<datetime>` are different descriptors from the `i4`/`string` cases, and
+/// only a `datetime`/`decimal` field reaches them.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LedgerPatch {
+    /// `.Field<datetime>` — clearing it must encode as `null`, not as `0001-01-01`.
+    pub booked_at: chrono::DateTime<chrono::FixedOffset>,
+    /// `.Field<decimal>` — clearing it must encode as `null`, not as `0`.
+    pub amount: ion_rustcore::IonDecimal,
+    /// `.NullableValue<datetime>`: `DateTimeOffset` is a struct, so a nullable one is
+    /// `Nullable<DateTimeOffset>` and needs the value-typed descriptor.
+    pub settled_at: Option<chrono::DateTime<chrono::FixedOffset>>,
+    /// `.Array<decimal>`.
+    pub adjustments: Vec<ion_rustcore::IonDecimal>,
+}
+
+
+/// The message that gets patched.
+///
+/// Deliberately the same shape as `GoldenPatchTarget` in
+/// `/tests/golden/partial.golden.json` — a value-typed scalar, a float, a reference
+/// scalar, an array field and an optional field — so a patch over it is byte-comparable
+/// with the cross-runtime golden vectors. The array and the optional are the two shapes
+/// the old reflection-derived formatter crashed on.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PatchTarget {
+    /// Value-typed scalar. Clearing it must encode as `null`, never as `0`.
+    pub n: i32,
+    /// Float. The R3 regression guard: `Removed()` here used to write the field's
+    /// default instead of `null`.
+    pub f: f32,
+    /// Reference-typed scalar.
+    pub s: String,
+    /// Array field.
+    pub items: Vec<i32>,
+    /// Optional field. "Cleared" and "set to none" are the same patch.
+    pub note: Option<String>,
+}
+
+
+/// Patches carried as ordinary message fields, in all four modifier stackings.
+///
+/// `WrapModifiers` applies Partial innermost, then Array, then Maybe, so `PatchTarget~[]?`
+/// is `Maybe<Array<Partial<PatchTarget>>>`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PatchEnvelope {
+    /// `T~` — `IonPartial<PatchTarget>`.
+    pub one: ion_rustcore::IonPartial<PatchTarget>,
+    /// `T~[]` — `IonArray<IonPartial<PatchTarget>>`.
+    pub many: Vec<ion_rustcore::IonPartial<PatchTarget>>,
+    /// `T~?` — a nullable `IonPartial<PatchTarget>`.
+    pub maybe: Option<ion_rustcore::IonPartial<PatchTarget>>,
+    /// `T~[]?` — a nullable `IonArray<IonPartial<PatchTarget>>`.
+    pub maybe_many: Option<Vec<ion_rustcore::IonPartial<PatchTarget>>>,
+}
+
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Vector {
@@ -49,7 +389,331 @@ pub struct VectorOfVectorOfVector {
 
 
 
+// ═══════════════ Partials ═══════════════
+
+ion_rustcore::ion_partial! {
+    /// Sparse patch over [`Doc`] (Ion `Doc~`).
+    #[allow(non_snake_case)]
+    pub struct DocPatch for Doc {
+        title: String,
+        revision: i32,
+    }
+}
+
+ion_rustcore::ion_partial! {
+    /// Sparse patch over [`PatchTarget`] (Ion `PatchTarget~`).
+    #[allow(non_snake_case)]
+    pub struct PatchTargetPatch for PatchTarget {
+        n: i32,
+        f: f32,
+        s: String,
+        items: Vec<i32>,
+        note: Option<String>,
+    }
+}
+
+ion_rustcore::ion_partial! {
+    /// Sparse patch over [`LedgerPatch`] (Ion `LedgerPatch~`).
+    #[allow(non_snake_case)]
+    pub struct LedgerPatchPatch for LedgerPatch {
+        bookedAt: chrono::DateTime<chrono::FixedOffset>,
+        amount: ion_rustcore::IonDecimal,
+        settledAt: Option<chrono::DateTime<chrono::FixedOffset>>,
+        adjustments: Vec<ion_rustcore::IonDecimal>,
+    }
+}
+
+
 // ═══════════════ Formatters ═══════════════
+
+impl IonFormat for LegacyRequest {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let len = d.array()?.ok_or(IonError::IndefiniteArray)?;
+        let old_id = <i32 as IonFormat>::ion_read(d)?;
+        let name = <String as IonFormat>::ion_read(d)?;
+        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        Ok(Self { old_id, name })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(2)?;
+        self.old_id.ion_write(e)?;
+        self.name.ion_write(e)?;
+        Ok(())
+    }
+}
+
+impl IonFormat for CacheProbe {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let len = d.array()?.ok_or(IonError::IndefiniteArray)?;
+        let hits = <i32 as IonFormat>::ion_read(d)?;
+        let misses = <i32 as IonFormat>::ion_read(d)?;
+        let total = <i32 as IonFormat>::ion_read(d)?;
+        ion_rustcore::formatter::skip_remaining(d, len, 3)?;
+        Ok(Self { hits, misses, total })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(3)?;
+        self.hits.ion_write(e)?;
+        self.misses.ion_write(e)?;
+        self.total.ion_write(e)?;
+        Ok(())
+    }
+}
+
+impl IonFormat for CacheRegion {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let raw = i32::ion_read(d)?;
+        Self::try_from(raw).map_err(|_| IonError::InvalidEnum(raw as i64))
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        (*self as i32).ion_write(e)
+    }
+}
+
+impl TryFrom<i32> for CacheRegion {
+    type Error = ();
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        // Safety: check all valid discriminants
+                match value {
+            | x if x == Self::None as i32 => Ok(unsafe { std::mem::transmute(x) }),
+            | x if x == Self::Local as i32 => Ok(unsafe { std::mem::transmute(x) }),
+            | x if x == Self::Session as i32 => Ok(unsafe { std::mem::transmute(x) }),
+            | x if x == Self::Shared as i32 => Ok(unsafe { std::mem::transmute(x) }),
+            _ => Err(()),
+        }
+    }
+}
+
+impl IonFormat for Member {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let len = d.array()?.ok_or(IonError::IndefiniteArray)?;
+        let id = <uuid::Uuid as IonFormat>::ion_read(d)?;
+        let name = <String as IonFormat>::ion_read(d)?;
+        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        Ok(Self { id, name })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(2)?;
+        self.id.ion_write(e)?;
+        self.name.ion_write(e)?;
+        Ok(())
+    }
+}
+
+impl IonFormat for Doc {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let len = d.array()?.ok_or(IonError::IndefiniteArray)?;
+        let title = <String as IonFormat>::ion_read(d)?;
+        let revision = <i32 as IonFormat>::ion_read(d)?;
+        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        Ok(Self { title, revision })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(2)?;
+        self.title.ion_write(e)?;
+        self.revision.ion_write(e)?;
+        Ok(())
+    }
+}
+
+impl IonFormat for KeyMatrix {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let len = d.array()?.ok_or(IonError::IndefiniteArray)?;
+        let by_i1 = <std::collections::HashMap<i8, i32> as IonFormat>::ion_read(d)?;
+        let by_i2 = <std::collections::HashMap<i16, i32> as IonFormat>::ion_read(d)?;
+        let by_i4 = <std::collections::HashMap<i32, i32> as IonFormat>::ion_read(d)?;
+        let by_i8 = <std::collections::HashMap<i64, i32> as IonFormat>::ion_read(d)?;
+        let by_i16 = <std::collections::HashMap<i128, i32> as IonFormat>::ion_read(d)?;
+        let by_u1 = <std::collections::HashMap<u8, i32> as IonFormat>::ion_read(d)?;
+        let by_u2 = <std::collections::HashMap<u16, i32> as IonFormat>::ion_read(d)?;
+        let by_u4 = <std::collections::HashMap<u32, i32> as IonFormat>::ion_read(d)?;
+        let by_u8 = <std::collections::HashMap<u64, i32> as IonFormat>::ion_read(d)?;
+        let by_u16 = <std::collections::HashMap<u128, i32> as IonFormat>::ion_read(d)?;
+        let by_bool = <std::collections::HashMap<bool, i32> as IonFormat>::ion_read(d)?;
+        let by_string = <std::collections::HashMap<String, i32> as IonFormat>::ion_read(d)?;
+        let by_guid = <std::collections::HashMap<uuid::Uuid, i32> as IonFormat>::ion_read(d)?;
+        let by_enum = <std::collections::HashMap<Tier, i32> as IonFormat>::ion_read(d)?;
+        ion_rustcore::formatter::skip_remaining(d, len, 14)?;
+        Ok(Self { by_i1, by_i2, by_i4, by_i8, by_i16, by_u1, by_u2, by_u4, by_u8, by_u16, by_bool, by_string, by_guid, by_enum })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(14)?;
+        self.by_i1.ion_write(e)?;
+        self.by_i2.ion_write(e)?;
+        self.by_i4.ion_write(e)?;
+        self.by_i8.ion_write(e)?;
+        self.by_i16.ion_write(e)?;
+        self.by_u1.ion_write(e)?;
+        self.by_u2.ion_write(e)?;
+        self.by_u4.ion_write(e)?;
+        self.by_u8.ion_write(e)?;
+        self.by_u16.ion_write(e)?;
+        self.by_bool.ion_write(e)?;
+        self.by_string.ion_write(e)?;
+        self.by_guid.ion_write(e)?;
+        self.by_enum.ion_write(e)?;
+        Ok(())
+    }
+}
+
+impl IonFormat for ContainerShapes {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let len = d.array()?.ok_or(IonError::IndefiniteArray)?;
+        let tags = <std::collections::HashMap<String, i32> as IonFormat>::ion_read(d)?;
+        let ids = <std::collections::HashSet<i32> as IonFormat>::ion_read(d)?;
+        let coords = <[f32; 16] as IonFormat>::ion_read(d)?;
+        let members_by_name = ion_rustcore::formatter::read_maybe::<std::collections::HashMap<String, Member>>(d)?;
+        let groups = ion_rustcore::formatter::read_array::<std::collections::HashSet<i32>>(d)?;
+        let layers = ion_rustcore::formatter::read_array::<std::collections::HashSet<i32>>(d)?;
+        let offsets = ion_rustcore::formatter::read_maybe::<[f32; 16]>(d)?;
+        let patches = <std::collections::HashMap<String, ion_rustcore::IonPartial<Doc>> as IonFormat>::ion_read(d)?;
+        let rosters = <std::collections::HashMap<String, Vec<Member>> as IonFormat>::ion_read(d)?;
+        let cohorts = <std::collections::HashMap<Tier, std::collections::HashSet<i32>> as IonFormat>::ion_read(d)?;
+        ion_rustcore::formatter::skip_remaining(d, len, 10)?;
+        Ok(Self { tags, ids, coords, members_by_name, groups, layers, offsets, patches, rosters, cohorts })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(10)?;
+        self.tags.ion_write(e)?;
+        self.ids.ion_write(e)?;
+        self.coords.ion_write(e)?;
+        ion_rustcore::formatter::write_maybe(e, &self.members_by_name)?;
+        ion_rustcore::formatter::write_array(e, &self.groups)?;
+        ion_rustcore::formatter::write_array(e, &self.layers)?;
+        ion_rustcore::formatter::write_maybe(e, &self.offsets)?;
+        self.patches.ion_write(e)?;
+        self.rosters.ion_write(e)?;
+        self.cohorts.ion_write(e)?;
+        Ok(())
+    }
+}
+
+impl IonFormat for Tier {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let raw = u8::ion_read(d)?;
+        Self::try_from(raw).map_err(|_| IonError::InvalidEnum(raw as i64))
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        (*self as u8).ion_write(e)
+    }
+}
+
+impl TryFrom<u8> for Tier {
+    type Error = ();
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        // Safety: check all valid discriminants
+                match value {
+            | x if x == Self::Free as u8 => Ok(unsafe { std::mem::transmute(x) }),
+            | x if x == Self::Paid as u8 => Ok(unsafe { std::mem::transmute(x) }),
+            | x if x == Self::Trial as u8 => Ok(unsafe { std::mem::transmute(x) }),
+            _ => Err(()),
+        }
+    }
+}
+
+impl IonFormat for LedgerEntry {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let len = d.array()?.ok_or(IonError::IndefiniteArray)?;
+        let booked_at = <chrono::DateTime<chrono::FixedOffset> as IonFormat>::ion_read(d)?;
+        let amount = <ion_rustcore::IonDecimal as IonFormat>::ion_read(d)?;
+        let settled_at = ion_rustcore::formatter::read_maybe::<chrono::DateTime<chrono::FixedOffset>>(d)?;
+        let fee = ion_rustcore::formatter::read_maybe::<ion_rustcore::IonDecimal>(d)?;
+        let revisions = ion_rustcore::formatter::read_array::<chrono::DateTime<chrono::FixedOffset>>(d)?;
+        let adjustments = ion_rustcore::formatter::read_array::<ion_rustcore::IonDecimal>(d)?;
+        let corrections = ion_rustcore::formatter::read_maybe::<Vec<ion_rustcore::IonDecimal>>(d)?;
+        let opened_at = <chrono::DateTime<chrono::FixedOffset> as IonFormat>::ion_read(d)?;
+        let opening_balance = <ion_rustcore::IonDecimal as IonFormat>::ion_read(d)?;
+        ion_rustcore::formatter::skip_remaining(d, len, 9)?;
+        Ok(Self { booked_at, amount, settled_at, fee, revisions, adjustments, corrections, opened_at, opening_balance })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(9)?;
+        self.booked_at.ion_write(e)?;
+        self.amount.ion_write(e)?;
+        ion_rustcore::formatter::write_maybe(e, &self.settled_at)?;
+        ion_rustcore::formatter::write_maybe(e, &self.fee)?;
+        ion_rustcore::formatter::write_array(e, &self.revisions)?;
+        ion_rustcore::formatter::write_array(e, &self.adjustments)?;
+        ion_rustcore::formatter::write_maybe(e, &self.corrections)?;
+        self.opened_at.ion_write(e)?;
+        self.opening_balance.ion_write(e)?;
+        Ok(())
+    }
+}
+
+impl IonFormat for LedgerPatch {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let len = d.array()?.ok_or(IonError::IndefiniteArray)?;
+        let booked_at = <chrono::DateTime<chrono::FixedOffset> as IonFormat>::ion_read(d)?;
+        let amount = <ion_rustcore::IonDecimal as IonFormat>::ion_read(d)?;
+        let settled_at = ion_rustcore::formatter::read_maybe::<chrono::DateTime<chrono::FixedOffset>>(d)?;
+        let adjustments = ion_rustcore::formatter::read_array::<ion_rustcore::IonDecimal>(d)?;
+        ion_rustcore::formatter::skip_remaining(d, len, 4)?;
+        Ok(Self { booked_at, amount, settled_at, adjustments })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(4)?;
+        self.booked_at.ion_write(e)?;
+        self.amount.ion_write(e)?;
+        ion_rustcore::formatter::write_maybe(e, &self.settled_at)?;
+        ion_rustcore::formatter::write_array(e, &self.adjustments)?;
+        Ok(())
+    }
+}
+
+impl IonFormat for PatchTarget {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let len = d.array()?.ok_or(IonError::IndefiniteArray)?;
+        let n = <i32 as IonFormat>::ion_read(d)?;
+        let f = <f32 as IonFormat>::ion_read(d)?;
+        let s = <String as IonFormat>::ion_read(d)?;
+        let items = ion_rustcore::formatter::read_array::<i32>(d)?;
+        let note = ion_rustcore::formatter::read_maybe::<String>(d)?;
+        ion_rustcore::formatter::skip_remaining(d, len, 5)?;
+        Ok(Self { n, f, s, items, note })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(5)?;
+        self.n.ion_write(e)?;
+        self.f.ion_write(e)?;
+        self.s.ion_write(e)?;
+        ion_rustcore::formatter::write_array(e, &self.items)?;
+        ion_rustcore::formatter::write_maybe(e, &self.note)?;
+        Ok(())
+    }
+}
+
+impl IonFormat for PatchEnvelope {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let len = d.array()?.ok_or(IonError::IndefiniteArray)?;
+        let one = <ion_rustcore::IonPartial<PatchTarget> as IonFormat>::ion_read(d)?;
+        let many = ion_rustcore::formatter::read_array::<ion_rustcore::IonPartial<PatchTarget>>(d)?;
+        let maybe = ion_rustcore::formatter::read_maybe::<ion_rustcore::IonPartial<PatchTarget>>(d)?;
+        let maybe_many = ion_rustcore::formatter::read_maybe::<Vec<ion_rustcore::IonPartial<PatchTarget>>>(d)?;
+        ion_rustcore::formatter::skip_remaining(d, len, 4)?;
+        Ok(Self { one, many, maybe, maybe_many })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(4)?;
+        self.one.ion_write(e)?;
+        ion_rustcore::formatter::write_array(e, &self.many)?;
+        ion_rustcore::formatter::write_maybe(e, &self.maybe)?;
+        ion_rustcore::formatter::write_maybe(e, &self.maybe_many)?;
+        Ok(())
+    }
+}
 
 impl IonFormat for Vector {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
@@ -109,6 +773,221 @@ impl IonFormat for VectorOfVectorOfVector {
 
 // ═══════════════ Service Clients ═══════════════
 
+/// Deprecated service, to pin the marker on a service as well as on its methods.
+#[deprecated(since = "0.6", note = "use CacheInteraction")]
+pub struct LegacyCacheInteractionClient {
+    ctx: ion_rustcore::IonClientContext,
+}
+
+impl ion_rustcore::FromContext for LegacyCacheInteractionClient {
+    fn from_context(ctx: ion_rustcore::IonClientContext) -> Self {
+        Self { ctx }
+    }
+}
+
+impl LegacyCacheInteractionClient {
+        /// Nothing here is reachable; the service exists for its `@deprecated`.
+    pub async fn ping(&self, ) -> Result<i32, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(0)?;
+        
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "ILegacyCacheInteraction", "Ping");
+        req.call::<i32>(&buf).await
+    }
+
+}
+
+/// Cache control surface.
+pub struct CacheInteractionClient {
+    ctx: ion_rustcore::IonClientContext,
+}
+
+impl ion_rustcore::FromContext for CacheInteractionClient {
+    fn from_context(ctx: ion_rustcore::IonClientContext) -> Self {
+        Self { ctx }
+    }
+}
+
+impl CacheInteractionClient {
+        /// `@deprecated` with both arguments, on a method.
+    #[deprecated(since = "0.6", note = "use Current instead")]
+    pub async fn legacy(&self, id: i32) -> Result<i32, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        id.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "ICacheInteraction", "Legacy");
+        req.call::<i32>(&buf).await
+    }
+    /// `@deprecated` with only `reason`, written as a named argument — which the binder
+    /// normalizes into `[null, "…"]`, i.e. a null in a *leading* slot that must survive.
+    #[deprecated(note = "renamed to Current")]
+    pub async fn renamed(&self, id: i32) -> Result<i32, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        id.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "ICacheInteraction", "Renamed");
+        req.call::<i32>(&buf).await
+    }
+    /// `@deprecated` with no arguments, on a method.
+    #[deprecated]
+    pub async fn bare(&self, id: i32) -> Result<i32, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        id.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "ICacheInteraction", "Bare");
+        req.call::<i32>(&buf).await
+    }
+    /// A std attribute with a real C# counterpart beside a user declared one. `@deadline`
+    /// is the case that used to emit `[deadline(30)]` and fail to resolve against
+    /// `ion.runtime.DeadlineAttribute`.
+    pub async fn current(&self, id: i32) -> Result<i32, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        id.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "ICacheInteraction", "Current");
+        req.call::<i32>(&buf).await
+    }
+    /// A parameterless user attribute, and a std marker with no target-language form.
+    pub async fn ping(&self, ) -> Result<i32, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(0)?;
+        
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "ICacheInteraction", "Ping");
+        req.call::<i32>(&buf).await
+    }
+
+}
+
+/// Round-trip surface: each container in argument and in return position.
+///
+/// Return position is where the three targets diverge most. C# has no
+/// `CallAsyncWithFixedArray`, so the generated client checks `T[N]`'s length itself with the
+/// runtime's own typed exception; TypeScript registers the whole fixed array under one
+/// formatter name (`f4[16]`) and lets the ordinary nullable/plain call resolve it; Rust's
+/// `[T; N]` needs nothing at all, because the const-generic `IonFormat` impl carries N.
+pub struct CollectionInteractionClient {
+    ctx: ion_rustcore::IonClientContext,
+}
+
+impl ion_rustcore::FromContext for CollectionInteractionClient {
+    fn from_context(ctx: ion_rustcore::IonClientContext) -> Self {
+        Self { ctx }
+    }
+}
+
+impl CollectionInteractionClient {
+        /// `Map<K,V>` in and out. The integration test sends the same entries in two different
+    /// insertion orders and asserts identical request bytes.
+    pub async fn count_by_tag(&self, tags: &std::collections::HashMap<String, i32>) -> Result<std::collections::HashMap<String, i32>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        tags.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "ICollectionInteraction", "CountByTag");
+        req.call::<std::collections::HashMap<String, i32>>(&buf).await
+    }
+    /// `Set<T>` in and out — same insertion-order claim, plus tag 258 on the wire.
+    pub async fn dedup(&self, ids: &std::collections::HashSet<i32>) -> Result<std::collections::HashSet<i32>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        ids.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "ICollectionInteraction", "Dedup");
+        req.call::<std::collections::HashSet<i32>>(&buf).await
+    }
+    /// `T[N]` in and out. A wrong length must be a typed error at both ends.
+    pub async fn rotate(&self, coords: &[f32; 16]) -> Result<[f32; 16], ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        coords.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "ICollectionInteraction", "Rotate");
+        req.call::<[f32; 16]>(&buf).await
+    }
+    /// `T[N]?` in and out. A null argument returns null, so the null branch is reachable.
+    pub async fn rotate_maybe(&self, coords: &Option<[f32; 16]>) -> Result<Option<[f32; 16]>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        ion_rustcore::formatter::write_maybe(&mut e, &coords)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "ICollectionInteraction", "RotateMaybe");
+        req.call_nullable::<[f32; 16]>(&buf).await
+    }
+    /// `Map<K,V>?` in and out, with a message value.
+    pub async fn lookup(&self, members: &Option<std::collections::HashMap<String, Member>>) -> Result<Option<std::collections::HashMap<String, Member>>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        ion_rustcore::formatter::write_maybe(&mut e, &members)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "ICollectionInteraction", "Lookup");
+        req.call_nullable::<std::collections::HashMap<String, Member>>(&buf).await
+    }
+    /// `Set<T>[]` in and out.
+    pub async fn regroup(&self, groups: &Vec<std::collections::HashSet<i32>>) -> Result<Vec<std::collections::HashSet<i32>>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        ion_rustcore::formatter::write_array(&mut e, &groups)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "ICollectionInteraction", "Regroup");
+        req.call::<Vec<std::collections::HashSet<i32>>>(&buf).await
+    }
+    /// `Map<K, T~>` in and out.
+    pub async fn patch(&self, patches: &std::collections::HashMap<String, ion_rustcore::IonPartial<Doc>>) -> Result<std::collections::HashMap<String, ion_rustcore::IonPartial<Doc>>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        patches.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "ICollectionInteraction", "Patch");
+        req.call::<std::collections::HashMap<String, ion_rustcore::IonPartial<Doc>>>(&buf).await
+    }
+    /// `Map<K, T[]>` in and out — the nested-array adapter over a real transport.
+    pub async fn roster(&self, rosters: &std::collections::HashMap<String, Vec<Member>>) -> Result<std::collections::HashMap<String, Vec<Member>>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        rosters.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "ICollectionInteraction", "Roster");
+        req.call::<std::collections::HashMap<String, Vec<Member>>>(&buf).await
+    }
+    /// A container beside a plain argument, to pin the argument count: a write path that
+    /// emits nothing for a container while still declaring the full array length produces
+    /// malformed CBOR rather than a compile error.
+    pub async fn merge(&self, baseline: &std::collections::HashMap<String, i32>, weight: i32) -> Result<std::collections::HashMap<String, i32>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(2)?;
+        baseline.ion_write(&mut e)?;
+        weight.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "ICollectionInteraction", "Merge");
+        req.call::<std::collections::HashMap<String, i32>>(&buf).await
+    }
+    /// Every field shape in one message, over a real transport.
+    pub async fn echo(&self, shapes: &ContainerShapes) -> Result<ContainerShapes, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        shapes.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "ICollectionInteraction", "Echo");
+        req.call::<ContainerShapes>(&buf).await
+    }
+    /// Every legal key type in one message, over a real transport.
+    pub async fn echo_keys(&self, keys: &KeyMatrix) -> Result<KeyMatrix, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        keys.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "ICollectionInteraction", "EchoKeys");
+        req.call::<KeyMatrix>(&buf).await
+    }
+
+}
+
 /// Blob echo service used by the transport tests.
 ///
 /// Nothing here interprets the payload; the methods only prove that a byte
@@ -160,6 +1039,89 @@ impl TestBlobsClient {
         let buf = e.into_writer();
         let req = ion_rustcore::IonRequest::new(&self.ctx, "ITestBlobs", "DoIt3");
         req.call::<ion_rustcore::IonBytes>(&buf).await
+    }
+
+}
+
+/// Round-trip surface for `datetime` and `decimal`.
+///
+/// The service level operand is itself a `datetime`, so every generated method signature
+/// carries one — that is the position that would have gone unnoticed if only fields were
+/// covered.
+pub struct LedgerInteractionClient {
+    ctx: ion_rustcore::IonClientContext,
+}
+
+impl ion_rustcore::FromContext for LedgerInteractionClient {
+    fn from_context(ctx: ion_rustcore::IonClientContext) -> Self {
+        Self { ctx }
+    }
+}
+
+impl LedgerInteractionClient {
+        /// `datetime` in both argument and return position. The one method whose result proves
+    /// the offset and the sub-millisecond tick survived the wire.
+    pub async fn echo(&self, opened_at: &chrono::DateTime<chrono::FixedOffset>, at: &chrono::DateTime<chrono::FixedOffset>) -> Result<chrono::DateTime<chrono::FixedOffset>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(2)?;
+        opened_at.ion_write(&mut e)?;
+        at.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "ILedgerInteraction", "Echo");
+        req.call::<chrono::DateTime<chrono::FixedOffset>>(&buf).await
+    }
+    /// `decimal` in both argument and return position.
+    pub async fn echo_amount(&self, opened_at: &chrono::DateTime<chrono::FixedOffset>, amount: ion_rustcore::IonDecimal) -> Result<ion_rustcore::IonDecimal, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(2)?;
+        opened_at.ion_write(&mut e)?;
+        amount.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "ILedgerInteraction", "EchoAmount");
+        req.call::<ion_rustcore::IonDecimal>(&buf).await
+    }
+    /// The whole message, so every field shape above goes over a real transport.
+    pub async fn roundtrip(&self, opened_at: &chrono::DateTime<chrono::FixedOffset>, entry: &LedgerEntry) -> Result<LedgerEntry, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(2)?;
+        opened_at.ion_write(&mut e)?;
+        entry.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "ILedgerInteraction", "Roundtrip");
+        req.call::<LedgerEntry>(&buf).await
+    }
+    /// Optional in argument and return position: `Maybe<datetime>` / `Maybe<decimal>`.
+    /// A null `amount` returns null, so the null branch is reachable.
+    pub async fn echo_maybe(&self, opened_at: &chrono::DateTime<chrono::FixedOffset>, at: &Option<chrono::DateTime<chrono::FixedOffset>>, amount: &Option<ion_rustcore::IonDecimal>) -> Result<Option<ion_rustcore::IonDecimal>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(3)?;
+        opened_at.ion_write(&mut e)?;
+        ion_rustcore::formatter::write_maybe(&mut e, &at)?;
+        ion_rustcore::formatter::write_maybe(&mut e, &amount)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "ILedgerInteraction", "EchoMaybe");
+        req.call_nullable::<ion_rustcore::IonDecimal>(&buf).await
+    }
+    /// Arrays of both, with an array return.
+    pub async fn echo_many(&self, opened_at: &chrono::DateTime<chrono::FixedOffset>, instants: &Vec<chrono::DateTime<chrono::FixedOffset>>, amounts: &Vec<ion_rustcore::IonDecimal>) -> Result<Vec<chrono::DateTime<chrono::FixedOffset>>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(3)?;
+        opened_at.ion_write(&mut e)?;
+        ion_rustcore::formatter::write_array(&mut e, &instants)?;
+        ion_rustcore::formatter::write_array(&mut e, &amounts)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "ILedgerInteraction", "EchoMany");
+        req.call::<Vec<chrono::DateTime<chrono::FixedOffset>>>(&buf).await
+    }
+    /// A `Partial<T>` whose target is made of the new primitives, in both positions.
+    pub async fn patch(&self, opened_at: &chrono::DateTime<chrono::FixedOffset>, patch: &ion_rustcore::IonPartial<LedgerPatch>) -> Result<ion_rustcore::IonPartial<LedgerPatch>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(2)?;
+        opened_at.ion_write(&mut e)?;
+        patch.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "ILedgerInteraction", "Patch");
+        req.call::<ion_rustcore::IonPartial<LedgerPatch>>(&buf).await
     }
 
 }
@@ -281,6 +1243,41 @@ impl MathInteractionClient {
         let req = ion_rustcore::IonRequest::new(&self.ctx, "IMathInteraction", "ToPositive");
         req.call_nullable::<i32>(&buf).await
     }
+    /// `i4[]?` in both argument and return position: null in, null out; otherwise the
+    /// elementwise power, same length as the input.
+    ///
+    /// The return is the shape the C# client used to emit `CallAsyncNullable<Array>` for —
+    /// `Maybe<Array<i4>>` collapsed to the bare word `Array` instead of naming the element
+    /// type. A value-typed element is the interesting half: `IonArray<i4>?` is a nullable
+    /// struct, so a reader that peels only one wrapper cannot even be coerced into compiling.
+    ///
+    /// # Arguments
+    ///
+    /// * `left_operand` - The left-hand operand shared by every method on this service.
+    pub async fn pow_array_maybe(&self, left_operand: i32, right_operand: &Option<Vec<i32>>) -> Result<Option<Vec<i32>>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(2)?;
+        left_operand.ion_write(&mut e)?;
+        ion_rustcore::formatter::write_maybe(&mut e, &right_operand)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "IMathInteraction", "PowArrayMaybe");
+        req.call_nullable::<Vec<i32>>(&buf).await
+    }
+    /// The same return shape over a reference-typed element, to pin that the fix is not
+    /// specific to value types.
+    ///
+    /// # Arguments
+    ///
+    /// * `left_operand` - The left-hand operand shared by every method on this service.
+    pub async fn spell(&self, left_operand: i32, right_operand: &Option<Vec<i32>>) -> Result<Option<Vec<String>>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(2)?;
+        left_operand.ion_write(&mut e)?;
+        ion_rustcore::formatter::write_maybe(&mut e, &right_operand)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "IMathInteraction", "Spell");
+        req.call_nullable::<Vec<String>>(&buf).await
+    }
 
 }
 
@@ -323,6 +1320,78 @@ impl RandomStreamInteractionClient {
         seed.ion_write(&mut e)?;
         let buf = e.into_writer();
         ion_rustcore::IonWsDuplexStream::open(&self.ctx, "IRandomStreamInteraction", "Floats", &buf).await
+    }
+
+}
+
+/// Patch application over the wire.
+pub struct PatchInteractionClient {
+    ctx: ion_rustcore::IonClientContext,
+}
+
+impl ion_rustcore::FromContext for PatchInteractionClient {
+    fn from_context(ctx: ion_rustcore::IonClientContext) -> Self {
+        Self { ctx }
+    }
+}
+
+impl PatchInteractionClient {
+        /// A patch in both argument and return position.
+    pub async fn apply(&self, patch: &ion_rustcore::IonPartial<PatchTarget>) -> Result<ion_rustcore::IonPartial<PatchTarget>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        patch.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "IPatchInteraction", "Apply");
+        req.call::<ion_rustcore::IonPartial<PatchTarget>>(&buf).await
+    }
+    /// An array of patches in, an optional patch out.
+    pub async fn apply_many(&self, patches: &Vec<ion_rustcore::IonPartial<PatchTarget>>) -> Result<Option<ion_rustcore::IonPartial<PatchTarget>>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        ion_rustcore::formatter::write_array(&mut e, &patches)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "IPatchInteraction", "ApplyMany");
+        req.call_nullable::<ion_rustcore::IonPartial<PatchTarget>>(&buf).await
+    }
+    /// `T~[]` in return position — `Array<Partial<PatchTarget>>`.
+    pub async fn apply_all(&self, patches: &Vec<ion_rustcore::IonPartial<PatchTarget>>) -> Result<Vec<ion_rustcore::IonPartial<PatchTarget>>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        ion_rustcore::formatter::write_array(&mut e, &patches)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "IPatchInteraction", "ApplyAll");
+        req.call::<Vec<ion_rustcore::IonPartial<PatchTarget>>>(&buf).await
+    }
+    /// `T~[]?` in return position — `Maybe<Array<Partial<PatchTarget>>>`, the two collapsing
+    /// wrappers stacked. An empty input returns null so the null branch is reachable.
+    pub async fn apply_some(&self, patches: &Vec<ion_rustcore::IonPartial<PatchTarget>>) -> Result<Option<Vec<ion_rustcore::IonPartial<PatchTarget>>>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        ion_rustcore::formatter::write_array(&mut e, &patches)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "IPatchInteraction", "ApplySome");
+        req.call_nullable::<Vec<ion_rustcore::IonPartial<PatchTarget>>>(&buf).await
+    }
+    /// A patch beside a plain argument, to pin the argument count: the write path used
+    /// to emit nothing for a partial while still declaring the full array length.
+    pub async fn apply_to(&self, target: &PatchTarget, patch: &ion_rustcore::IonPartial<PatchTarget>) -> Result<PatchTarget, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(2)?;
+        target.ion_write(&mut e)?;
+        patch.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "IPatchInteraction", "ApplyTo");
+        req.call::<PatchTarget>(&buf).await
+    }
+    /// Messages whose own fields are patches.
+    pub async fn rewrap(&self, envelope: &PatchEnvelope) -> Result<PatchEnvelope, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        envelope.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "IPatchInteraction", "Rewrap");
+        req.call::<PatchEnvelope>(&buf).await
     }
 
 }
@@ -374,6 +1443,16 @@ impl VectorMathInteractionClient {
         let req = ion_rustcore::IonRequest::new(&self.ctx, "IVectorMathInteraction", "Clamp");
         req.call::<Vector>(&buf).await
     }
+    /// Exercises a typedef in both argument and return position.
+    pub async fn component(&self, left_operand: &Vector, index: u8) -> Result<f32, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(2)?;
+        left_operand.ion_write(&mut e)?;
+        index.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "IVectorMathInteraction", "Component");
+        req.call::<f32>(&buf).await
+    }
     pub async fn r#do(&self, left_operand: &Vector) -> Result<VectorOfVectorOfVector, ion_rustcore::IonError> {
         let mut e = ion_rustcore::Encoder::new(Vec::new());
         e.array(1)?;
@@ -381,6 +1460,30 @@ impl VectorMathInteractionClient {
         let buf = e.into_writer();
         let req = ion_rustcore::IonRequest::new(&self.ctx, "IVectorMathInteraction", "Do");
         req.call::<VectorOfVectorOfVector>(&buf).await
+    }
+    /// `T[]` return over a message element, beside `Spread` below.
+    pub async fn repeat(&self, left_operand: &Vector, count: u8) -> Result<Vec<Vector>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(2)?;
+        left_operand.ion_write(&mut e)?;
+        count.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "IVectorMathInteraction", "Repeat");
+        req.call::<Vec<Vector>>(&buf).await
+    }
+    /// `T[]?` return over a message element: `count` of 0 returns null, not an empty array.
+    ///
+    /// The null case is the one that matters — an implementation that decodes the response as a
+    /// single `Vector` instead of a nullable array still "works" on a non-null payload of length
+    /// one, so only null-vs-empty-vs-populated together pin the wire shape.
+    pub async fn spread(&self, left_operand: &Vector, count: u8) -> Result<Option<Vec<Vector>>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(2)?;
+        left_operand.ion_write(&mut e)?;
+        count.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "IVectorMathInteraction", "Spread");
+        req.call_nullable::<Vec<Vector>>(&buf).await
     }
 
 }

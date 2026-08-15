@@ -1,0 +1,140 @@
+//! Attribute emission fixtures.
+//!
+//! Nothing here is called by the integration tests: this module exists so that every
+//! shape the code generators have to render for an attribute appears in checked-in
+//! generated output, where a regression is a diff rather than a silent behaviour change.
+//!
+//! Two families are covered.
+//!
+//! * A **user declared** attribute, `@Cache`, with one parameter of each kind the
+//!   attribute binder can produce — an integer, a string, a bool, an array, and a
+//!   trailing optional — used with the optional written and with it omitted. Only C#
+//!   has a general purpose annotation mechanism, so `@Cache` is expected to appear in
+//!   the C# output alone.
+//! * **`@deprecated`**, in all four argument shapes (none, `since` only, `reason` only,
+//!   both), on a msg, a field, an enum, an enum member, a service and a method. This one
+//!   is expected in every target, each in its own idiom: `[Obsolete]`, a `@deprecated`
+//!   JSDoc tag, `#[deprecated]`, and a `// Deprecated:` doc paragraph.
+
+/// Marks a declaration as cacheable.
+///
+/// Exists to exercise argument rendering, not to be honoured by any runtime.
+attribute @Cache(
+    /// How long a cached entry stays fresh, in seconds.
+    duration: i4,
+
+    /// The cache partition to store the entry in.
+    region: string,
+
+    /// Whether the entry may be served to an anonymous caller.
+    shared: bool,
+
+    /// Which argument positions take part in the cache key. Exercises an array argument,
+    /// including the empty case, which C# cannot write without naming the element type.
+    keyParts: i4[],
+
+    /// Free text note. Optional and trailing, so most use sites leave it off — which is
+    /// what puts an explicit `null` in the last slot of the bound argument list.
+    note: string?
+) on msg, field, enum, service, method;
+
+/// Takes no arguments at all, to pin the bare `[Name]` form against `[Name()]`.
+attribute @AllowAnonymous() on service, method;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// @deprecated
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// The request shape that `CacheProbe` replaced.
+///
+/// `@deprecated` with no arguments: the bare form, and the one where every target has to
+/// avoid emitting an empty argument list.
+@deprecated
+msg LegacyRequest {
+    /// The pre-0.4 identifier.
+    ///
+    /// `@deprecated` with only `since`. On a field, because a C# positional record has to
+    /// route the attribute to the generated property rather than the constructor parameter.
+    @deprecated("0.4")
+    oldId: i4;
+
+    /// Not deprecated, so the neighbouring field proves the marker is per-member.
+    name: string;
+}
+
+/// Where a cached entry lives.
+///
+/// `@deprecated` with both arguments, on the enum itself.
+@deprecated("0.5", "regions were replaced by explicit key parts")
+enum CacheRegion : i4 {
+    /// Never produced any more. Bare `@deprecated` on an enum member.
+    @deprecated
+    None = 0,
+
+    /// `@deprecated` with only `since`, on an enum member.
+    @deprecated("0.5")
+    Local = 1,
+
+    /// `@deprecated` with both arguments, on an enum member.
+    @deprecated("0.5", "use Shared")
+    Session = 2,
+
+    /// The surviving member.
+    Shared = 3
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// User declared attributes
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Carries `@Cache` on the declaration and on one of its fields.
+@Cache(30, "requests", true, [0], "written on a msg")
+msg CacheProbe {
+    /// Every argument written, including the trailing optional.
+    @Cache(5, "field", false, [0, 1], "written on a field")
+    hits: i4;
+
+    /// The optional omitted and the array empty — the two shapes that used to emit
+    /// `[Cache(0,misses,)]` and an untyped `new[] { }`.
+    @Cache(0, "misses", false, [])
+    misses: i4;
+
+    /// Undecorated, to keep an unannotated field in the same record.
+    total: i4;
+}
+
+/// Deprecated service, to pin the marker on a service as well as on its methods.
+@deprecated("0.6", "use CacheInteraction")
+service LegacyCacheInteraction() {
+    /// Nothing here is reachable; the service exists for its `@deprecated`.
+    Ping(): i4;
+}
+
+/// Cache control surface.
+@Cache(60, "service", true, [0], "written on a service")
+service CacheInteraction() {
+    /// `@deprecated` with both arguments, on a method.
+    @deprecated("0.6", "use Current instead")
+    Legacy(id: i4): i4;
+
+    /// `@deprecated` with only `reason`, written as a named argument — which the binder
+    /// normalizes into `[null, "…"]`, i.e. a null in a *leading* slot that must survive.
+    @deprecated(reason: "renamed to Current")
+    Renamed(id: i4): i4;
+
+    /// `@deprecated` with no arguments, on a method.
+    @deprecated
+    Bare(id: i4): i4;
+
+    /// A std attribute with a real C# counterpart beside a user declared one. `@deadline`
+    /// is the case that used to emit `[deadline(30)]` and fail to resolve against
+    /// `ion.runtime.DeadlineAttribute`.
+    @Cache(15, "method", true, [0], "written on a method")
+    @deadline(30)
+    Current(id: i4): i4;
+
+    /// A parameterless user attribute, and a std marker with no target-language form.
+    @AllowAnonymous
+    @internal
+    Ping(): i4;
+}

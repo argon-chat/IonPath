@@ -19,6 +19,10 @@
       "outputs": "./gen-rust",
       "crateName": "test-contracts",
       "rustcorePath": "../../../../packages/ion.rustcore"
+    },
+    "browser": {
+      "outputFile": "./gen-ts/contracts.ts",
+      "singleFileOutput": true
     }
   }
 }

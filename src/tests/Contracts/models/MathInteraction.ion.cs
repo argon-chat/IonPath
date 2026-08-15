@@ -66,6 +66,23 @@ public interface IMathInteraction : IIonService
     /// </summary>
     /// <param name="leftOperand">The left-hand operand shared by every method on this service.</param>
     Task<i4?> ToPositive(i4 leftOperand, i4? rightOperand, CancellationToken ct = default);
+    /// <summary>
+    /// `i4[]?` in both argument and return position: null in, null out; otherwise the
+    /// elementwise power, same length as the input.
+    ///
+    /// The return is the shape the C# client used to emit `CallAsyncNullable&lt;Array&gt;` for —
+    /// `Maybe&lt;Array&lt;i4&gt;&gt;` collapsed to the bare word `Array` instead of naming the element
+    /// type. A value-typed element is the interesting half: `IonArray&lt;i4&gt;?` is a nullable
+    /// struct, so a reader that peels only one wrapper cannot even be coerced into compiling.
+    /// </summary>
+    /// <param name="leftOperand">The left-hand operand shared by every method on this service.</param>
+    Task<IonArray<i4>?> PowArrayMaybe(i4 leftOperand, IonArray<i4>? rightOperand, CancellationToken ct = default);
+    /// <summary>
+    /// The same return shape over a reference-typed element, to pin that the fix is not
+    /// specific to value types.
+    /// </summary>
+    /// <param name="leftOperand">The left-hand operand shared by every method on this service.</param>
+    Task<IonArray<string>?> Spell(i4 leftOperand, IonArray<i4>? rightOperand, CancellationToken ct = default);
 }
 
 

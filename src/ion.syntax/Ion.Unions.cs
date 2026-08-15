@@ -7,8 +7,7 @@ using static Pidgin.Parser<char>;
 
 public partial class IonParser
 {
-    private static Parser<char, Unit> UnionKeyword =>
-        String("union").Before(SkipTrivia).Then(Return(Unit.Value));
+    private static Parser<char, Unit> UnionKeyword => Keyword("union");
 
     private static Parser<char, IonUnionSyntax> UnionCore =>
         Map(IonUnionSyntax

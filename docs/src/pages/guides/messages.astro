@@ -24,7 +24,7 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
     email: <span class="type-keyword">string</span>;
 {'}'}</pre>
       </div>
-      <p class="text-sm text-text-secondary mt-3">Each field has a <strong>name</strong> and a <strong>type</strong>, separated by a colon and terminated with a semicolon. The <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">///</code> lines are <a href="/guides/comments/" class="text-accent hover:underline">doc comments</a> — they attach to the declaration below them and are re-emitted as XML docs, JSDoc, rustdoc and Go doc comments. Plain <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">//</code> comments (used for the inline notes elsewhere on this page) are discarded.</p>
+      <p class="text-sm text-text-secondary mt-3">Each field has a <strong>name</strong> and a <strong>type</strong>, separated by a colon and terminated with a semicolon. The <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">///</code> lines are <a href="/guides/comments/" class="text-accent hover:underline">doc comments</a> — they attach to the declaration below them and are re-emitted as XML docs, JSDoc and rustdoc. Plain <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">//</code> comments (used for the inline notes elsewhere on this page) are discarded.</p>
     </section>
 
     <section>
@@ -58,26 +58,58 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
     </section>
 
     <section>
-      <h2 id="array-fields" class="text-xl font-bold mb-4">Array Fields</h2>
-      <p class="text-sm text-text-secondary mb-4">Append <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">[]</code> for variable-length arrays:</p>
+      <h2 id="array-fields" class="text-xl font-bold mb-4">Collection Fields</h2>
+      <p class="text-sm text-text-secondary mb-4">Append <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">[]</code> for a variable-length array, <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">[N]</code> for a fixed-size one. <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">Map</code> and <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">Set</code> have no suffix form and are written out:</p>
       <div class="code-block text-[13px]">
         <pre><span class="text-accent-3">msg</span> <span class="type-name">SearchResult</span> {'{'}
     query: <span class="type-keyword">string</span>;
-    results: <span class="type-name">User</span>[];     <span class="text-text-muted">// array of User messages</span>
-    scores: <span class="type-keyword">f4</span>[];         <span class="text-text-muted">// array of floats</span>
+    results: <span class="type-name">User</span>[];              <span class="text-text-muted">// array of User messages</span>
+    scores: <span class="type-keyword">f4</span>[];                  <span class="text-text-muted">// array of floats</span>
+    embedding: <span class="type-keyword">f4</span>[<span class="text-accent-2">768</span>];          <span class="text-text-muted">// exactly 768 floats</span>
+    facets: <span class="type-name">Map</span>&lt;<span class="type-keyword">string</span>, <span class="type-keyword">u4</span>&gt;;    <span class="text-text-muted">// keyed counts</span>
+    seenIds: <span class="type-name">Set</span>&lt;<span class="type-keyword">u8</span>&gt;;           <span class="text-text-muted">// distinct ids</span>
 {'}'}</pre>
       </div>
+      <p class="text-sm text-text-secondary mt-3">See <a href="/guides/collections/" class="text-accent hover:underline">Collections</a> for the wire formats, the canonical ordering both sorted forms use, and which types may be a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Map</code> key.</p>
+    </section>
+
+    <section>
+      <h2 id="with-clause" class="text-xl font-bold mb-4">Reusing Fields with <code class="font-mono">with</code></h2>
+      <p class="text-sm text-text-secondary mb-4">A <a href="/guides/mixins/" class="text-accent hover:underline"><code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">mixin</code></a> is a reusable field set. Naming one in a <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">with</code> clause splices its fields into the message at compile time:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">mixin</span> <span class="type-name">Audited</span> {'{'}
+    createdAt: <span class="type-keyword">datetime</span>;
+    createdBy: <span class="type-keyword">guid</span>;
+{'}'}
+
+<span class="text-accent-3">msg</span> <span class="type-name">Document</span> <span class="text-accent-3">with</span> <span class="type-name">Audited</span> {'{'}
+    title: <span class="type-keyword">string</span>;
+{'}'}
+<span class="text-text-muted">// Document has three fields, in this order: createdAt, createdBy, title</span></pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3"><strong>Mixin fields come first</strong>, in <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">with</code> order, then the message's own. That is the field <em>numbering</em>, so it is a hard contract — see <a href="/guides/mixins/#order" class="text-accent hover:underline">Field order is the contract</a>.</p>
+    </section>
+
+    <section>
+      <h2 id="inline-types" class="text-xl font-bold mb-4">Inline Anonymous Types</h2>
+      <p class="text-sm text-text-secondary mb-4">A field's type can be an anonymous <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">msg {'{'} … {'}'}</code> written in place. The compiler names it <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">{'{'}Owner{'}'}{'{'}PascalCasedFieldName{'}'}</code> and lifts it to a top level declaration:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">msg</span> <span class="type-name">Order</span> {'{'}
+    shipping: <span class="text-accent-3">msg</span> {'{'} address: <span class="type-keyword">string</span>; {'}'};   <span class="text-text-muted">// becomes msg OrderShipping</span>
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">The derived name is real — it goes into <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ion.lock.json</code> and into the generated code — so a collision with an explicit declaration is an error rather than a silent rename. See <a href="/guides/inline-types/" class="text-accent hover:underline">Inline Types</a>.</p>
     </section>
 
     <section>
       <h2 id="partial-fields" class="text-xl font-bold mb-4">Partial Fields</h2>
-      <p class="text-sm text-text-secondary mb-4">The <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">~</code> modifier creates a partial/sparse version of a type where only modified fields are serialized:</p>
+      <p class="text-sm text-text-secondary mb-4">The <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">~</code> <strong>suffix</strong> turns a message type into a sparse patch over that message, where only the fields you touch are serialized:</p>
       <div class="code-block text-[13px]">
         <pre><span class="text-accent-3">service</span> <span class="type-name">UserService</span>() {'{'}
-    UpdateUser(id: <span class="type-keyword">u4</span>, patch: ~<span class="type-name">User</span>): <span class="type-name">User</span>;
+    UpdateUser(id: <span class="type-keyword">u4</span>, patch: <span class="type-name">User</span>~): <span class="type-name">User</span>;
 {'}'}</pre>
       </div>
-      <p class="text-sm text-text-secondary mt-3">In C# this generates <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">IonPartial&lt;User&gt;</code> which tracks which fields have been set using expression trees.</p>
+      <p class="text-sm text-text-secondary mt-3">Like <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">?</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">[]</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">~</code> is written <em>after</em> the type name. In C# this generates <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">IonPartial&lt;User&gt;</code>. Unlike every other Ion type, a partial is encoded as a CBOR <em>map</em> rather than a positional array — see the <a href="/guides/partial/" class="text-accent hover:underline">Partial&lt;T&gt;</a> guide.</p>
     </section>
 
     <section>
@@ -98,6 +130,33 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
 {'}'}</pre>
       </div>
       <p class="text-sm text-text-secondary mt-3">Forward references are supported — you can reference a message that is declared later in the file or in a different module (imported with <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">#use</code>).</p>
+
+      <h3 class="text-lg font-semibold mt-8 mb-3">Recursive messages</h3>
+      <p class="text-sm text-text-secondary mb-3">A message may reference itself, directly or through a chain of other messages, <strong>as long as the recursion can terminate on the wire</strong>. The compiler tests this with one rule:</p>
+      <div class="glass rounded-xl p-4 mb-4 border-l-2 border-accent/40">
+        <p class="text-sm font-medium mb-1">A reference cycle is an error only if every edge on it is <em>unconditionally owned</em>.</p>
+        <p class="text-xs text-text-secondary mt-2">A bare <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">x: T;</code> is owned: every value of the owner contains one, always. <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T?</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T[]</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T~</code> and a union arm are <em>cycle-breaking</em>, because each can terminate — absent, empty, omitted from the patch, or a different arm.</p>
+      </div>
+      <p class="text-sm text-text-secondary mb-3">So a tree is expressible:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">msg</span> <span class="type-name">TreeNode</span> {'{'}
+    label: <span class="type-keyword">string</span>;
+    children: <span class="type-name">TreeNode</span>[];    <span class="text-text-muted">// breaking — a leaf has none</span>
+    parent: <span class="type-name">TreeNode</span>?;       <span class="text-text-muted">// breaking — the root has none</span>
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">And so is a mutually recursive graph, which is the case that used to be rejected outright:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">msg</span> <span class="type-name">Folder</span> {'{'} items: <span class="type-name">Item</span>[]; {'}'}
+<span class="text-accent-3">msg</span> <span class="type-name">Item</span>   {'{'} parent: <span class="type-name">Folder</span>?; {'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">What is <em>not</em> allowed is a loop you cannot get out of. A bare self-reference is the smallest example, and it is now caught — it used to be skipped silently, producing a type no encoder can finish writing:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">msg</span> <span class="type-name">A</span> {'{'} a: <span class="type-name">A</span>; {'}'}           <span class="text-text-muted">// ION0030</span>
+<span class="text-accent-3">msg</span> <span class="type-name">B</span> {'{'} c: <span class="type-name">C</span>; {'}'}           <span class="text-text-muted">// ION0030 — B → C → B, both edges owned</span>
+<span class="text-accent-3">msg</span> <span class="type-name">C</span> {'{'} b: <span class="type-name">B</span>; {'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">Making any one edge on the loop breaking fixes it. See <a href="/guides/diagnostics/#ION0030" class="text-accent hover:underline">ION0030</a> for the full rule and the reasoning.</p>
     </section>
 
     <section>

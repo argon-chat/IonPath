@@ -28,8 +28,7 @@
         "type": "string",
         "enum": [
           "orleans",
-          "std",
-          "vector"
+          "std"
         ]
       },
       "uniqueItems": true
@@ -84,10 +83,6 @@
           }
         },
         "rust": {
-          "type": "object",
-          "additionalProperties": true
-        },
-        "go": {
           "type": "object",
           "additionalProperties": true
         }

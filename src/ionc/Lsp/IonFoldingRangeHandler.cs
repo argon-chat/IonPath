@@ -33,9 +33,14 @@ public class IonFoldingRangeHandler(IonWorkspace workspace) : FoldingRangeHandle
 
         if (file is not null)
         {
-            // Messages
+            // Messages, including the hoisted inline types — whose span is the `msg { … }` body
+            // the author actually wrote, so folding one folds exactly the text on screen.
             foreach (var msg in file.messageSyntaxes)
                 AddRange(ranges, msg, FoldingRangeKind.Region);
+
+            // Mixins
+            foreach (var mixin in file.mixinSyntaxes)
+                AddRange(ranges, mixin, FoldingRangeKind.Region);
 
             // Services
             foreach (var svc in file.serviceSyntaxes)

@@ -1,0 +1,287 @@
+{
+  "$format": "ionpath/decimal-golden/1",
+  "$comment": [
+    "Cross-runtime golden vectors for Ion's `decimal` primitive (exact-precision decimal).",
+    "  C#   src/tests/IonTestClientServer/DecimalGoldenTests.cs",
+    "  TS   packages/ion.webcore.js/test/decimal.golden.test.ts",
+    "  Rust packages/ion.rustcore/tests/decimal_golden.rs"
+  ],
+  "wireFormat": {
+    "container": "CBOR tag 4 (decimal fraction, RFC 8949 §3.4.4) wrapping a definite-length 2-element array [exponent, mantissa].",
+    "value": "mantissa x 10^exponent.",
+    "exponent": "A plain CBOR integer (major type 0 or 1), minimal-length. Always fits i32.",
+    "mantissa": "A plain CBOR integer (major type 0/1) when the value fits the i64/u64 range, otherwise a tag 2 (positive) or tag 3 (negative) bignum whose byte string is the MINIMAL-length big-endian magnitude. For tag 3 the magnitude is -1 - value, per RFC 8949.",
+    "readerLeniency": "Readers accept an indefinite-length inner array, a non-normalised mantissa, and a bignum that would have fitted a plain int. They reject any other tag, an arity other than 2, and a non-array payload — with a TYPED decode error."
+  },
+  "canonicalForm": {
+    "rule": "The mantissa is NORMALISED on write: trailing decimal zeros are stripped and the exponent raised to compensate. Zero is always [0, 0].",
+    "why": "1.50 and 1.5 are the same number. Without a canonical form a C# `1.50m` (which remembers its scale: unscaled 150, scale 2) and a TypeScript `IonDecimal(-1, 15n)` would compare equal but serialise to different bytes, breaking the byte-identity rule the same way shortest-form floats did.",
+    "chosenOverAlternative": "The alternative — 'leave the mantissa as authored' — was rejected because C# decimal, JS bigint and a Rust i128 do not agree on what 'as authored' means: C# is the only one of the three that carries a trailing-zero scale at all, so it alone could ever produce the un-normalised form.",
+    "negativeZero": "C# decimal can hold a negative zero (`-0.0m`). It normalises to mantissa 0, and CBOR has no negative zero integer, so -0.0m and 0m are the same four bytes. Documented, not accidental."
+  },
+  "types": {
+    "cs": "System.Decimal. Its range (|v| <= 2^96-1 unscaled, scale 0..28) is NARROWER than tag 4 allows, so out-of-range decoding is a typed error — see `inCSharpDecimalRange`.",
+    "ts": "IonDecimal { exponent: number, mantissa: bigint } — dependency-free, and deliberately NOT `number`, which is binary floating point and cannot hold an exact decimal.",
+    "rust": "ion_rustcore::IonDecimal { exponent: i32, mantissa: i128 } — dependency-free, no rust_decimal. A mantissa outside i128 is a typed decode error."
+  },
+  "howToConsume": [
+    "For each entry of `vectors`:",
+    "  encode: build the value from `exponent` and `mantissa` (the AUTHORED, possibly non-canonical",
+    "          pair) and expect exactly `hex`, which encodes `canonicalExponent`/`canonicalMantissa`.",
+    "  decode: read `hex` and re-encode it, expect `hex` back.",
+    "  C# only: skip the encode/decode round trip when `inCSharpDecimalRange` is false, and instead",
+    "          assert that decoding `hex` raises the typed out-of-range error.",
+    "For each entry of `decodeOnly`: read `hex`, re-encode, expect `reencodedHex`.",
+    "For each entry of `malformed`: reading `hex` must raise the runtime's TYPED decode error."
+  ],
+  "vectors": [
+    {
+      "name": "zero",
+      "exponent": 0,
+      "mantissa": "0",
+      "canonicalExponent": 0,
+      "canonicalMantissa": "0",
+      "value": "0",
+      "inCSharpDecimalRange": true,
+      "hex": "c4820000",
+      "notes": "Zero is canonically [0, 0]. Any authored zero (0.00, -0.0, 0E+5) normalises to these four bytes, so a C# decimal's negative zero and a positive zero are indistinguishable on the wire — CBOR has no negative zero integer."
+    },
+    {
+      "name": "zero-authored-scaled",
+      "exponent": -2,
+      "mantissa": "0",
+      "canonicalExponent": 0,
+      "canonicalMantissa": "0",
+      "value": "0.00",
+      "inCSharpDecimalRange": true,
+      "hex": "c4820000",
+      "notes": "ENCODE-ONLY IN SPIRIT: authored as 0.00 (exponent -2), canonicalises to exponent 0. Same bytes as 'zero'."
+    },
+    {
+      "name": "one",
+      "exponent": 0,
+      "mantissa": "1",
+      "canonicalExponent": 0,
+      "canonicalMantissa": "1",
+      "value": "1",
+      "inCSharpDecimalRange": true,
+      "hex": "c4820001"
+    },
+    {
+      "name": "one-point-five",
+      "exponent": -1,
+      "mantissa": "15",
+      "canonicalExponent": -1,
+      "canonicalMantissa": "15",
+      "value": "1.5",
+      "inCSharpDecimalRange": true,
+      "hex": "c482200f"
+    },
+    {
+      "name": "one-point-five-zero",
+      "exponent": -2,
+      "mantissa": "150",
+      "canonicalExponent": -1,
+      "canonicalMantissa": "15",
+      "value": "1.50",
+      "inCSharpDecimalRange": true,
+      "hex": "c482200f",
+      "notes": "CANONICAL-FORM GUARD. 1.50 and 1.5 are the same number, so they MUST be the same bytes. The mantissa is normalised by stripping trailing zeros — without this rule a C# `1.50m` (scale 2) and a TypeScript IonDecimal(-1, 15n) would disagree byte-wise while comparing equal."
+    },
+    {
+      "name": "negative",
+      "exponent": -1,
+      "mantissa": "-15",
+      "canonicalExponent": -1,
+      "canonicalMantissa": "-15",
+      "value": "-1.5",
+      "inCSharpDecimalRange": true,
+      "hex": "c482202e"
+    },
+    {
+      "name": "negative-one",
+      "exponent": 0,
+      "mantissa": "-1",
+      "canonicalExponent": 0,
+      "canonicalMantissa": "-1",
+      "value": "-1",
+      "inCSharpDecimalRange": true,
+      "hex": "c4820020"
+    },
+    {
+      "name": "hundred-from-scaled-mantissa",
+      "exponent": -1,
+      "mantissa": "1000",
+      "canonicalExponent": 2,
+      "canonicalMantissa": "1",
+      "value": "100",
+      "inCSharpDecimalRange": true,
+      "hex": "c4820201",
+      "notes": "Normalisation can drive the exponent POSITIVE: 1000 x 10^-1 -> 1 x 10^2."
+    },
+    {
+      "name": "positive-exponent",
+      "exponent": 2,
+      "mantissa": "15",
+      "canonicalExponent": 2,
+      "canonicalMantissa": "15",
+      "value": "1500",
+      "inCSharpDecimalRange": true,
+      "hex": "c482020f",
+      "notes": "A positive exponent is a plain unsigned CBOR int."
+    },
+    {
+      "name": "smallest-cs-scale",
+      "exponent": -28,
+      "mantissa": "1",
+      "canonicalExponent": -28,
+      "canonicalMantissa": "1",
+      "value": "1E-28",
+      "inCSharpDecimalRange": true,
+      "hex": "c482381b01",
+      "notes": "Exponent -28 is the most negative a C# decimal can hold."
+    },
+    {
+      "name": "out-of-cs-range-exponent",
+      "exponent": -30,
+      "mantissa": "1",
+      "canonicalExponent": -30,
+      "canonicalMantissa": "1",
+      "value": "1E-30",
+      "inCSharpDecimalRange": false,
+      "hex": "c482381d01",
+      "notes": "OUT-OF-RANGE GUARD. Exponent -30 exceeds C# decimal's maximum scale of 28. Decoding this in C# must produce a TYPED error, not an OverflowException and not a silently rounded value. TypeScript and Rust decode it exactly."
+    },
+    {
+      "name": "u64-mantissa",
+      "exponent": 0,
+      "mantissa": "18446744073709551615",
+      "canonicalExponent": 0,
+      "canonicalMantissa": "18446744073709551615",
+      "value": "18446744073709551615",
+      "inCSharpDecimalRange": true,
+      "hex": "c482001bffffffffffffffff",
+      "notes": "ulong.MaxValue. Still a plain CBOR unsigned int (0x1b + 8 bytes), not a bignum — the mantissa only becomes a tag 2/3 bignum once it leaves the i64/u64 range."
+    },
+    {
+      "name": "i64-min-mantissa",
+      "exponent": 0,
+      "mantissa": "-9223372036854775808",
+      "canonicalExponent": 0,
+      "canonicalMantissa": "-9223372036854775808",
+      "value": "-9223372036854775808",
+      "inCSharpDecimalRange": true,
+      "hex": "c482003b7fffffffffffffff",
+      "notes": "long.MinValue: the last mantissa that is still a plain CBOR negative int (0x3b + 8 bytes)."
+    },
+    {
+      "name": "bignum-mantissa-positive",
+      "exponent": 0,
+      "mantissa": "18446744073709551616",
+      "canonicalExponent": 0,
+      "canonicalMantissa": "18446744073709551616",
+      "value": "18446744073709551616",
+      "inCSharpDecimalRange": true,
+      "hex": "c48200c249010000000000000000",
+      "notes": "2^64, one past ulong.MaxValue: the first mantissa that must be written as a tag 2 bignum with a minimal-length big-endian magnitude."
+    },
+    {
+      "name": "cs-decimal-max",
+      "exponent": 0,
+      "mantissa": "79228162514264337593543950335",
+      "canonicalExponent": 0,
+      "canonicalMantissa": "79228162514264337593543950335",
+      "value": "79228162514264337593543950335",
+      "inCSharpDecimalRange": true,
+      "hex": "c48200c24cffffffffffffffffffffffff",
+      "notes": "decimal.MaxValue exactly (2^96 - 1). In range for C#, and a 12-byte tag 2 bignum on the wire."
+    },
+    {
+      "name": "out-of-cs-range-mantissa",
+      "exponent": 0,
+      "mantissa": "79228162514264337593543950336",
+      "canonicalExponent": 0,
+      "canonicalMantissa": "79228162514264337593543950336",
+      "value": "79228162514264337593543950336",
+      "inCSharpDecimalRange": false,
+      "hex": "c48200c24d01000000000000000000000000",
+      "notes": "OUT-OF-RANGE GUARD. decimal.MaxValue + 1 (2^96). Off by exactly one from the previous vector, so it isolates the boundary check rather than the magnitude."
+    },
+    {
+      "name": "out-of-cs-range-mantissa-negative",
+      "exponent": 0,
+      "mantissa": "-79228162514264337593543950336",
+      "canonicalExponent": 0,
+      "canonicalMantissa": "-79228162514264337593543950336",
+      "value": "-79228162514264337593543950336",
+      "inCSharpDecimalRange": false,
+      "hex": "c48200c34cffffffffffffffffffffffff",
+      "notes": "decimal.MinValue - 1, as a tag 3 negative bignum (magnitude = -1 - value = 2^96 - 1)."
+    },
+    {
+      "name": "pi-28-digits",
+      "exponent": -28,
+      "mantissa": "31415926535897932384626433832",
+      "canonicalExponent": -28,
+      "canonicalMantissa": "31415926535897932384626433832",
+      "value": "3.1415926535897932384626433832",
+      "inCSharpDecimalRange": true,
+      "hex": "c482381bc24c6582a5360b14388541b65f28",
+      "notes": "28 significant digits: the most a C# decimal can carry, and a bignum mantissa. In range."
+    },
+    {
+      "name": "negative-exponent-large-mantissa",
+      "exponent": -18,
+      "mantissa": "123456789012345678901",
+      "canonicalExponent": -18,
+      "canonicalMantissa": "123456789012345678901",
+      "value": "123.456789012345678901",
+      "inCSharpDecimalRange": true,
+      "hex": "c48231c24906b14e9f812f366c35",
+      "notes": "Bignum mantissa combined with a negative exponent."
+    }
+  ],
+  "decodeOnly": [
+    {
+      "name": "reads-non-canonical-trailing-zeros",
+      "hex": "c482211896",
+      "reencodedHex": "c482200f",
+      "notes": "LENIENCY. A peer that did not normalise still decodes; re-encoding canonicalises it. This is the read side of the 1.50 == 1.5 rule."
+    },
+    {
+      "name": "reads-non-canonical-bignum-for-small-mantissa",
+      "hex": "c48220c2410f",
+      "reencodedHex": "c482200f",
+      "notes": "LENIENCY. A tag 2 bignum holding a value that fits an int is accepted on read and re-encoded as a plain int."
+    },
+    {
+      "name": "reads-indefinite-length-inner-array",
+      "hex": "c49f200fff",
+      "reencodedHex": "c482200f",
+      "notes": "LENIENCY. An indefinite-length inner array (0x9F ... 0xFF) is accepted. Writers always emit a definite length of 2."
+    },
+    {
+      "name": "reads-zero-with-nonzero-exponent",
+      "hex": "c4820500",
+      "reencodedHex": "c4820000",
+      "notes": "0 x 10^5 is zero; canonical zero is [0, 0]."
+    }
+  ],
+  "malformed": [
+    {
+      "name": "wrong-tag",
+      "hex": "c582200f",
+      "notes": "Tag 5 is bigfloat (mantissa x 2^exponent), a different value for the same array. Rejected."
+    },
+    {
+      "name": "wrong-arity",
+      "hex": "c483200f00",
+      "notes": "Tag 4 is defined as exactly two elements."
+    },
+    {
+      "name": "not-an-array",
+      "hex": "c40f",
+      "notes": "Tag 4 wrapping a bare integer."
+    }
+  ]
+}

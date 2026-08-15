@@ -41,6 +41,18 @@ public class IonRenameHandler(IonWorkspace workspace) : RenameHandlerBase
 
         // Find all references including definition
         var refs = IonLspHelpers.FindReferences(word, workspace, includeDefinition: true);
+
+        // A synthesized identifier is not editable text. The name a hoisted inline type carries
+        // spans the whole `msg { … }` body it was lifted from, so an edit against it would replace
+        // the entire declaration with the new name. Go-to-definition may still land on that span —
+        // jumping to the body is the right answer there — but nothing may write to it.
+        //
+        // The consequence is that a hoisted type cannot be renamed from its own name, which is
+        // correct: the name is derived from the field, so renaming the field is the rename.
+        refs = refs
+            .Where(r => r.node is not ion.syntax.IonIdentifier id || !IonLspHelpers.IsSynthesizedSpan(id))
+            .ToList();
+
         if (refs.Count == 0)
             return Task.FromResult<WorkspaceEdit?>(null);
 

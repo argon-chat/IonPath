@@ -1,15 +1,381 @@
 [
   {
-    "version": "1.14.0",
-    "date": "2026-08-14",
-    "title": "Comments & Documentation Comments",
+    "version": "1.15.0",
+    "date": "2026-08-15",
+    "title": "Comments, Typedefs, Partial<T>, Typed Attributes, Collections and decimal — and Removing What Never Worked",
     "changes": [
-      { "type": "added", "description": "Doc comments: /// attaches to the declaration that follows it, /** */ is the equivalent block form, and //! documents the .ion module itself" },
-      { "type": "added", "description": "Doc comments attach to messages, message fields, services, service methods, method arguments, unions, union cases, enums, flags, enum and flags members, typedefs, attribute declarations, and the #use / #import / #feature directives" },
-      { "type": "added", "description": "Doc comments are emitted as C# XML documentation, TypeScript JSDoc, Rust rustdoc and Go doc comments, including per-argument <param> and @param entries" },
-      { "type": "added", "description": "Non-nesting /* */ block comments are accepted anywhere trivia is allowed" },
-      { "type": "changed", "description": "Plain // comments are now pure trivia: they are never attached to a declaration and no longer flow into generated documentation. Use /// to document a declaration" },
-      { "type": "added", "description": "VS Code grammar highlights all five comment forms; Enter continues /// and /** */ blocks, and Ctrl+/ toggles plain // comments" }
+      {
+        "type": "added",
+        "description": "Doc comments: /// attaches to the declaration that follows it, /** */ is the equivalent block form, and //! documents the .ion module itself"
+      },
+      {
+        "type": "added",
+        "description": "Doc comments attach to messages, message fields, services, service methods, method arguments, unions, union cases, enums, flags, enum and flags members, typedefs, attribute declarations, and the #use / #import / #feature directives"
+      },
+      {
+        "type": "added",
+        "description": "Doc comments are emitted as C# XML documentation, TypeScript JSDoc, Rust rustdoc and Go doc comments, including per-argument <param> and @param entries"
+      },
+      {
+        "type": "added",
+        "description": "Non-nesting /* */ block comments are accepted anywhere trivia is allowed"
+      },
+      {
+        "type": "changed",
+        "description": "Plain // comments are now pure trivia: they are never attached to a declaration and no longer flow into generated documentation. Use /// to document a declaration"
+      },
+      {
+        "type": "added",
+        "description": "VS Code grammar highlights all five comment forms; Enter continues /// and /** */ blocks, and Ctrl+/ toggles plain // comments"
+      },
+      {
+        "type": "added",
+        "description": "typedef is implemented. A typedef is a transparent alias erased at compile time: UserId is u4, with no wrapper, no formatter and no wire overhead. Generated as a C# global using, a TypeScript export type, a Rust pub type and a Go type alias"
+      },
+      {
+        "type": "changed",
+        "description": "The trailing { } block on a typedef is now optional, so the documented form typedef UserId = u4; finally parses. The block is still accepted for back-compat but is vestigial and its contents have never been read"
+      },
+      {
+        "type": "added",
+        "description": "Typedef diagnostics: ION0014 (no underlying type), ION0015 (?, [] or ~ on the alias name), ION0016 (generic typedef, unsupported), ION0017 (cyclic alias chain)"
+      },
+      {
+        "type": "changed",
+        "description": "Typedefs get no entry in ion.lock.json and do not bump the lock version. Because the alias is erased, the lock records the underlying type at every use site, so repointing a typedef surfaces as ION0022 once per field that used it"
+      },
+      {
+        "type": "fixed",
+        "description": "Partial<T> is written with a suffix, T~, not a prefix. Documentation and LSP hover showed the prefix form ~T, which has never parsed"
+      },
+      {
+        "type": "added",
+        "description": "New Partial<T> guide covering the suffix syntax, the untouched / modified / cleared tri-state, and the CBOR-map wire format keyed by field name"
+      },
+      {
+        "type": "fixed",
+        "description": "Documented the real C# IonPartial<T> API. The previously documented patch.Set(...) and patch.IsSet(...) do not exist; use Modify, Remove, SetField, GetField and On over PartialField<T>"
+      },
+      {
+        "type": "added",
+        "description": "LSP: reference-count code lens for typedefs, typedef names emitted as declaration tokens, and hover showing typedef Name = Underlying together with the alias-erasure semantics"
+      },
+      {
+        "type": "changed",
+        "description": "Five diagnostic codes that no compiler stage raises (ION0001, ION0004, ION0045, ION0046, ION1003) are now badged Reserved rather than documented as live"
+      },
+      {
+        "type": "added",
+        "description": "Attribute arguments are lexed and typed. The argument list is a real grammar over a standalone literal parser: integers (decimal, 0x hex, 0b binary, _ separators, leading -), floats with exponents, strings with \\\" \\\\ \\n \\r \\t \\0 \\uXXXX escapes, true, false, null, Type.Member enum references, and nested array literals up to 32 levels"
+      },
+      {
+        "type": "fixed",
+        "description": "@description(\"Hello, world\") used to become two arguments, \"Hello and world\", with no diagnostic. The argument list was raw text split on every comma, so string literals, nested parentheses and escapes were invisible to the lexer"
+      },
+      {
+        "type": "fixed",
+        "description": "attribute @Cache(duration: i4, key: string); used to crash the compiler with an unhandled InvalidOperationException on first use. The resolver read each parameter's name where it meant its type, so any attribute whose parameter was not coincidentally named after a primitive was unusable"
+      },
+      {
+        "type": "added",
+        "description": "Named arguments: @Retry(maxAttempts: 3, backoffMs: 250), in any order. The C# rule applies — once an argument is named, every argument after it must be named too. However they are written, arguments are normalised into declaration order, so the generated code is identical"
+      },
+      {
+        "type": "added",
+        "description": "Optional attribute parameters are written T?. There is no = default syntax; optional parameters must be trailing, because an argument list can only be truncated from the end"
+      },
+      {
+        "type": "added",
+        "description": "Attribute targets: attribute @idx(n: u4) on field, unionCase; restricts where an attribute may be written. The twelve targets are msg, field, enum, flags, enumMember, union, unionCase, service, method, argument, typedef and attribute. Omitting the on clause means any target, so every attribute declared before the clause existed keeps compiling"
+      },
+      {
+        "type": "changed",
+        "description": "@deprecated is now declared (since: string?, reason: string?) on all twelve targets. It previously had zero parameters, so the two-argument form the documentation had shown since launch had never once worked"
+      },
+      {
+        "type": "added",
+        "description": "@deprecated now emits in every target: C# [Obsolete(\"Since 2.0: reason\")], a TypeScript JSDoc @deprecated tag, Rust #[deprecated(since = \"2.0\", note = \"reason\")], and a Go // Deprecated: paragraph. Both halves are independently optional, so all four spellings render"
+      },
+      {
+        "type": "added",
+        "description": "ION1004 warns wherever a schema references a declaration marked @deprecated — a field's type, a method return or argument, a union case, a typedef's underlying type, and a use of an attribute whose own declaration is deprecated. The deprecated declaration itself, and references made from inside something already deprecated, stay silent"
+      },
+      {
+        "type": "added",
+        "description": "New attribute diagnostics ION0032 (arity), ION0033 (argument type, including null in a non-optional slot), ION0034 (value out of range for the declared width), ION0035 (unknown named argument, with a did-you-mean), ION0036 (argument supplied twice), ION0037 (positional after named), ION0038 (target not allowed, and unknown target keyword) and ION0039 (required parameter declared after an optional one)"
+      },
+      {
+        "type": "changed",
+        "description": "ION0004 fires for the first time. Attribute parameter types are now validated: void, bytes, a bare Maybe/Array/Partial and T~ are rejected in the declaration rather than at every use site. It is no longer badged Reserved on the diagnostics page"
+      },
+      {
+        "type": "fixed",
+        "description": "The CLI rendered diagnostics only when the build failed, so every warning and info diagnostic of a successful build was discarded before reaching the terminal — ION1001, ION1002, ION0025, ION0029, ION0047 and now ION1004 were unreachable from the command line even though the language server surfaced them. Warnings print now; the exit code still keys off errors alone"
+      },
+      {
+        "type": "fixed",
+        "description": "flags P { Read, Write } with implicit member values hung the compiler forever. It now compiles"
+      },
+      {
+        "type": "added",
+        "description": "LSP: hover on an attribute use shows the declared signature, the on clause, the doc comment and which parameter each written argument bound to; hover on a declaration shows the signature with its clause"
+      },
+      {
+        "type": "added",
+        "description": "LSP: signature help inside @Foo( ). Parameter highlighting follows the cursor and tracks named arguments by name rather than by comma count, matching how the compiler binds them"
+      },
+      {
+        "type": "added",
+        "description": "LSP: completion offers attribute names after @, filtered by whether the attribute's targets permit the position the cursor is in; parameter names inside a call; and the twelve target keywords after on"
+      },
+      {
+        "type": "added",
+        "description": "LSP: literals inside attribute arguments are classified as number, string, enumMember or keyword instead of one undifferentiated span, and argument names are emitted as parameter tokens"
+      },
+      {
+        "type": "added",
+        "description": "LSP: inlay hints name the positional arguments of an attribute use, so @cache(300, \"user\") reads as @cache(duration: 300, key: \"user\")"
+      },
+      {
+        "type": "changed",
+        "description": "The attributes guide was rewritten. It had documented @deprecated(\"2.0\", \"reason\") against a declaration with no parameters, and described @tag, @internal, @grainId and @oneWay as having effects. Those four are now marked as what they are: declared, checked, and read by nothing"
+      },
+      {
+        "type": "fixed",
+        "description": "The .NET client guide claimed @deadline gave methods automatic request timeouts. Nothing reads DeadlineAttribute — pass a CancellationToken instead"
+      },
+      {
+        "type": "fixed",
+        "description": "Recursive types work. Cycle detection now follows only unconditionally owned edges: a bare T field is owned, while T?, T[], T~ and union arms are cycle-breaking because each can terminate on the wire. msg Folder { items: Item[]; } with msg Item { parent: Folder?; } was wrongly ION0030 — the stage stripped Maybe/Array/Partial before testing — despite the diagnostic's own remedy text telling users to make the reference optional. Trees and back-referencing graphs are expressible for the first time"
+      },
+      {
+        "type": "changed",
+        "description": "A direct self-reference msg A { a: A; } is now correctly ION0030. It used to be skipped outright and is a genuinely infinite type. msg A { a: A?; } and msg A { children: A[]; } are fine"
+      },
+      {
+        "type": "fixed",
+        "description": "Attributes on enum and flags members, on union shared fields, and on the parameters of an attribute declaration survive compilation. All three were validated and then dropped during lowering, because the compiler built those nodes with a hardcoded empty attribute list. @deprecated on an enum member finally emits"
+      },
+      {
+        "type": "fixed",
+        "description": "flags F : Bogus compiled clean while enum E : Bogus correctly reported ION0003. The flags arm asserted its base type was non-null instead of checking it. Both arms are checked now, and both require an integral builtin base"
+      },
+      {
+        "type": "fixed",
+        "description": "Writing @union explicitly on a union no longer leaves two extra attribute instances alongside the compiler-synthesized one"
+      },
+      {
+        "type": "fixed",
+        "description": "Redeclaring a std attribute — attribute @tag(x: string); — was a silent no-op, because builtins win attribute resolution and the declaration was unreachable. It is now diagnosed on the declaration, in the same style as ION0031 builtin type shadowing"
+      },
+      {
+        "type": "added",
+        "description": "#feature \"x\" does something. It declares that the file requires feature x; if the project does not enable it, compilation fails with the new ION0049, naming the \"features\" key of ion.config.json and listing what is enabled. An unknown feature name is also ION0049 — the set is closed (std, orleans). The check runs first in the pipeline, because an unmet feature is the cause of every unresolved name after it. The directive previously parsed and was read by nothing but the editor's syntax highlighter"
+      },
+      {
+        "type": "added",
+        "description": "The internal method modifier is implemented: the method is no longer part of the generated client's public API. Each target uses its own native visibility — C# emits an explicit interface implementation, Rust drops pub (crate private), Go lowercases the identifier (package private, wire name unchanged), and TypeScript marks it @internal so tsc --stripInternal removes it from the published .d.ts. The service interface, the server dispatch and the wire route are all untouched, so a peer service can still call it. It is not a security boundary"
+      },
+      {
+        "type": "added",
+        "description": "ION0001 (cyclic module import) is implemented and registered. The detection stage existed but threw NotImplementedException from its entry point and was never added to the pipeline, so the code could never reach anyone"
+      },
+      {
+        "type": "added",
+        "description": "ION0045 (unused imported type) is implemented — a name in an #import { … } list that nothing in the file references"
+      },
+      {
+        "type": "removed",
+        "description": "The vector feature and its nine builtin types vec2f…vec4h are deleted. They resolved in the compiler and the LSP, but no generator mapped them and no runtime defined them, so enabling the feature produced output that did not compile in any target. Also removed from both VS Code grammars and from the ion-config JSON schema. The docs had described the feature as providing Vector2, Vector3, Vector4 and Quaternion — four names that never existed in Ion at all"
+      },
+      {
+        "type": "removed",
+        "description": "@tag is deleted, along with the IonType.Tag property that exposed it. It was declared, modelled and read by nothing. A CBOR semantic-tag feature with real runtime support can be added deliberately later; the name is free, and you can declare your own attribute @tag(...) meanwhile"
+      },
+      {
+        "type": "removed",
+        "description": "ION1003 (unused field) is deleted rather than implemented. A field is part of the wire contract, so \"unused\" is not a meaningful thing to say about one"
+      },
+      {
+        "type": "removed",
+        "description": "ION0046 (module content-hash drift) is deleted, along with the module hash that was computed and never compared"
+      },
+      {
+        "type": "removed",
+        "description": "The duplicate C# and TypeScript generator stack is deleted — CSharpCodeGenerator, TypeScriptCodeGenerator, both emitters and both template providers, none of which was ever instantiated. The shipping path is unchanged and generated output is byte-identical. The emitter stack remains live for Rust and Go"
+      },
+      {
+        "type": "changed",
+        "description": "unary is kept as the explicit spelling of the default method kind, and is now documented as such"
+      },
+      {
+        "type": "added",
+        "description": "Four emitted diagnostics that were missing from the diagnostics guide entirely are documented: ION0010 (modifiers out of order), ION0018 (partial over a non-message), ION0019 (repeated modifier) and ION0031 (declaration shadows a builtin). So is the ION0050–ION0059 target-capability band — ION0050 (Partial<T> unsupported by Go) and ION0051 (Rust patch field is a Rust keyword) — which no page had ever mentioned"
+      },
+      {
+        "type": "changed",
+        "description": "The diagnostics guide no longer carries a \"Reserved — not emitted\" badge. Every code it documents has an emission site, and every code the compiler emits is documented"
+      },
+      {
+        "type": "fixed",
+        "description": "The services guide claimed internal methods were \"not exposed in public interfaces\", which was never true of any target — no generator read the modifier at all. The Partial guide claimed the Go backend referenced a partial type from an unshipped Go runtime package; Go now refuses with ION0050 instead of emitting code that cannot build"
+      },
+      {
+        "type": "changed",
+        "description": "BREAKING WIRE FORMAT: datetime is now CBOR tag 0 wrapping RFC 3339 text, always with an explicit numeric offset and always with exactly seven fractional-second digits — 2024-03-01T12:34:56.7891234+05:30, 33 characters, 36 bytes. Redeploy peers together; payloads written by an older release do not decode reliably"
+      },
+      {
+        "type": "fixed",
+        "description": "datetime was not interoperable and this is the fix. C# wrote tag 0 + RFC 3339 but read it back through .UtcDateTime, parsing the offset and discarding it. TypeScript wrote Date.toISOString(), millisecond resolution, truncating 100ns ticks on every C#/TS exchange. Rust wrote a bare CBOR array [ticks, offset_minutes] — a different major type — so Rust and C# could not exchange a datetime at all"
+      },
+      {
+        "type": "changed",
+        "description": "datetime maps to System.DateTimeOffset in C# (was System.DateTime, which has nowhere to put the offset) and to a new IonDateTime in TypeScript (was Date, which is millisecond-resolution and holds no offset). Rust keeps chrono::DateTime<FixedOffset>, which already carried the offset. Both are source-breaking changes your compiler will point at"
+      },
+      {
+        "type": "added",
+        "description": "datetime readers are lenient: 0 to 9 fractional digits are accepted with digits past the seventh truncated rather than rounded, Z is accepted alongside a numeric offset, the T separator may be lower case or a space, and an untagged text string is accepted. A missing offset is rejected — a local time without one is ambiguous and is not assumed to be UTC"
+      },
+      {
+        "type": "added",
+        "description": "decimal, a builtin for exact base-10 arithmetic. CBOR tag 4 [exponent, mantissa], with the mantissa normalised on write so 1.50 and 1.5 are the same bytes. C# System.Decimal, TypeScript IonDecimal, Rust ion_rustcore::IonDecimal. Deliberately not mapped to f8 — the whole point of the type is that it does not lose precision"
+      },
+      {
+        "type": "added",
+        "description": "ION0052: the Go target refuses decimal rather than emitting something that cannot build. Go's standard library has no exact decimal (math/big.Float is binary), so the alternatives were silent precision loss via float64 or an undefined bare identifier. The other three targets are unaffected"
+      },
+      {
+        "type": "added",
+        "description": "ION0053: the Go target refuses Map, Set and T[N] for a worse reason than it refuses decimal — Go's map and [N]T would both compile and then be wrong on the wire, writing hash-iteration order for a map, no tag 258 for a set and no length check for a fixed array. Silent wire divergence is harder to find than a build failure. An unsized T[] is unaffected"
+      },
+      {
+        "type": "added",
+        "description": "Map<K, V> and Set<T> are builtin generics beside Maybe, Array and Partial. Neither has a shorthand suffix, so both are always written out. Map is a definite-length CBOR map with keys in canonical RFC 8949 order; Set is CBOR tag 258 over a sorted array. Both sort on write, so the same logical value is byte-identical on every runtime"
+      },
+      {
+        "type": "added",
+        "description": "ION0061 restricts Map keys to the integral scalars, bool, duration, string, guid and enums. Floats are excluded because -0.0 and 0.0 encode differently but compare equal and NaN is not equal to itself, so a float-keyed map cannot reproduce its own key set. decimal and bigint are excluded as arbitrary-precision, bytes and the date/time types because at least one target maps them to a reference-equality type"
+      },
+      {
+        "type": "added",
+        "description": "Fixed-size arrays, f4[16]: a definite-length CBOR array of exactly N elements, where any other length is a typed decode error naming both the declared and the actual length. The lock records Array<f4, 16>, so changing N is ION0022. New ION0062 for N < 1. u1[32] is deliberately not special-cased into a CBOR byte string — that would make an array's CBOR major type depend on its element type"
+      },
+      {
+        "type": "added",
+        "description": "ION0060 checks generic arity. There was no arity check anywhere before: Maybe<A, B> resolved silently by writing two arguments into a one-parameter definition, and a bare Array lowered to an open generic with no element type. The check covers all five builtin generics"
+      },
+      {
+        "type": "fixed",
+        "description": "Nested generic arguments parse. Map<string, Array<User>> and Map<string, User?> were both hard parse errors — an argument could only be a bare identifier, so Array<User> read as the identifier Array followed by an unexpected '<' and the whole declaration died. One level of generics worked and two never did; the resolver discarded nesting anyway"
+      },
+      {
+        "type": "added",
+        "description": "mixin declarations and the with clause. A mixin is a reusable field set spliced into every msg or mixin that names it. It is not a type: it cannot be written in type position (ION0066), gets no entry in ion.lock.json, and generates no declaration in any target"
+      },
+      {
+        "type": "added",
+        "description": "Mixin expansion order is a hard contract, because the wire is positional: the mixins in with order, each expanded base-first and transitively, then the declaration's own fields. A mixin reached by more than one path contributes exactly once, at its first position in that walk, so 'with Audited, Traced' and 'with Traced, Audited' produce identical field numbering"
+      },
+      {
+        "type": "added",
+        "description": "Mixin diagnostics: ION0063 (with clause entry undeclared, not a mixin, or listed twice), ION0064 (circular inclusion), ION0065 (two fields of the same name reaching one declaration, naming both sources). ION1001 gained a mixin wording for a mixin nothing includes"
+      },
+      {
+        "type": "added",
+        "description": "Mixin fields carry their doc comments and attributes into every includer — the expansion reuses the field nodes the author wrote, so there is nothing to keep in sync"
+      },
+      {
+        "type": "added",
+        "description": "Inline anonymous types: a field's type may be an unnamed msg { … } written in place. It hoists to {Owner}{PascalCasedFieldName}, so 'shipping' on msg Order becomes OrderShipping. Nesting extends the chain, and an inline type written in a mixin is hoisted once, named after the mixin, rather than once per includer"
+      },
+      {
+        "type": "added",
+        "description": "ION0067 rejects an inline type whose derived name is already taken, by a declaration or by another inline type — never a silent rename. A rename would quietly change a name in ion.lock.json and in four generated languages. ION0068 rejects an inline type in a position with no field name to derive from: a generic argument, a typedef, an enum or flags base type, an attribute parameter, a union case name, or a method return type"
+      },
+      {
+        "type": "changed",
+        "description": "Cycle detection treats Map, Set, T[], T?, T~ and union arms as cycle-breaking, and T[N] with N >= 1 as owned. A fixed array of at least one element always contains an element, so it cannot terminate: msg Bad { kids: Bad[4]; } is ION0030 while msg Tree { kids: Tree[]; } is fine"
+      },
+      {
+        "type": "added",
+        "description": "LSP: hover on Map, Set and decimal describes the type and its wire rule instead of rendering Map as 'msg Map {}', Set as 'msg Set {}' and decimal as an empty typedef. The datetime hover no longer claims DateTime and 64 bits"
+      },
+      {
+        "type": "added",
+        "description": "LSP: hover on a mixin shows its expanded field list in wire order, each field tagged with the mixin it came from, and lists what includes it. Hover on a with clause entry shows what that entry actually contributes — which in a diamond is less than the mixin's own field list, and is sometimes nothing, in which case it names the earlier entry that already brought it in"
+      },
+      {
+        "type": "added",
+        "description": "LSP: an inlay hint shows an inline type's hoisted name right after the msg keyword, and hover anywhere on the body shows the full hoisted declaration. Nothing else in the editor could disclose that name — there is no token in the source that spells it"
+      },
+      {
+        "type": "fixed",
+        "description": "LSP: type references render their full nesting. Hover, the code lens, attribute signatures, find-references, rename and document highlight all read only each generic argument's head name, so Map<string, Array<Document>> displayed as Map<string, Array> and rename left nested references behind, producing a schema that no longer compiled. The three copies of the renderer are now one"
+      },
+      {
+        "type": "fixed",
+        "description": "LSP: f4[16] displays as f4[16] rather than f4[], and its hover names the Array<f4, 16> lock entry and warns that changing N is ION0022"
+      },
+      {
+        "type": "added",
+        "description": "LSP: completion offers mixin names after 'with', filtered to exclude ones already listed and the declaration's own name, each showing how many fields it would contribute; mixin and with as keywords; and decimal, Map and Set among the builtin types, with the five generics offered as snippets"
+      },
+      {
+        "type": "added",
+        "description": "LSP: mixin declarations and with clause entries are semantic-token coloured, appear in the document outline and workspace symbols, and support go-to-definition, find-references, rename, document highlight, folding and a reference-count code lens. Previously a mixin was invisible to all of them — it read as '0 references' and renaming one rewrote the declaration alone, leaving every includer pointing at a name that no longer existed"
+      },
+      {
+        "type": "fixed",
+        "description": "LSP: hovering a field inside an inline msg { … } body returns the field, not the whole hoisted type. The synthesized name token spans the entire body, so it used to answer for every position inside it — which also made the tokenizer paint an arbitrary run of text at the msg keyword, twice"
+      },
+      {
+        "type": "fixed",
+        "description": "LSP: an array field's size hint reported the element width. i4[] and f4[16] both claimed 4 bytes, and the enclosing message's total was wrong by however many elements the arrays held. datetime no longer contributes a fixed 8 bytes to a message size, since it is now variable-length text"
+      },
+      {
+        "type": "added",
+        "description": "VS Code: mixin and with are highlighted as keywords, mixin names and with clause entries are scoped as declarations and type references, and decimal, Map and Set are highlighted as builtins"
+      },
+      {
+        "type": "added",
+        "description": "New guides for Collections (Map, Set, T[N]), Mixins and Inline Types, all three added to the sidebar and the mobile menu — which had drifted apart, one carrying Partial<T> and the other Modules"
+      },
+      {
+        "type": "fixed",
+        "description": "The generics guide documented msg Response<T> { … } and Response<User>. Neither has ever parsed: a message declaration has no type-parameter list, so msg Response<T> fails on the '<' with a parse error. Generic declarations are not implemented, and the page now says so"
+      },
+      {
+        "type": "fixed",
+        "description": "The syntax overview listed vector as a #feature value. The feature was deleted two releases ago; the set is std and orleans"
+      },
+      {
+        "type": "changed",
+        "description": "Documented the code-generation gap honestly: Map, Set and T[N] are complete in the grammar, the resolver, the diagnostics and ion.lock.json, and the .NET runtime implements all three wire formats — but no code generator emits them, so a Map field currently produces a C# type name no assembly defines and a T[N] loses its length check. Nested generic arguments are dropped by the C# and TypeScript generators for the same reason"
+      },
+      {
+        "type": "removed",
+        "description": "BREAKING: the Go code-generation target is gone. A \"go\" block in ion.config.json is now rejected outright — the config parser accepts only \"dotnet\", \"browser\" and \"rust\" — and ionc init no longer offers it. If you generate Go from an Ion schema, this release stops that working. Stay on the previous release, or move those consumers to another target"
+      },
+      {
+        "type": "removed",
+        "description": "It is removed because nothing it produced was ever verified. There is no Go runtime in this repository — no .go files, no go.mod — and the generated code imported out-of-tree github.com/argon-chat/ion.server.go and ion.webcore.go, so no Go output was ever compiled or tested here. Beyond that it was quietly broken: the import block never emitted time or math/big, so datetime, bigint, i16 and u16 referenced undefined packages; bytes had no type mapping at all; and a union emitted a func init() nested inside another func init(), which is not valid Go. Partial<T>, decimal, Map, Set and T[N] were already refused rather than emitted. What remained expressible was messages of basic scalars, enums, flags and services — and even that was unverifiable"
+      },
+      {
+        "type": "removed",
+        "description": "ION0050, ION0052 and ION0053 are deleted. All three were Go-only refusals — Partial<T>, decimal, and Map/Set/T[N] — raised before the generator emitted anything, and all three became unreachable when the generator went. The three numbers are retired, not recycled: they will not be reused for an unrelated diagnostic, so a reader who meets ION0052 in an old build log is not told it meant something else"
+      },
+      {
+        "type": "changed",
+        "description": "ION0051 is unaffected and still raised. It is the Rust diagnostic for a patch field named after a Rust keyword, where the generated wire key would become \"r#type\" instead of \"type\" and desynchronise from the C# and TypeScript runtimes"
+      },
+      {
+        "type": "added",
+        "description": "ionc init offers rust alongside dotnet and browser. Rust was already a supported generator, but the scaffolding wizard never listed it, so the only way to turn it on was to hand-write the generators block. Choosing it writes features, outputs, crateName and a rustcorePath placeholder to edit"
+      },
+      {
+        "type": "changed",
+        "description": "Ion has three code-generation targets: C#, TypeScript and Rust. The documentation counted four throughout — a Go column in the primitive-types and services tables, Go samples in the comments and typedefs guides, a Go row in the deprecation table, and a \"Go is the exception\" note in the collections and Partial guides. All of it is gone, and the ion.config.json reference now documents the rust generator, which it never had"
+      }
     ]
   },
   {
@@ -17,12 +383,30 @@
     "date": "2026-04-22",
     "title": "Documentation Launch",
     "changes": [
-      { "type": "added", "description": "Comprehensive IonPath documentation site with language reference, compiler docs, and SDK guides" },
-      { "type": "added", "description": "Full primitive type reference with C# and TypeScript mappings" },
-      { "type": "added", "description": "Schema lock documentation with breaking change detection guide" },
-      { "type": "added", "description": "JavaScript SDK (ion.webcore.js) usage guide with CBOR encoding details" },
-      { "type": "added", "description": ".NET runtime documentation covering server setup, client usage, and wire protocol" },
-      { "type": "added", "description": "C# and TypeScript code generation reference" }
+      {
+        "type": "added",
+        "description": "Comprehensive IonPath documentation site with language reference, compiler docs, and SDK guides"
+      },
+      {
+        "type": "added",
+        "description": "Full primitive type reference with C# and TypeScript mappings"
+      },
+      {
+        "type": "added",
+        "description": "Schema lock documentation with breaking change detection guide"
+      },
+      {
+        "type": "added",
+        "description": "JavaScript SDK (ion.webcore.js) usage guide with CBOR encoding details"
+      },
+      {
+        "type": "added",
+        "description": ".NET runtime documentation covering server setup, client usage, and wire protocol"
+      },
+      {
+        "type": "added",
+        "description": "C# and TypeScript code generation reference"
+      }
     ]
   }
 ]

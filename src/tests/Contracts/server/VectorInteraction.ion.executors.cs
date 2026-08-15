@@ -89,6 +89,27 @@ public sealed class Ion_VectorMathInteraction_ServiceExecutor(AsyncServiceScope 
         
         IonFormatterStorage<Vector>.Write(writer, result);
     }
+    /// <summary>
+    /// Exercises a typedef in both argument and return position.
+    /// </summary>
+    [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+    public async Task Component_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
+    {
+        var service = scope.ServiceProvider.GetRequiredService<IVectorMathInteraction>();
+    
+        const int argumentSize = 2;
+    
+        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+    
+        var __leftoperand = IonFormatterStorage<Vector>.Read(reader);
+        var __index = IonFormatterStorage<u1>.Read(reader);
+    
+        reader.ReadEndArrayAndSkip(arraySize - argumentSize);
+    
+        var result = await service.Component(__leftoperand, __index);
+        
+        IonFormatterStorage<f4>.Write(writer, result);
+    }
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public async Task Do_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
     {
@@ -106,6 +127,52 @@ public sealed class Ion_VectorMathInteraction_ServiceExecutor(AsyncServiceScope 
         
         IonFormatterStorage<VectorOfVectorOfVector>.Write(writer, result);
     }
+    /// <summary>
+    /// `T[]` return over a message element, beside `Spread` below.
+    /// </summary>
+    [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+    public async Task Repeat_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
+    {
+        var service = scope.ServiceProvider.GetRequiredService<IVectorMathInteraction>();
+    
+        const int argumentSize = 2;
+    
+        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+    
+        var __leftoperand = IonFormatterStorage<Vector>.Read(reader);
+        var __count = IonFormatterStorage<u1>.Read(reader);
+    
+        reader.ReadEndArrayAndSkip(arraySize - argumentSize);
+    
+        var result = await service.Repeat(__leftoperand, __count);
+        
+        IonFormatterStorage<Vector>.WriteArray(writer, result);
+    }
+    /// <summary>
+    /// `T[]?` return over a message element: `count` of 0 returns null, not an empty array.
+    ///
+    /// The null case is the one that matters — an implementation that decodes the response as a
+    /// single `Vector` instead of a nullable array still "works" on a non-null payload of length
+    /// one, so only null-vs-empty-vs-populated together pin the wire shape.
+    /// </summary>
+    [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+    public async Task Spread_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
+    {
+        var service = scope.ServiceProvider.GetRequiredService<IVectorMathInteraction>();
+    
+        const int argumentSize = 2;
+    
+        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+    
+        var __leftoperand = IonFormatterStorage<Vector>.Read(reader);
+        var __count = IonFormatterStorage<u1>.Read(reader);
+    
+        reader.ReadEndArrayAndSkip(arraySize - argumentSize);
+    
+        var result = await service.Spread(__leftoperand, __count);
+        
+        IonFormatterStorage<Vector>.WriteNullableArray(writer, result);
+    }
 
     
     
@@ -121,8 +188,14 @@ public sealed class Ion_VectorMathInteraction_ServiceExecutor(AsyncServiceScope 
             return AndNot_Execute(reader, writer, ct);
         if (methodName.Equals("Clamp", StringComparison.InvariantCultureIgnoreCase))
             return Clamp_Execute(reader, writer, ct);
+        if (methodName.Equals("Component", StringComparison.InvariantCultureIgnoreCase))
+            return Component_Execute(reader, writer, ct);
         if (methodName.Equals("Do", StringComparison.InvariantCultureIgnoreCase))
             return Do_Execute(reader, writer, ct);
+        if (methodName.Equals("Repeat", StringComparison.InvariantCultureIgnoreCase))
+            return Repeat_Execute(reader, writer, ct);
+        if (methodName.Equals("Spread", StringComparison.InvariantCultureIgnoreCase))
+            return Spread_Execute(reader, writer, ct);
 
         
         throw new InvalidOperationException("no method defined");

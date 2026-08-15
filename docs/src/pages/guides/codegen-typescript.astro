@@ -98,12 +98,20 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
           <span class="font-mono text-[12px] text-text-secondary">string</span>
         </div>
         <div class="type-grid-row">
-          <span class="font-mono text-[12px] type-keyword">datetime, dateonly, timeonly</span>
-          <span class="font-mono text-[12px] text-text-secondary">Date</span>
+          <span class="font-mono text-[12px] type-keyword">datetime</span>
+          <span class="font-mono text-[12px] text-text-secondary">IonDateTime <span class="text-text-muted">— not <code>Date</code>: a <code>Date</code> is millisecond-resolution and cannot hold the 100ns ticks the wire form carries</span></span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">dateonly, timeonly</span>
+          <span class="font-mono text-[12px] text-text-secondary">DateOnly, TimeOnly</span>
         </div>
         <div class="type-grid-row">
           <span class="font-mono text-[12px] type-keyword">duration</span>
-          <span class="font-mono text-[12px] text-text-secondary">number</span>
+          <span class="font-mono text-[12px] text-text-secondary">Duration</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">decimal</span>
+          <span class="font-mono text-[12px] text-text-secondary">IonDecimal</span>
         </div>
         <div class="type-grid-row">
           <span class="font-mono text-[12px] type-keyword">T?</span>

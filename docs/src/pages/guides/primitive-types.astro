@@ -66,6 +66,67 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
           </tbody>
         </table>
       </div>
+      <div class="mt-4 rounded-lg border border-oled-border-subtle bg-oled-elevated p-4">
+        <p class="text-sm font-medium mb-2">Float wire encoding: the declared width is always written</p>
+        <p class="text-sm text-text-secondary">
+          A float is encoded at exactly the width its Ion type declares — <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">f2</code> as CBOR
+          <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">0xf9</code> + 2 bytes,
+          <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">f4</code> as
+          <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">0xfa</code> + 4 bytes,
+          <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">f8</code> as
+          <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">0xfb</code> + 8 bytes — regardless of the value. IonPath deliberately does
+          <em>not</em> use CBOR's shortest-lossless float form: Ion is schema-first, so the reader already knows the width, and shrinking would make
+          <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">f2</code> and
+          <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">f4</code> indistinguishable on the wire. This makes a given message byte-identical
+          across the C#, TypeScript and Rust runtimes, which matters for hashing, signing and content-addressing.
+        </p>
+        <p class="text-sm text-text-secondary mt-2">
+          Readers accept any of the three widths for any float field, so payloads written by older releases — which did shrink — still decode. <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">NaN</code>
+          is normalized to positive quiet NaN on write; <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">-0.0</code>, subnormals and the
+          infinities are preserved bit-for-bit.
+        </p>
+      </div>
+    </section>
+
+    <!-- decimal -->
+    <section>
+      <h2 id="decimal" class="text-xl font-bold mb-4">Exact Decimal</h2>
+      <p class="text-sm text-text-secondary mb-4">A base-10 number that is not a binary float. Use it for money, for tax rates, and for anything else where <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">0.1 + 0.2 != 0.3</code> is a bug rather than a curiosity.</p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-oled-border-subtle">
+              <th class="text-left py-2 px-3 text-text-muted font-medium">Ion Type</th>
+              <th class="text-left py-2 px-3 text-text-muted font-medium">C#</th>
+              <th class="text-left py-2 px-3 text-text-muted font-medium">TypeScript</th>
+              <th class="text-left py-2 px-3 text-text-muted font-medium">Rust</th>
+            </tr>
+          </thead>
+          <tbody class="text-text-secondary">
+            <tr><td class="py-2 px-3 font-mono type-keyword">decimal</td><td class="py-2 px-3 font-mono text-xs">System.Decimal</td><td class="py-2 px-3 font-mono text-xs">IonDecimal</td><td class="py-2 px-3 font-mono text-xs">ion_rustcore::IonDecimal</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="mt-4 rounded-lg border border-oled-border-subtle bg-oled-elevated p-4">
+        <p class="text-sm font-medium mb-2">Wire encoding: CBOR tag 4</p>
+        <p class="text-sm text-text-secondary">
+          A <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">decimal</code> is CBOR <strong>tag 4</strong> — the standard decimal-fraction tag — wrapping a
+          two element array <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">[exponent, mantissa]</code>, giving the value
+          <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">mantissa × 10^exponent</code>. It is deliberately <em>not</em> mapped to
+          <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">f8</code>: the entire point of the type is that it does not lose precision.
+        </p>
+        <p class="text-sm text-text-secondary mt-2">
+          <strong>The mantissa is normalised on write</strong>, so <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">1.50</code> and
+          <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">1.5</code> produce the same bytes and a value cannot carry a trailing-zero "scale" across the
+          wire. <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">-0.0m</code> and <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">0m</code> also
+          normalise to the same encoding — the one deliberate place in the language where two distinguishable source values become one wire value.
+        </p>
+        <p class="text-sm text-text-secondary mt-2">
+          Tag 4 permits an arbitrary mantissa and exponent, but the C# runtime type does not: a payload outside
+          <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">System.Decimal</code>'s 96-bit magnitude or 0..28 scale is a typed range error on read rather than a
+          silently truncated value. Not a Map key — see <a href="/guides/collections/#map-keys" class="text-accent hover:underline">Collections</a>.
+        </p>
+      </div>
     </section>
 
     <!-- Special Types -->
@@ -104,23 +165,70 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
               <th class="text-left py-2 px-3 text-text-muted font-medium">Ion Type</th>
               <th class="text-left py-2 px-3 text-text-muted font-medium">C#</th>
               <th class="text-left py-2 px-3 text-text-muted font-medium">TypeScript</th>
+              <th class="text-left py-2 px-3 text-text-muted font-medium">Rust</th>
               <th class="text-left py-2 px-3 text-text-muted font-medium">Description</th>
             </tr>
           </thead>
           <tbody class="text-text-secondary">
-            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono type-keyword">datetime</td><td class="py-2 px-3 font-mono text-xs">DateTime</td><td class="py-2 px-3 font-mono text-xs">Date</td><td class="py-2 px-3 text-xs">UTC date and time</td></tr>
-            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono type-keyword">dateonly</td><td class="py-2 px-3 font-mono text-xs">DateOnly</td><td class="py-2 px-3 font-mono text-xs">string</td><td class="py-2 px-3 text-xs">Date without time component</td></tr>
-            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono type-keyword">timeonly</td><td class="py-2 px-3 font-mono text-xs">TimeOnly</td><td class="py-2 px-3 font-mono text-xs">string</td><td class="py-2 px-3 text-xs">Time without date component</td></tr>
-            <tr><td class="py-2 px-3 font-mono type-keyword">duration</td><td class="py-2 px-3 font-mono text-xs">TimeSpan</td><td class="py-2 px-3 font-mono text-xs">number</td><td class="py-2 px-3 text-xs">Time span / duration</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono type-keyword">datetime</td><td class="py-2 px-3 font-mono text-xs">DateTimeOffset</td><td class="py-2 px-3 font-mono text-xs">IonDateTime</td><td class="py-2 px-3 font-mono text-xs">chrono::DateTime&lt;FixedOffset&gt;</td><td class="py-2 px-3 text-xs">Instant with an explicit UTC offset</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono type-keyword">dateonly</td><td class="py-2 px-3 font-mono text-xs">DateOnly</td><td class="py-2 px-3 font-mono text-xs">DateOnly</td><td class="py-2 px-3 font-mono text-xs">IonDateOnly</td><td class="py-2 px-3 text-xs">Date without time component</td></tr>
+            <tr class="border-b border-oled-border-subtle"><td class="py-2 px-3 font-mono type-keyword">timeonly</td><td class="py-2 px-3 font-mono text-xs">TimeOnly</td><td class="py-2 px-3 font-mono text-xs">TimeOnly</td><td class="py-2 px-3 font-mono text-xs">IonTimeOnly</td><td class="py-2 px-3 text-xs">Time without date component</td></tr>
+            <tr><td class="py-2 px-3 font-mono type-keyword">duration</td><td class="py-2 px-3 font-mono text-xs">TimeSpan</td><td class="py-2 px-3 font-mono text-xs">Duration</td><td class="py-2 px-3 font-mono text-xs">IonDuration</td><td class="py-2 px-3 text-xs">Time span / duration</td></tr>
           </tbody>
         </table>
+      </div>
+
+      <div class="mt-6 rounded-lg border border-status-down/40 bg-oled-elevated p-4">
+        <p class="text-sm font-medium mb-2"><span class="text-status-down">⚠</span> <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">datetime</code> changed on the wire — and this is the fix, not a regression</p>
+        <p class="text-sm text-text-secondary">
+          The old encoding was <strong>not interoperable</strong>. The three runtimes wrote three different shapes and no two of them fully agreed:
+        </p>
+        <ul class="text-sm text-text-secondary space-y-2 mt-3 ml-4">
+          <li>• <strong>C#</strong> wrote tag 0 + RFC 3339 text, then read it back through <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">.UtcDateTime</code> — parsing the offset and <em>throwing it away</em>. A value authored at <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">+05:30</code> came back as UTC.</li>
+          <li>• <strong>TypeScript</strong> wrote <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">Date.toISOString()</code>, which is millisecond resolution, so the 100ns ticks a C# writer produced were silently truncated on every exchange.</li>
+          <li>• <strong>Rust</strong> wrote a bare CBOR array <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">[ticks, offset_minutes]</code> — a different CBOR major type entirely. <strong>Rust and C# could not exchange a <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">datetime</code> at all.</strong></li>
+        </ul>
+      </div>
+
+      <div class="mt-4 rounded-lg border border-oled-border-subtle bg-oled-elevated p-4">
+        <p class="text-sm font-medium mb-2">The encoding now</p>
+        <p class="text-sm text-text-secondary">
+          CBOR <strong>tag 0</strong> wrapping an RFC 3339 date-time, <strong>always with an explicit numeric offset</strong> and
+          <strong>always with exactly seven fractional-second digits</strong>:
+        </p>
+        <div class="code-block text-[13px] mt-3">
+          <pre><span class="text-accent-2">"2024-03-01T12:34:56.7891234+05:30"</span>   <span class="text-text-muted">// 33 characters, 36 wire bytes: c0 78 21 …</span></pre>
+        </div>
+        <p class="text-sm text-text-secondary mt-3">
+          <strong>Seven digits, not fewer and not more.</strong> 100ns is the resolution of the most precise runtime type in play, the .NET tick. Fewer
+          would lose C# precision on the wire; more would be unrepresentable in C# and so could never be written back byte-identically.
+        </p>
+        <p class="text-sm text-text-secondary mt-2">
+          <strong>A numeric offset, never <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">Z</code>.</strong>
+          <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">Z</code> and <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">+00:00</code> denote the same
+          instant but are different bytes, so exactly one has to be canonical. Writers pick <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">+00:00</code>
+          because it removes the special case: every offset is formatted the same way.
+        </p>
+        <p class="text-sm text-text-secondary mt-2">
+          <strong>Readers are lenient.</strong> Any fractional precision from 0 to 9 digits is accepted, with digits past the seventh
+          <em>truncated</em> rather than rounded — rounding <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">.99999995</code> would carry into the next second
+          and no two runtimes would agree on the carry at every boundary. <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">Z</code> is accepted alongside a
+          numeric offset, the <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">T</code> separator may be lower case or a space, and an untagged text string
+          is accepted because the schema already says the field is a <code class="bg-oled-base px-1 py-0.5 rounded font-mono text-[11px]">datetime</code>. A missing offset is
+          <em>rejected</em>: a local time without one is ambiguous and is not assumed to be UTC.
+        </p>
+      </div>
+
+      <div class="glass rounded-xl p-4 mt-4 border-l-2 border-status-degraded/40">
+        <p class="text-sm font-medium mb-1">Migration</p>
+        <p class="text-xs text-text-secondary">Payloads written by an older release do not decode reliably: a Rust-written value is a CBOR array where a tag-0 text string is now expected, and a C#-written value loses its offset. There is no compatibility shim — the old format had no single definition to be compatible <em>with</em>. Redeploy peers together. In C#, a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">datetime</code> field is now <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">System.DateTimeOffset</code> rather than <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">System.DateTime</code>, which is a source-breaking change your compiler will point at; in TypeScript it is <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">IonDateTime</code> rather than <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Date</code>, with <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">IonDateTime.fromDate()</code> to convert.</p>
       </div>
     </section>
 
     <!-- Generic Wrappers -->
     <section>
-      <h2 id="wrappers" class="text-xl font-bold mb-4">Generic Wrappers</h2>
-      <p class="text-sm text-text-secondary mb-4">These built-in generic types wrap other types:</p>
+      <h2 id="wrappers" class="text-xl font-bold mb-4">Built-in Generics</h2>
+      <p class="text-sm text-text-secondary mb-4">Five built-in generics wrap or collect other types. The first three have a suffix shorthand; <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Map</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Set</code> do not and are always written out. See <a href="/guides/collections/" class="text-accent hover:underline">Collections</a> for the wire formats and the key restrictions.</p>
       <div class="type-grid">
         <div class="type-grid-header">
           <span>Wrapper</span>
@@ -136,9 +244,18 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
         </div>
         <div class="type-grid-row">
           <span class="font-mono text-[12px]"><span class="type-name">Partial</span>&lt;<span class="type-keyword">T</span>&gt;</span>
-          <span class="text-[12px] text-text-secondary">Sparse update — only modified fields are serialized. Shorthand: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">~T</code>.</span>
+          <span class="text-[12px] text-text-secondary">Sparse patch — only touched fields are serialized. Shorthand: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T~</code>.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]"><span class="type-name">Map</span>&lt;<span class="type-keyword">K</span>, <span class="type-keyword">V</span>&gt;</span>
+          <span class="text-[12px] text-text-secondary">Keyed collection. <strong>No shorthand.</strong> A definite-length CBOR map with keys in canonical order; keys are restricted.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]"><span class="type-name">Set</span>&lt;<span class="type-keyword">T</span>&gt;</span>
+          <span class="text-[12px] text-text-secondary">Distinct collection. <strong>No shorthand.</strong> CBOR tag 258 over a sorted array.</span>
         </div>
       </div>
+      <p class="text-sm text-text-secondary mt-4">A fixed-size array is written <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T[N]</code> and has no spelled-out generic form in source; it records in the lock as <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Array&lt;T, N&gt;</code>.</p>
     </section>
 
     <!-- Usage Example -->
@@ -151,7 +268,8 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
     email: <span class="type-keyword">string</span>?;            <span class="text-text-muted">// optional string (Maybe&lt;string&gt;)</span>
     avatar: <span class="type-keyword">bytes</span>?;            <span class="text-text-muted">// optional binary data</span>
     score: <span class="type-keyword">f8</span>;                <span class="text-text-muted">// double-precision float</span>
-    createdAt: <span class="type-keyword">datetime</span>;       <span class="text-text-muted">// UTC timestamp</span>
+    balance: <span class="type-keyword">decimal</span>;          <span class="text-text-muted">// exact base-10 — not a binary float</span>
+    createdAt: <span class="type-keyword">datetime</span>;       <span class="text-text-muted">// instant + explicit offset</span>
     tags: <span class="type-keyword">string</span>[];            <span class="text-text-muted">// array of strings</span>
     largeId: <span class="type-keyword">u8</span>;              <span class="text-text-muted">// 64-bit unsigned (bigint in TS)</span>
     uniqueRef: <span class="type-keyword">guid</span>;          <span class="text-text-muted">// 128-bit UUID</span>

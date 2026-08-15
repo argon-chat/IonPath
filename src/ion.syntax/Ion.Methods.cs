@@ -19,9 +19,16 @@ public partial class IonParser
             Char(':').Before(SkipTrivia).Then(Type).Before(SkipTrivia)
         );
 
+    /// <summary>
+    /// The <c>stream</c> parameter modifier, terminated by a word boundary.
+    /// </summary>
+    /// <remarks>
+    /// See <c>MethodModifierOne</c>. Without <see cref="Keyword"/> this matched the first six
+    /// characters of a parameter name: <c>Ok(streamValue: i4)</c> lowered to a parameter literally
+    /// named <c>" Value"</c> (leading space included) of type <c>IAsyncEnumerable&lt;i4&gt;</c>.
+    /// </remarks>
     private static Parser<char, IonArgumentModifiers> ArgumentModifierOne =>
-        Try(String("stream").ThenReturn(IonArgumentModifiers.Stream))
-            .Before(SkipTrivia);
+        Keyword("stream").ThenReturn(IonArgumentModifiers.Stream);
 
     private static Parser<char, IEnumerable<IonArgumentSyntax>> ArgList =>
         ArgEntry

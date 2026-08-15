@@ -77,13 +77,55 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
       </div>
       <p class="text-sm text-text-secondary mt-3">Both the input parameter and the return are streams. Only <strong>one</strong> parameter per method can be marked as <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">stream</code> (violation: <a href="/guides/diagnostics/" class="text-accent hover:underline">ION0013</a>).</p>
 
-      <h3 class="text-lg font-semibold mt-8 mb-3">Internal Methods</h3>
-      <p class="text-sm text-text-secondary mb-3">Methods marked <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">internal</code> are not exposed in public interfaces:</p>
+      <p class="text-sm text-text-secondary mt-3">The default is unary, and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">unary</code> may be written explicitly for symmetry with <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">stream</code>. It is the spelling of the default and changes nothing:</p>
       <div class="code-block text-[13px]">
-        <pre><span class="text-accent-3">service</span> <span class="type-name">AdminService</span>() {'{'}
-    <span class="text-accent-3">internal</span> Migrate(): <span class="type-keyword">void</span>;
+        <pre><span class="text-accent-3">service</span> <span class="type-name">DataService</span>() {'{'}
+    <span class="text-accent-3">unary</span> DoIt(data: <span class="type-keyword">bytes</span>): <span class="type-keyword">bytes</span>;  <span class="text-text-muted">// identical to omitting 'unary'</span>
 {'}'}</pre>
       </div>
+
+      <h3 class="text-lg font-semibold mt-8 mb-3">Internal Methods</h3>
+      <p class="text-sm text-text-secondary mb-3">A method marked <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">internal</code> is <strong>not part of the generated client's public API</strong>. It is still declared on the service interface, still dispatched by the server, and still carried on the wire unchanged — only the generated client stops advertising it. The effect is that a peer service compiled alongside the contracts can still call it, while an outside consumer of the client package cannot.</p>
+      <p class="text-sm text-text-secondary mb-3"><strong>It is not a security boundary.</strong> The route is unchanged and the server still accepts it, so anything that can reach the endpoint can call the method. It is a visibility control over generated code, nothing more.</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">service</span> <span class="type-name">AdminService</span>() {'{'}
+    GetStatus(): <span class="type-name">Status</span>;
+    <span class="text-accent-3">internal</span> Migrate();     <span class="text-text-muted">// server-side only</span>
+{'}'}</pre>
+      </div>
+
+      <p class="text-sm text-text-secondary mt-4 mb-2">The method is never <em>deleted</em> from the output — it is made invisible using each target's own native visibility mechanism, so the generated code still compiles and the server side is untouched:</p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-[12px] border-collapse">
+          <thead>
+            <tr class="border-b border-white/10">
+              <th class="text-left py-2 pr-3 font-medium">Target</th>
+              <th class="text-left py-2 pr-3 font-medium">Mechanism</th>
+              <th class="text-left py-2 font-medium">Result</th>
+            </tr>
+          </thead>
+          <tbody class="text-text-secondary">
+            <tr class="border-b border-white/5">
+              <td class="py-2 pr-3 font-medium text-text-primary">C#</td>
+              <td class="py-2 pr-3">Explicit interface implementation — <code class="font-mono text-[11px]">async Task I{'{'}Service{'}'}.Migrate()</code> instead of <code class="font-mono text-[11px]">public async Task Migrate()</code></td>
+              <td class="py-2">Off the concrete client type's surface. Still reachable by casting the client to <code class="font-mono text-[11px]">I{'{'}Service{'}'}</code>, which is how a peer service calls it.</td>
+            </tr>
+            <tr class="border-b border-white/5">
+              <td class="py-2 pr-3 font-medium text-text-primary">TypeScript</td>
+              <td class="py-2 pr-3">A JSDoc <code class="font-mono text-[11px]">{'@'}internal</code> tag on the method</td>
+              <td class="py-2">TypeScript cannot narrow the visibility of a member an <code class="font-mono text-[11px]">implements</code> clause requires, so the method stays on the class and <code class="font-mono text-[11px]">tsc --stripInternal</code> removes it from the published <code class="font-mono text-[11px]">.d.ts</code> — the actual client surface.</td>
+            </tr>
+            <tr>
+              <td class="py-2 pr-3 font-medium text-text-primary">Rust</td>
+              <td class="py-2 pr-3">Drops <code class="font-mono text-[11px]">pub</code></td>
+              <td class="py-2">Crate private. The client struct implements no trait, so nothing obliges the method to stay public; a peer in the same crate can call it, the crate's public API cannot.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="text-sm text-text-secondary mt-4">Three things deliberately do <em>not</em> change. The <strong>service interface</strong> still declares the method, so a server implementation must still provide it. The <strong>server executor / router</strong> still dispatches it. And the <strong><a href="/guides/schema-lock/" class="text-accent hover:underline">schema lock</a></strong> records it like any other method, so removing an internal method is still <a href="/guides/diagnostics/#ION0025" class="text-accent hover:underline">ION0025</a>. To the compiler, an <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">internal</code> method is routed and validated exactly like any other — the distinction exists only in code generation.</p>
+      <p class="text-sm text-text-secondary mt-3">The modifier previously did nothing at all: it parsed, was carried through the compiler and written into <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ion.lock.json</code>, and no generator ever read it — so a method marked <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">internal</code> appeared in the generated client exactly like any other. This page used to claim it was "not exposed in public interfaces", which was never true of any target.</p>
     </section>
 
     <section>

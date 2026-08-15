@@ -41,7 +41,7 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
         <pre><span class="text-text-muted">$</span> mkdir my-contracts && cd my-contracts
 <span class="text-text-muted">$</span> ionc init</pre>
       </div>
-      <p class="text-sm text-text-secondary mt-3">This creates an <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ion.config.json</code> file — the project manifest:</p>
+      <p class="text-sm text-text-secondary mt-3">The wizard asks for features (<code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">std</code>, <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">orleans</code>) and then for target platforms — <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">dotnet</code>, <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">browser</code> and <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">rust</code>, the three code-generation targets. It writes an <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ion.config.json</code> file — the project manifest — with a block per platform you chose:</p>
       <div class="code-block text-[13px]">
         <pre><span class="text-text-muted">// ion.config.json</span>
 {'{'}

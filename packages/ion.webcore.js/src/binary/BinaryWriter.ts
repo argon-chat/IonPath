@@ -3,6 +3,19 @@ const f32Bytes = new Uint8Array(f32Scratch.buffer);
 const f64Scratch = new Float64Array(1);
 const f64Bytes = new Uint8Array(f64Scratch.buffer);
 
+/**
+ * Canonical NaN bit patterns — positive quiet NaN with an empty payload — big-endian.
+ *
+ * These are written as literal bytes rather than by storing a NaN `number`, because the bits a
+ * JS engine produces for a NaN are not fixed: `Math.sqrt(-1)` yields a *sign-set* NaN that
+ * survives a `Float32Array` store as `0xffc00000`. .NET's `float.NaN` is negative too, while
+ * Rust's `f32::NAN` is positive. Pinning the bytes here is what makes NaN byte-identical across
+ * the three runtimes; JavaScript cannot observe a NaN payload at all, so canonicalising is the
+ * only reachable agreement.
+ */
+const NAN_F32_BE = [0x7f, 0xc0, 0x00, 0x00] as const;
+const NAN_F64_BE = [0x7f, 0xf8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00] as const;
+
 export class BinaryWriter {
   private buffer: Uint8Array;
   private offset: number = 0;
@@ -105,8 +118,17 @@ export class BinaryWriter {
     }
   }
 
+  /** Writes 4 bytes. NaN is canonicalised (see {@link NAN_F32_BE}); `-0` is preserved. */
   writeFloat32(value: number, littleEndian = false) {
     this.ensure(4);
+    if (Number.isNaN(value)) {
+      if (littleEndian) {
+        for (let i = 3; i >= 0; i--) this.buffer[this.offset++] = NAN_F32_BE[i];
+      } else {
+        for (let i = 0; i < 4; i++) this.buffer[this.offset++] = NAN_F32_BE[i];
+      }
+      return;
+    }
     f32Scratch[0] = value;
     if (littleEndian) {
       for (let i = 0; i < 4; i++) this.buffer[this.offset++] = f32Bytes[i];
@@ -115,8 +137,17 @@ export class BinaryWriter {
     }
   }
 
+  /** Writes 8 bytes. NaN is canonicalised (see {@link NAN_F64_BE}); `-0` is preserved. */
   writeFloat64(value: number, littleEndian = false) {
     this.ensure(8);
+    if (Number.isNaN(value)) {
+      if (littleEndian) {
+        for (let i = 7; i >= 0; i--) this.buffer[this.offset++] = NAN_F64_BE[i];
+      } else {
+        for (let i = 0; i < 8; i++) this.buffer[this.offset++] = NAN_F64_BE[i];
+      }
+      return;
+    }
     f64Scratch[0] = value;
     if (littleEndian) {
       for (let i = 0; i < 8; i++) this.buffer[this.offset++] = f64Bytes[i];

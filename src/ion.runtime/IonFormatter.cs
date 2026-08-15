@@ -270,6 +270,45 @@ public static class IonFormatterStorage<T>
             Write(writer, array[i]);
         writer.WriteEndArray();
     }
+
+    // ── T[N] — fixed-size arrays ────────────────────────────────────────────────────────────
+    // Same shape as ReadArray/WriteArray plus the declared length. `length` is a parameter, not
+    // part of the type, so one formatter serves every declared N. See IonFixedArrayFormatter<T>
+    // in formatter.collections.cs for the wire rule and the reasoning.
+
+    /// <inheritdoc cref="IonFixedArrayFormatter{T}.Read"/>
+    public static IonArray<T> ReadFixedArray(CborReader reader, int length)
+        => IonFixedArrayFormatter<T>.Read(reader, length);
+
+    /// <inheritdoc cref="IonFixedArrayFormatter{T}.ReadNullable"/>
+    public static IonArray<T>? ReadNullableFixedArray(CborReader reader, int length)
+        => IonFixedArrayFormatter<T>.ReadNullable(reader, length);
+
+    /// <inheritdoc cref="IonFixedArrayFormatter{T}.Write"/>
+    public static void WriteFixedArray(CborWriter writer, IonArray<T> array, int length)
+        => IonFixedArrayFormatter<T>.Write(writer, array, length);
+
+    /// <inheritdoc cref="IonFixedArrayFormatter{T}.WriteNullable"/>
+    public static void WriteNullableFixedArray(CborWriter writer, IonArray<T>? array, int length)
+        => IonFixedArrayFormatter<T>.WriteNullable(writer, array, length);
+
+    // ── Set<T> ──────────────────────────────────────────────────────────────────────────────
+
+    /// <inheritdoc cref="IonSetFormatter{T}.Read"/>
+    public static HashSet<T> ReadSet(CborReader reader)
+        => IonSetFormatter<T>.Read(reader);
+
+    /// <inheritdoc cref="IonSetFormatter{T}.ReadNullable"/>
+    public static HashSet<T>? ReadNullableSet(CborReader reader)
+        => IonSetFormatter<T>.ReadNullable(reader);
+
+    /// <inheritdoc cref="IonSetFormatter{T}.Write"/>
+    public static void WriteSet(CborWriter writer, IReadOnlyCollection<T> set)
+        => IonSetFormatter<T>.Write(writer, set);
+
+    /// <inheritdoc cref="IonSetFormatter{T}.WriteNullable"/>
+    public static void WriteNullableSet(CborWriter writer, IReadOnlyCollection<T>? set)
+        => IonSetFormatter<T>.WriteNullable(writer, set);
 }
 
 public static class IonFormatterStorageModuleInit
@@ -300,7 +339,23 @@ public static class IonFormatterStorageModuleInit
         IonFormatterStorage<ulong>.Value = new Ion_u8_Formatter();
         IonFormatterStorage<Int128>.Value = new Ion_i16_Formatter();
         IonFormatterStorage<UInt128>.Value = new Ion_u16_Formatter();
+        IonFormatterStorage<decimal>.Value = new Ion_decimal_Formatter();
         IonFormatterStorage<IonProtocolError>.Value = new IonProtocolErrorFormatter();
+
+        // Open-generic containers, so IonFormatterStorage<Dictionary<K,V>> and
+        // IonFormatterStorage<HashSet<T>> resolve for any K/V/T and can therefore be nested inside
+        // a message, an array, a Maybe or a Partial with no special-casing in the generator.
+        // T[N] deliberately has NO entry here: N is not part of the CLR type, so a fixed-size array
+        // is reached through IonFixedArrayFormatter<T>.Read(reader, n) with n passed at the call
+        // site — see formatter.collections.cs.
+        IonFormatterStorage.SetFormatterTypeFor(typeof(Dictionary<,>), typeof(Ion_map_Formatter<,>));
+        IonFormatterStorage.SetFormatterTypeFor(typeof(HashSet<>), typeof(Ion_set_Formatter<>));
+
+        // Open-generic fallback: makes IonFormatterStorage<IonPartial<X>> resolve for any X,
+        // even when no generated schema was registered — in that case PartialFormatter<X>
+        // derives the field schema reflectively (see ReflectionPartialSchema).
+        // Generated code should call IonPartialSchema<X>.Register(...) instead, which installs
+        // a concrete PartialFormatter<X> eagerly and needs neither MakeGenericType nor Activator.
         IonFormatterStorage.SetFormatterTypeFor(typeof(IonPartial<>), typeof(PartialFormatter<>));
     }
 }
@@ -381,23 +436,10 @@ public sealed class Ion_guid_Formatter : IonFormatter<Guid>
     }
 }
 
-public sealed class Ion_datetime_offset_Formatter : IonFormatter<DateTimeOffset>
-{
-    public DateTimeOffset Read(CborReader reader)
-        => reader.ReadDateTimeOffset();
-
-    public void Write(CborWriter writer, DateTimeOffset value)
-        => writer.WriteDateTimeOffset(value);
-}
-
-public sealed class Ion_datetime_Formatter : IonFormatter<DateTime>
-{
-    public DateTime Read(CborReader reader)
-        => reader.ReadDateTimeOffset().UtcDateTime;
-
-    public void Write(CborWriter writer, DateTime value)
-        => writer.WriteDateTimeOffset(value);
-}
+// Ion_datetime_offset_Formatter and Ion_datetime_Formatter moved to formatter.datetime.cs, which
+// documents the tag-0 / RFC 3339 / 7-fractional-digit wire rule and the three-runtime defect it
+// fixes. They used to live here as CborWriter.WriteDateTimeOffset + CborReader.ReadDateTimeOffset,
+// which parsed the offset and then discarded it via .UtcDateTime.
 
 public sealed class Ion_dateonly_Formatter : IonFormatter<DateOnly>
 {

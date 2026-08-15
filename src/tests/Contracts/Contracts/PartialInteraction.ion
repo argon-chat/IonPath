@@ -1,0 +1,71 @@
+//! `Partial<T>` ("T~") contracts.
+//!
+//! Exercises every shape the generators have to emit for a partial: as a message
+//! field, as a method argument, as a method return, and under each of the four
+//! modifier stackings (`T~`, `T~[]`, `T~?`, `T~[]?`).
+
+/// The message that gets patched.
+///
+/// Deliberately the same shape as `GoldenPatchTarget` in
+/// `/tests/golden/partial.golden.json` — a value-typed scalar, a float, a reference
+/// scalar, an array field and an optional field — so a patch over it is byte-comparable
+/// with the cross-runtime golden vectors. The array and the optional are the two shapes
+/// the old reflection-derived formatter crashed on.
+msg PatchTarget {
+    /// Value-typed scalar. Clearing it must encode as `null`, never as `0`.
+    n: i4;
+
+    /// Float. The R3 regression guard: `Removed()` here used to write the field's
+    /// default instead of `null`.
+    f: f4;
+
+    /// Reference-typed scalar.
+    s: string;
+
+    /// Array field.
+    items: i4[];
+
+    /// Optional field. "Cleared" and "set to none" are the same patch.
+    note: string?;
+}
+
+/// Patches carried as ordinary message fields, in all four modifier stackings.
+///
+/// `WrapModifiers` applies Partial innermost, then Array, then Maybe, so `PatchTarget~[]?`
+/// is `Maybe<Array<Partial<PatchTarget>>>`.
+msg PatchEnvelope {
+    /// `T~` — `IonPartial<PatchTarget>`.
+    one: PatchTarget~;
+
+    /// `T~[]` — `IonArray<IonPartial<PatchTarget>>`.
+    many: PatchTarget~[];
+
+    /// `T~?` — a nullable `IonPartial<PatchTarget>`.
+    maybe: PatchTarget~?;
+
+    /// `T~[]?` — a nullable `IonArray<IonPartial<PatchTarget>>`.
+    maybeMany: PatchTarget~[]?;
+}
+
+/// Patch application over the wire.
+service PatchInteraction() {
+    /// A patch in both argument and return position.
+    Apply(patch: PatchTarget~): PatchTarget~;
+
+    /// An array of patches in, an optional patch out.
+    ApplyMany(patches: PatchTarget~[]): PatchTarget~?;
+
+    /// `T~[]` in return position — `Array<Partial<PatchTarget>>`.
+    ApplyAll(patches: PatchTarget~[]): PatchTarget~[];
+
+    /// `T~[]?` in return position — `Maybe<Array<Partial<PatchTarget>>>`, the two collapsing
+    /// wrappers stacked. An empty input returns null so the null branch is reachable.
+    ApplySome(patches: PatchTarget~[]): PatchTarget~[]?;
+
+    /// A patch beside a plain argument, to pin the argument count: the write path used
+    /// to emit nothing for a partial while still declaring the full array length.
+    ApplyTo(target: PatchTarget, patch: PatchTarget~): PatchTarget;
+
+    /// Messages whose own fields are patches.
+    Rewrap(envelope: PatchEnvelope): PatchEnvelope;
+}

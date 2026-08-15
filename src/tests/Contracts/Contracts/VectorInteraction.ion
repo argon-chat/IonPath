@@ -1,7 +1,17 @@
-﻿msg Vector {
-    x: f4;
-    y: f4;
-    z: f4;
+﻿/// A single vector component.
+///
+/// A typedef is a transparent alias: on the wire this is an ordinary `f4`, and every
+/// generated field below is emitted as `f4`. The alias exists only so hand written code
+/// can name it.
+typedef Scalar = f4;
+
+/// A component count, used as a service operand.
+typedef Rank = u1 {}
+
+msg Vector {
+    x: Scalar;
+    y: Scalar;
+    z: Scalar;
 }
 
 msg VectorOfVector {
@@ -21,5 +31,18 @@ service VectorMathInteraction(leftOperand: Vector) {
     AndNot(rightOperand: Vector): Vector;
     Clamp(min: Vector, max: Vector): Vector;
 
+    /// Exercises a typedef in both argument and return position.
+    Component(index: Rank): Scalar;
+
     Do(): VectorOfVectorOfVector;
+
+    /// `T[]` return over a message element, beside `Spread` below.
+    Repeat(count: Rank): Vector[];
+
+    /// `T[]?` return over a message element: `count` of 0 returns null, not an empty array.
+    ///
+    /// The null case is the one that matters — an implementation that decodes the response as a
+    /// single `Vector` instead of a nullable array still "works" on a non-null payload of length
+    /// one, so only null-vs-empty-vs-populated together pin the wire shape.
+    Spread(count: Rank): Vector[]?;
 }

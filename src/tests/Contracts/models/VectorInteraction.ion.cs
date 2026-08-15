@@ -33,7 +33,23 @@ public interface IVectorMathInteraction : IIonService
     Task<Vector> Add(Vector leftOperand, Vector rightOperand, CancellationToken ct = default);
     Task<Vector> AndNot(Vector leftOperand, Vector rightOperand, CancellationToken ct = default);
     Task<Vector> Clamp(Vector leftOperand, Vector min, Vector max, CancellationToken ct = default);
+    /// <summary>
+    /// Exercises a typedef in both argument and return position.
+    /// </summary>
+    Task<f4> Component(Vector leftOperand, u1 index, CancellationToken ct = default);
     Task<VectorOfVectorOfVector> Do(Vector leftOperand, CancellationToken ct = default);
+    /// <summary>
+    /// `T[]` return over a message element, beside `Spread` below.
+    /// </summary>
+    Task<IonArray<Vector>> Repeat(Vector leftOperand, u1 count, CancellationToken ct = default);
+    /// <summary>
+    /// `T[]?` return over a message element: `count` of 0 returns null, not an empty array.
+    ///
+    /// The null case is the one that matters — an implementation that decodes the response as a
+    /// single `Vector` instead of a nullable array still "works" on a non-null payload of length
+    /// one, so only null-vs-empty-vs-populated together pin the wire shape.
+    /// </summary>
+    Task<IonArray<Vector>?> Spread(Vector leftOperand, u1 count, CancellationToken ct = default);
 }
 
 

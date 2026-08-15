@@ -5,40 +5,18 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
 <DocsLayout title="Generics — IonPath" current="/guides/generics/">
   <div class="animate-fade-in-up">
     <h1 class="text-3xl font-bold tracking-tight mb-2">Generics</h1>
-    <p class="text-text-secondary mb-8">IonPath supports parameterized types for reusable data structures. Built-in generics include <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">Maybe&lt;T&gt;</code>, <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">Array&lt;T&gt;</code>, and <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">Partial&lt;T&gt;</code>.</p>
+    <p class="text-text-secondary mb-8">Ion has five built-in generic types — <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">Maybe&lt;T&gt;</code>, <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">Array&lt;T&gt;</code>, <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">Partial&lt;T&gt;</code>, <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">Map&lt;K, V&gt;</code> and <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">Set&lt;T&gt;</code> — and no way to declare your own.</p>
   </div>
 
   <div class="space-y-12 animate-fade-in-up-delay-1">
 
     <section>
-      <h2 id="syntax" class="text-xl font-bold mb-4">Syntax</h2>
-      <p class="text-sm text-text-secondary mb-4">Generic types are declared with angle-bracket type parameters:</p>
-      <div class="code-block text-[13px]">
-        <pre><span class="text-accent-3">msg</span> <span class="type-name">Response</span>&lt;<span class="type-keyword">T</span>&gt; {'{'}
-    data: <span class="type-keyword">T</span>;
-    timestamp: <span class="type-keyword">datetime</span>;
-    success: <span class="type-keyword">bool</span>;
-{'}'}
-
-<span class="text-accent-3">msg</span> <span class="type-name">Page</span>&lt;<span class="type-keyword">T</span>&gt; {'{'}
-    items: <span class="type-keyword">T</span>[];
-    total: <span class="type-keyword">u4</span>;
-    page: <span class="type-keyword">u4</span>;
-{'}'}</pre>
+      <h2 id="no-declarations" class="text-xl font-bold mb-4">You cannot declare a generic type</h2>
+      <div class="glass rounded-xl p-4 border-l-2 border-status-down/40">
+        <p class="text-sm font-medium mb-1">This page used to say otherwise. It was wrong.</p>
+        <p class="text-xs text-text-secondary">This guide previously opened with <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg Response&lt;T&gt; {'{'} … {'}'}</code> and a matching <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Response&lt;User&gt;</code> instantiation. <strong>Neither has ever parsed.</strong> The grammar for a message declaration is <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">"msg" identifier withClause? fieldList</code> — there is no type-parameter list, so <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg Response&lt;T&gt;</code> fails on the <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">&lt;</code> with an <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ION_PARSE</code> error. Generic <em>declarations</em> are a planned feature and are not implemented.</p>
       </div>
-    </section>
-
-    <section>
-      <h2 id="instantiation" class="text-xl font-bold mb-4">Instantiation</h2>
-      <p class="text-sm text-text-secondary mb-4">Use generic types by providing concrete type arguments:</p>
-      <div class="code-block text-[13px]">
-        <pre><span class="text-accent-3">msg</span> <span class="type-name">User</span> {'{'} id: <span class="type-keyword">u4</span>; name: <span class="type-keyword">string</span>; {'}'}
-
-<span class="text-accent-3">service</span> <span class="type-name">UserService</span>() {'{'}
-    GetUser(id: <span class="type-keyword">u4</span>): <span class="type-name">Response</span>&lt;<span class="type-name">User</span>&gt;;
-    ListUsers(page: <span class="type-keyword">u4</span>): <span class="type-name">Page</span>&lt;<span class="type-name">User</span>&gt;;
-{'}'}</pre>
-      </div>
+      <p class="text-sm text-text-secondary mt-4">What Ion has is generic <em>use</em>: the five builtins below, instantiated at a field, argument or return position. If you need a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Response</code> wrapper today, declare one concrete message per payload type, or use a <a href="/guides/unions/" class="text-accent hover:underline">union</a>.</p>
     </section>
 
     <section>
@@ -59,9 +37,31 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
         </div>
         <div class="type-grid-row">
           <span class="font-mono text-[12px]"><span class="type-name">Partial</span>&lt;<span class="type-keyword">T</span>&gt;</span>
-          <span class="text-[12px] text-text-secondary">Sparse update tracker. Shorthand: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">~T</code>. C#: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">IonPartial&lt;T&gt;</code></span>
+          <span class="text-[12px] text-text-secondary">Sparse patch. Shorthand: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T~</code>. C#: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">IonPartial&lt;T&gt;</code></span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]"><span class="type-name">Map</span>&lt;<span class="type-keyword">K</span>, <span class="type-keyword">V</span>&gt;</span>
+          <span class="text-[12px] text-text-secondary">Keyed collection. <strong>No shorthand.</strong> Keys are restricted — see <a href="/guides/collections/#map-keys" class="text-accent hover:underline">Collections</a>.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px]"><span class="type-name">Set</span>&lt;<span class="type-keyword">T</span>&gt;</span>
+          <span class="text-[12px] text-text-secondary">Distinct collection. <strong>No shorthand.</strong> CBOR tag 258 over a sorted array.</span>
         </div>
       </div>
+      <p class="text-sm text-text-secondary mt-4">Using one with the wrong number of arguments is <a href="/guides/diagnostics/#ION0060" class="text-accent hover:underline">ION0060</a>. That check is new, and it applies to the three older wrappers too: <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Maybe&lt;A, B&gt;</code> and a bare <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Array</code> used to resolve silently.</p>
+    </section>
+
+    <section>
+      <h2 id="nesting" class="text-xl font-bold mb-4">Nested arguments</h2>
+      <p class="text-sm text-text-secondary mb-4">A generic argument may itself be generic, optional, an array, or an <a href="/guides/inline-types/" class="text-accent hover:underline">inline type</a>:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">msg</span> <span class="type-name">Catalogue</span> {'{'}
+    byTag:    <span class="type-name">Map</span>&lt;<span class="type-keyword">string</span>, <span class="type-name">Array</span>&lt;<span class="type-name">Product</span>&gt;&gt;;
+    featured: <span class="type-name">Map</span>&lt;<span class="type-keyword">string</span>, <span class="type-name">Product</span>?&gt;;
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">This is new. An argument used to be a bare identifier, so a nested one was a hard parse error — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Array&lt;User&gt;</code> read as the identifier <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Array</code> followed by an unexpected <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">&lt;</code> and the whole declaration died. One level worked and two never did; modifiers on an argument were unreachable for the same reason.</p>
+      <p class="text-sm text-text-secondary mt-3">Nesting is bounded at 32 levels, a budget shared with inline-type nesting because the two compose. <strong>Note the code-generation gap</strong> described in <a href="/guides/collections/#nesting" class="text-accent hover:underline">Collections</a>: the front end and the lock carry the full nesting, but the C# and TypeScript generators currently render only each argument's head name.</p>
     </section>
 
     <section>
@@ -78,13 +78,14 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
     </section>
 
     <section>
-      <h2 id="partial" class="text-xl font-bold mb-4">Partial&lt;T&gt; (Sparse Update)</h2>
-      <p class="text-sm text-text-secondary mb-4"><code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">Partial&lt;T&gt;</code> tracks which fields have been modified. Only modified fields are serialized on the wire — ideal for PATCH-like updates:</p>
+      <h2 id="partial" class="text-xl font-bold mb-4">Partial&lt;T&gt; (Sparse Patch)</h2>
+      <p class="text-sm text-text-secondary mb-4"><code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">Partial&lt;T&gt;</code> carries a per-field tri-state patch over a message: each field is <em>untouched</em>, <em>modified</em>, or <em>cleared</em>. Only the fields you touch travel on the wire. Written in Ion with the suffix <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">T~</code>:</p>
       <div class="code-block text-[13px]">
-        <pre><span class="text-text-muted">// C# usage</span>
-<span class="text-accent-3">var</span> patch = <span class="text-accent-3">new</span> <span class="type-name">IonPartial</span>&lt;<span class="type-name">User</span>&gt;();
-patch.Set(u =&gt; u.name, <span class="text-accent-2">"New Name"</span>);  <span class="text-text-muted">// only 'name' will be sent on the wire</span></pre>
+        <pre><span class="text-accent-3">service</span> <span class="type-name">UserService</span>() {'{'}
+    UpdateUser(id: <span class="type-keyword">u4</span>, patch: <span class="type-name">User</span>~): <span class="type-name">User</span>;
+{'}'}</pre>
       </div>
+      <p class="text-sm text-text-secondary mt-3">See the <a href="/guides/partial/" class="text-accent hover:underline">Partial&lt;T&gt;</a> guide for the wire format and the per-target generated shapes.</p>
     </section>
 
   </div>

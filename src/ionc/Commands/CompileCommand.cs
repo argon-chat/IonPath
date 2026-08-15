@@ -7,6 +7,7 @@ using Spectre.Console.Cli;
 using syntax;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.Numerics;
 using System.Text;
@@ -71,7 +72,22 @@ public class CompileCommand : AsyncCommand<CompileOptions>
             return Task.FromResult(-1);
         }
 
-        var project = IonProjectConfig.FromJson(File.ReadAllText(projectFile.FullName));
+        IonProjectConfig project;
+        try
+        {
+            project = IonProjectConfig.FromJson(File.ReadAllText(projectFile.FullName));
+        }
+        catch (Exception e) when (e is JsonException or ValidationException)
+        {
+            // A retired or misspelled generator key ('go' was removed) reaches here as a
+            // JsonException from PlatformKeyConverter. Rendering it as a diagnostic keeps the
+            // failure readable instead of dumping a deserializer stack trace.
+            IonDiagnosticRenderer.RenderDiagnostics([
+                new IonDiagnostic("ION", IonDiagnosticSeverity.Error,
+                    $"Project 'ion.config.json' is not valid: {e.Message}", new IonSyntaxBase())
+            ]);
+            return Task.FromResult(-1);
+        }
 
         var files = currentDir.EnumerateFiles("*.ion", SearchOption.AllDirectories).ToList();
 
@@ -88,6 +104,12 @@ public class CompileCommand : AsyncCommand<CompileOptions>
         var list = new List<IonFileSyntax>();
         var parseErrors = new List<(FileInfo file, ParseException error)>();
 
+        // Blocks the parser could not understand but recovered past. `IonParser.Parse` only throws
+        // when even error recovery fails, so without this the CLI silently ignores unparseable
+        // source: the editor shows red squiggles while `ionc check` reports success.
+        // Mirrors IonWorkspace.PublishDiagnostics.
+        var invalidBlocks = new List<IonDiagnostic>();
+
         foreach (var file in files)
         {
             using var _ = IonFileProcessingScope.Begin(file);
@@ -96,6 +118,13 @@ public class CompileCommand : AsyncCommand<CompileOptions>
             {
                 var syntax = IonParser.Parse(file.Name, File.ReadAllText(file.FullName));
                 list.Add(syntax);
+
+                foreach (var token in (syntax.allTokens ?? []).OfType<InvalidIonBlock>())
+                    invalidBlocks.Add(new IonDiagnostic(
+                        "ION_PARSE",
+                        IonDiagnosticSeverity.Error,
+                        $"Unexpected syntax: {token.block.Trim().Split('\n')[0]}",
+                        token));
             }
             catch (ParseException e)
             {
@@ -122,6 +151,8 @@ public class CompileCommand : AsyncCommand<CompileOptions>
 
         var ctx = CompilationContext.Create(project.Features.Select(x => x.ToString().ToLowerInvariant()).ToList(),
             list);
+
+        ctx.Diagnostics.AddRange(invalidBlocks);
 
         // Resolve external module dependencies
         List<IonModule> externalModules = [];
@@ -194,15 +225,21 @@ public class CompileCommand : AsyncCommand<CompileOptions>
 
         AnsiConsole.WriteLine();
 
-        if (!pipelineSuccess)
+        // Render whenever there is anything to say, not only on failure. `pipeline.Execute()` fails
+        // on errors alone, so gating the renderer on it discarded every warning and info diagnostic
+        // of a successful build — ION1001/ION1002 (unused), ION0025/ION0029 (lock compatibility),
+        // ION0047 (#use deprecated) and ION1004 (deprecated usage) were unreachable in the CLI even
+        // though the LSP surfaced them. Exit code still keys off errors only.
+        if (ctx.Diagnostics.Count > 0)
         {
-            // Render detailed diagnostics
             if (options.JsonOutput)
                 RenderDiagnosticsAsJson(ctx.Diagnostics);
             else
                 IonDiagnosticRenderer.RenderDiagnostics(ctx.Diagnostics);
-            return Task.FromResult(-1);
         }
+
+        if (!pipelineSuccess)
+            return Task.FromResult(-1);
 
         // Check-only mode: validate, generate lock if needed, but no code gen
         if (options.CheckOnly)
@@ -226,6 +263,11 @@ public class CompileCommand : AsyncCommand<CompileOptions>
 
         // Code generation
         AnsiConsole.MarkupLine("[bold cyan]Code Generation[/]\n");
+
+        // A generator may reject a construct its target cannot express (see
+        // IonCodeGenDiagnostics). Those diagnostics land in the same list the pipeline uses,
+        // so remember where the pipeline's own end.
+        var diagnosticsBeforeCodegen = ctx.Diagnostics.Count;
 
         foreach (var (key, value) in project.Generators)
         {
@@ -283,31 +325,6 @@ public class CompileCommand : AsyncCommand<CompileOptions>
                 AnsiConsole.MarkupLine($"    [green]✓[/] Generated to [dim]{cfg.OutputFile}[/]");
             }
 
-            if (key is IonGeneratorPlatform.Go)
-            {
-                var cfg = value as GoGeneratorConfig;
-                var packageName = cfg!.PackageName ?? project.Name.ToLowerInvariant().Replace(".", "").Replace("-", "");
-                var generator = new GoCodeGenerator(packageName);
-                generator.UseMaybeWrapper = options.UseMaybeWrapper;
-                var outputDirectoryForFiles = new DirectoryInfo(projectFile.Directory!.Combine(cfg.Outputs).FullName);
-
-                if (!outputDirectoryForFiles.Exists)
-                    outputDirectoryForFiles.Create();
-
-                // Clean old .go files
-                foreach (var file in outputDirectoryForFiles.EnumerateFiles("*.go"))
-                    file.Delete();
-
-                // Generate single file with everything
-                var content = generator.GenerateSingleFile(
-                    ctx,
-                    includeServer: cfg.Features.Contains(GoFeature.Server),
-                    includeClient: cfg.Features.Contains(GoFeature.Client));
-
-                File.WriteAllText(outputDirectoryForFiles.File($"{packageName}_generated.go").FullName, content);
-                AnsiConsole.MarkupLine($"    [green]✓[/] Generated to [dim]{cfg.Outputs}[/]");
-            }
-
             if (key is IonGeneratorPlatform.Rust)
             {
                 var cfg = value as RustGeneratorConfig;
@@ -328,13 +345,36 @@ public class CompileCommand : AsyncCommand<CompileOptions>
                 // Generate single file with types, formatters, and clients
                 var rustContent = generator.GenerateSingleFile(ctx);
 
-                var srcDir = outputDirectoryForFiles.Directory("src");
-                if (!srcDir.Exists)
-                    srcDir.Create();
+                // Empty means the generator refused the schema (see IonCodeGenDiagnostics);
+                // leaving no .rs behind is better than leaving one that does not compile.
+                if (rustContent.Length == 0)
+                {
+                    AnsiConsole.MarkupLine("    [red]✗[/] Skipped: the target cannot express this schema");
+                }
+                else
+                {
+                    var srcDir = outputDirectoryForFiles.Directory("src");
+                    if (!srcDir.Exists)
+                        srcDir.Create();
 
-                File.WriteAllText(srcDir.File("lib.rs").FullName, rustContent);
-                AnsiConsole.MarkupLine($"    [green]✓[/] Generated to [dim]{cfg.Outputs}[/]");
+                    File.WriteAllText(srcDir.File("lib.rs").FullName, rustContent);
+                    AnsiConsole.MarkupLine($"    [green]✓[/] Generated to [dim]{cfg.Outputs}[/]");
+                }
             }
+        }
+
+        // Diagnostics raised by a generator (target capability limits) fail the build the same
+        // way a pipeline error does — and before the lock file is rewritten from a schema one
+        // of the targets could not emit.
+        var codegenDiagnostics = ctx.Diagnostics.Skip(diagnosticsBeforeCodegen).ToList();
+        if (codegenDiagnostics.Any(d => d.Severity == IonDiagnosticSeverity.Error))
+        {
+            AnsiConsole.WriteLine();
+            if (options.JsonOutput)
+                RenderDiagnosticsAsJson(codegenDiagnostics);
+            else
+                IonDiagnosticRenderer.RenderDiagnostics(codegenDiagnostics);
+            return Task.FromResult(-1);
         }
 
         // Write lock file after successful code generation
@@ -387,15 +427,17 @@ public class CompileCommand : AsyncCommand<CompileOptions>
               CborWriter, 
               
               DateOnly, 
-              DateTimeOffset, 
+              IonDateTime, 
+              IonDecimal, 
               Duration, 
               TimeOnly, 
               Guid, 
               
               IonFormatterStorage,
 
-              IonArray, 
+              IonArray,
               IonMaybe,
+              IonPartial,
 
               IIonService,
               IIonUnion,
@@ -410,7 +452,13 @@ public class CompileCommand : AsyncCommand<CompileOptions>
             type guid = Guid;
             type timeonly = TimeOnly;
             type duration = Duration;
-            type datetime = DateTimeOffset;
+            // IonDateTime, never the deprecated `DateTimeOffset { date: Date; offsetMinutes }`
+            // shape: `Date` is millisecond-resolution, so it cannot hold the 100ns ticks the
+            // wire form carries, and the webcore "datetime" formatter now reads and writes
+            // IonDateTime — leaving the old alias here would be a live type mismatch, not just
+            // a lossy one.
+            type datetime = IonDateTime;
+            type decimal = IonDecimal;
             type dateonly = DateOnly;
 
             declare type bool = boolean;
@@ -449,11 +497,16 @@ public class CompileCommand : AsyncCommand<CompileOptions>
             allServices.AddRange(externalModules.SelectMany(m => m.Services));
         }
 
-        var distinctDefs = allDefinitions.DistinctBy(x => x.name.Identifier);
+        var distinctDefsList = allDefinitions.DistinctBy(x => x.name.Identifier).ToList();
         var distinctServices = allServices.DistinctBy(x => x.name.Identifier).ToList();
 
-        fileBuilder.AppendLine(generator.GenerateTypes(distinctDefs));
-        fileBuilder.AppendLine(generator.GenerateAllFormatters(distinctDefs));
+        fileBuilder.AppendLine(generator.GenerateTypes(distinctDefsList));
+        fileBuilder.AppendLine(generator.GenerateAllFormatters(distinctDefsList));
+
+        // Partial<T> schemas. Emitted after the ordinary formatters, but order is irrelevant:
+        // registerPartial resolves each field's formatter lazily. Services are passed too,
+        // because a `T~` can appear only in a method argument or return type.
+        fileBuilder.AppendLine(generator.GeneratePartialRegistrations(distinctDefsList, distinctServices));
 
         foreach (var module in context.ProcessedModules)
             fileBuilder.AppendLine(generator.GenerateServices(module));

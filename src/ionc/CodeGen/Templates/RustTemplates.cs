@@ -196,17 +196,6 @@ public sealed class RustTemplateProvider : ITemplateProvider
             }
         """;
 
-    // ═══════════════════════════════════════════════════════════════════
-    // SERVICE EXECUTOR TEMPLATES (Not used in Rust client)
-    // ═══════════════════════════════════════════════════════════════════
-
-    public string ServiceExecutorClassTemplate => throw new NotSupportedException("Rust is client-only");
-    public string ServiceExecutorMethodTemplate => throw new NotSupportedException();
-    public string ServiceExecutorMethodVoidTemplate => throw new NotSupportedException();
-    public string ServiceExecutorMethodStreamTemplate => throw new NotSupportedException();
-    public string ServiceExecutorRouterTemplate => throw new NotSupportedException();
-    public string ServiceExecutorStreamRouterTemplate => throw new NotSupportedException();
-    public string ServiceExecutorBranchTemplate => throw new NotSupportedException();
     public string? InputStreamCastTemplate => null;
 
     // ═══════════════════════════════════════════════════════════════════

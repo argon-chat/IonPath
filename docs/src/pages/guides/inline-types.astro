@@ -1,0 +1,138 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+
+const toc = [
+  { id: 'syntax', title: 'Syntax' },
+  { id: 'naming', title: 'The naming rule' },
+  { id: 'collisions', title: 'Collisions are errors' },
+  { id: 'not-allowed', title: 'Where they are not allowed' },
+  { id: 'namespace', title: 'The namespace problem' },
+  { id: 'wire', title: 'Wire format and schema lock' },
+  { id: 'editor', title: 'Finding the hoisted name' },
+];
+---
+
+<DocsLayout title="Inline Types — IonPath" current="/guides/inline-types/" toc={toc}>
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">Inline Types</h1>
+    <p class="text-text-secondary mb-8">An anonymous <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">msg {'{'} … {'}'}</code> written directly in type position. The compiler gives it a derived name and lifts it out to a top level declaration, so everything downstream — the lock, the generators, the diagnostics — sees an ordinary message.</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <section>
+      <h2 id="syntax" class="text-xl font-bold mb-4">Syntax</h2>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">msg</span> <span class="type-name">Order</span> {'{'}
+    shipping: <span class="text-accent-3">msg</span> {'{'} address: <span class="type-keyword">string</span>; postcode: <span class="type-keyword">string</span>; {'}'};
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">The body is the same field list a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg</code> body is, so doc comments and attributes on its fields behave identically. An inline type carries <strong>no name and no <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">with</code> clause</strong> — it is not a declaration.</p>
+      <p class="text-sm text-text-secondary mt-3">The modifier suffixes apply to it exactly as they do to a named type, so <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg {'{'} … {'}'}[]</code> is an array of the hoisted message and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg {'{'} … {'}'}?</code> is an optional one. Inline types may nest, up to 32 levels — a budget shared with generic nesting, because the two compose.</p>
+      <div class="glass rounded-xl p-4 mt-4 border-l-2 border-accent/40">
+        <p class="text-sm font-medium mb-1">A type spelled <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg</code> still works</p>
+        <p class="text-xs text-text-secondary">The <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg</code> keyword commits to an inline type only once a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">{'{'}</code> is in sight, so a field written <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">a: msg;</code> — a reference to a type actually called <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg</code> — parses exactly as it always did.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="naming" class="text-xl font-bold mb-4">The naming rule</h2>
+      <p class="text-sm text-text-secondary mb-4"><code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">{'{'}Owner{'}'}{'{'}PascalCasedFieldName{'}'}</code>. The owner is the chain of names from the top level declaration down to the immediate container, so a nested inline type extends the chain it is written in.</p>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Written on</span>
+          <span>Hoisted to</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">msg Order {'{'} shipping: msg {'{'} … {'}'}; {'}'}</span>
+          <span class="font-mono text-[12px] text-text-secondary">OrderShipping</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">msg Order {'{'} history: msg {'{'} at: msg {'{'} … {'}'}; {'}'}[]; {'}'}</span>
+          <span class="font-mono text-[12px] text-text-secondary">OrderHistory, OrderHistoryAt</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">service Api {'{'} Get(id: msg {'{'} … {'}'}) {'}'}</span>
+          <span class="font-mono text-[12px] text-text-secondary">ApiGetId</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">mixin Audited {'{'} by: msg {'{'} … {'}'}; {'}'}</span>
+          <span class="font-mono text-[12px] text-text-secondary">AuditedBy — once, not once per includer</span>
+        </div>
+      </div>
+      <p class="text-sm text-text-secondary mt-4">Pascal-casing touches only the first letter of each <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">_</code>-separated run and leaves the rest exactly as written, so <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">trace_id</code> becomes <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">TraceId</code> and an already-camel or acronym name such as <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">URL</code> is not mangled.</p>
+    </section>
+
+    <section>
+      <h2 id="collisions" class="text-xl font-bold mb-4">Collisions are errors</h2>
+      <p class="text-sm text-text-secondary mb-4">A derived name that is already taken is <a href="/guides/diagnostics/#ION0067" class="text-accent hover:underline">ION0067</a> — <strong>never a silent rename</strong>:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">msg</span> <span class="type-name">Order</span> {'{'} shipping: <span class="text-accent-3">msg</span> {'{'} a: <span class="type-keyword">i4</span>; {'}'}; {'}'}
+<span class="text-accent-3">msg</span> <span class="type-name">OrderShipping</span> {'{'} b: <span class="type-keyword">i4</span>; {'}'}
+<span class="text-text-muted">// ION0067: the inline type on the field 'shipping' of msg 'Order' hoists to</span>
+<span class="text-text-muted">//          'OrderShipping', but msg 'OrderShipping' already has that name.</span>
+
+<span class="text-accent-3">msg</span> <span class="type-name">TwoInline</span> {'{'}
+    trace_id: <span class="text-accent-3">msg</span> {'{'} a: <span class="type-keyword">i4</span>; {'}'};
+    traceId:  <span class="text-accent-3">msg</span> {'{'} b: <span class="type-keyword">i4</span>; {'}'};
+{'}'}
+<span class="text-text-muted">// ION0067: both hoist to 'TraceId'. Rename one of the fields.</span></pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">A compiler that quietly renamed <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">OrderShipping</code> to <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">OrderShipping1</code> would change a name in <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ion.lock.json</code> and in four generated languages that nobody asked to change. The collision is reported against the two <em>fields</em> where they are two inline types, because "it collides with msg 'TraceId'" would point at a declaration the author cannot find in their file.</p>
+    </section>
+
+    <section>
+      <h2 id="not-allowed" class="text-xl font-bold mb-4">Where they are not allowed</h2>
+      <p class="text-sm text-text-secondary mb-4">The grammar accepts <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg {'{'} … {'}'}</code> in every type position, but the naming rule needs a field name to derive from and several positions have none. Those are <a href="/guides/diagnostics/#ION0068" class="text-accent hover:underline">ION0068</a>:</p>
+      <ul class="text-sm text-text-secondary space-y-2 mt-3 ml-4">
+        <li>• a <strong>generic argument</strong> — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Map&lt;string, msg {'{'} … {'}'}&gt;</code>, at any depth</li>
+        <li>• a <strong>typedef</strong>, on either side</li>
+        <li>• an <strong>enum</strong> or <strong>flags</strong> base type</li>
+        <li>• an <strong>attribute parameter</strong> type</li>
+        <li>• a <strong>union case name</strong></li>
+        <li>• a <strong>method return type</strong></li>
+      </ul>
+      <p class="text-sm text-text-secondary mt-4">Rejected rather than named by invention: a generated type called <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Result</code> or <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Item</code> that the author never wrote is a name they then own forever, because it is in the lock. Each diagnostic names the position and says what to write instead — declare it as a named <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg</code> and reference it.</p>
+      <p class="text-sm text-text-secondary mt-3">Method <em>arguments</em> and service base arguments <strong>are</strong> allowed: an argument has a name, so <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ApiGetId</code> is derivable. Only the return type is not.</p>
+    </section>
+
+    <section>
+      <h2 id="namespace" class="text-xl font-bold mb-4">The namespace problem</h2>
+      <div class="glass rounded-xl p-4 border-l-2 border-status-degraded/40">
+        <p class="text-sm font-medium mb-1">A field name now claims a type name</p>
+        <p class="text-xs text-text-secondary">Ion has one flat global type namespace — <a href="/guides/modules/" class="text-accent hover:underline">module namespacing</a> is on the roadmap and is not here yet. Hoisting makes that gap materially worse, because writing a field called <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">shipping</code> on a message called <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Order</code> now takes the global name <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">OrderShipping</code> out of circulation. Until namespacing lands, ION0067 is the entire thing keeping that safe — which is why it is a hard error rather than a warning.</p>
+      </div>
+      <p class="text-sm text-text-secondary mt-4">Practical consequence: prefer an inline type where the shape genuinely belongs to one field and will never be referenced elsewhere. If two messages need the same shape, declare it once by name — an inline type cannot be shared, and copying it produces two unrelated types with two lock entries.</p>
+    </section>
+
+    <section>
+      <h2 id="wire" class="text-xl font-bold mb-4">Wire format and schema lock</h2>
+      <p class="text-sm text-text-secondary mb-4">There is nothing special about either. After hoisting there are no inline bodies left in a well-formed file, so duplicate detection, unused-symbol detection, deprecation, the lock and all three generators see an ordinary <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg</code> and needed no changes at all.</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// msg Order {'{'} shipping: msg {'{'} address: string; {'}'}; {'}'}  produces:</span>
+{'{'}
+  <span class="text-accent-2">"Order"</span>: {'{'} <span class="text-accent-2">"kind"</span>: <span class="text-accent-2">"Msg"</span>, <span class="text-accent-2">"fields"</span>: [
+    {'{'} <span class="text-accent-2">"index"</span>: <span class="text-accent-3">0</span>, <span class="text-accent-2">"name"</span>: <span class="text-accent-2">"shipping"</span>, <span class="text-accent-2">"type"</span>: <span class="text-accent-2">"OrderShipping"</span> {'}'}
+  ] {'}'},
+  <span class="text-accent-2">"OrderShipping"</span>: {'{'} <span class="text-accent-2">"kind"</span>: <span class="text-accent-2">"Msg"</span>, <span class="text-accent-2">"fields"</span>: [
+    {'{'} <span class="text-accent-2">"index"</span>: <span class="text-accent-3">0</span>, <span class="text-accent-2">"name"</span>: <span class="text-accent-2">"address"</span>, <span class="text-accent-2">"type"</span>: <span class="text-accent-2">"string"</span> {'}'}
+  ] {'}'}
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">The derived name is in the lock like any other, which makes one consequence worth knowing before you use the feature widely: <strong>renaming the field renames the type.</strong> Renaming <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">shipping</code> to <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">delivery</code> reports <a href="/guides/diagnostics/#ION0023" class="text-accent hover:underline">ION0023</a> (definition <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">OrderShipping</code> removed) alongside the <a href="/guides/diagnostics/#ION0020" class="text-accent hover:underline">ION0020</a> the field rename would have produced anyway — two breaking changes where a named type would have given one.</p>
+      <p class="text-sm text-text-secondary mt-3">A doc comment or attribute written on the inline <em>body</em> belongs to the type it becomes; one written on the <em>field</em> stays on the field.</p>
+    </section>
+
+    <section>
+      <h2 id="editor" class="text-xl font-bold mb-4">Finding the hoisted name</h2>
+      <p class="text-sm text-text-secondary mb-4">There is no token anywhere in your source that spells the derived name, so the editor surfaces it in three places:</p>
+      <ul class="text-sm text-text-secondary space-y-2 mt-3 ml-4">
+        <li>• an <strong>inlay hint</strong> immediately after the <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg</code> keyword, so <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">shipping: msg <em>OrderShipping</em> {'{'} … {'}'}</code> reads inline;</li>
+        <li>• <strong>hover</strong> anywhere on the body, which shows the full hoisted declaration and where it came from;</li>
+        <li>• the <strong>document outline</strong>, where it appears as a top level symbol marked <em>hoisted from an inline msg {'{'} … {'}'}</em>.</li>
+      </ul>
+      <p class="text-sm text-text-secondary mt-4">It deliberately cannot be renamed from the editor: the name is derived from the field, so renaming the field <em>is</em> the rename.</p>
+    </section>
+
+  </div>
+</DocsLayout>

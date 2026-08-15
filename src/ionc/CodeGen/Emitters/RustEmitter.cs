@@ -41,27 +41,45 @@ public sealed class RustEmitter : ICodeEmitter
     // TYPE DECLARATIONS
     // ═══════════════════════════════════════════════════════════════════
 
-    public string EnumDeclaration(string name, IEnumerable<EnumMember> members, EnumOptions? options = null, string? doc = null)
+    /// <summary>
+    /// Appends the <c>#[deprecated]</c> line for a declaration, if it carries one.
+    /// </summary>
+    /// <remarks>
+    /// Written after the doc comment and before <c>#[derive(…)]</c> — Rust accepts outer attributes
+    /// in any order, and keeping the doc first matches how the rest of this emitter builds an item.
+    /// </remarks>
+    private static void AppendDeprecated(StringBuilder sb, IonDeprecation? deprecated, string indent = "")
+    {
+        if (deprecated is { } deprecation)
+            sb.AppendLine($"{indent}{AttributeEmission.RustDeprecated(deprecation)}");
+    }
+
+    public string EnumDeclaration(string name, IEnumerable<EnumMember> members, EnumOptions? options = null,
+        string? doc = null, IonDeprecation? deprecated = null)
     {
         var baseType = options?.BaseType ?? "i32";
         var sb = new StringBuilder();
         sb.Append(DocComment(doc));
+        AppendDeprecated(sb, deprecated);
         sb.AppendLine($"#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]");
         sb.AppendLine($"#[repr({baseType})]");
         sb.AppendLine($"pub enum {name} {{");
         foreach (var m in members)
         {
             sb.Append(DocComment(m.Doc, Indent(1)));
+            AppendDeprecated(sb, m.Deprecated, Indent(1));
             sb.AppendLine($"    {m.Name} = {m.Value},");
         }
         sb.AppendLine("}");
         return sb.ToString();
     }
 
-    public string FlagsDeclaration(string name, string? baseType, IEnumerable<EnumMember> members, string? doc = null)
+    public string FlagsDeclaration(string name, string? baseType, IEnumerable<EnumMember> members, string? doc = null,
+        IonDeprecation? deprecated = null)
     {
         var sb = new StringBuilder();
         sb.Append(DocComment(doc));
+        AppendDeprecated(sb, deprecated);
         sb.AppendLine($"#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]");
         sb.AppendLine($"pub struct {name}(pub {baseType ?? "u32"});");
         sb.AppendLine();
@@ -69,21 +87,25 @@ public sealed class RustEmitter : ICodeEmitter
         foreach (var m in members)
         {
             sb.Append(DocComment(m.Doc, Indent(1)));
+            AppendDeprecated(sb, m.Deprecated, Indent(1));
             sb.AppendLine($"    pub const {m.Name}: Self = Self({m.Value});");
         }
         sb.AppendLine("}");
         return sb.ToString();
     }
 
-    public string MessageDeclaration(string name, IEnumerable<FieldDecl> fields, string? doc = null)
+    public string MessageDeclaration(string name, IEnumerable<FieldDecl> fields, string? doc = null,
+        IonDeprecation? deprecated = null)
     {
         var sb = new StringBuilder();
         sb.Append(DocComment(doc));
+        AppendDeprecated(sb, deprecated);
         sb.AppendLine("#[derive(Debug, Clone, PartialEq)]");
         sb.AppendLine($"pub struct {name} {{");
         foreach (var f in fields)
         {
             sb.Append(DocComment(f.Doc, Indent(1)));
+            AppendDeprecated(sb, f.Deprecated, Indent(1));
             sb.AppendLine($"    pub {FormatIdentifier(f.Name)}: {f.Type},");
         }
         sb.AppendLine("}");
@@ -95,10 +117,12 @@ public sealed class RustEmitter : ICodeEmitter
         return $"{DocComment(doc)}pub type {name} = {underlyingType};";
     }
 
-    public string ServiceInterfaceDeclaration(string name, IEnumerable<MethodDecl> methods, string? baseInterface = null, string? doc = null)
+    public string ServiceInterfaceDeclaration(string name, IEnumerable<MethodDecl> methods, string? baseInterface = null,
+        string? doc = null, IonDeprecation? deprecated = null)
     {
         var sb = new StringBuilder();
         sb.Append(DocComment(doc));
+        AppendDeprecated(sb, deprecated);
         sb.AppendLine("#[async_trait::async_trait]");
         sb.AppendLine($"pub trait {name}: Send + Sync {{");
         foreach (var m in methods)
@@ -106,6 +130,7 @@ public sealed class RustEmitter : ICodeEmitter
             var args = string.Join(", ", m.Parameters.Select(p => $"{FormatIdentifier(p.Name)}: {p.Type}"));
             var selfArg = "&self";
             sb.Append(DocComment(m.Doc, Indent(1), m.DocParams));
+            AppendDeprecated(sb, m.Deprecated, Indent(1));
             sb.AppendLine($"    async fn {FormatIdentifier(m.Name)}({selfArg}, {args}) -> Result<{m.ReturnType}, ion_rustcore::IonError>;");
         }
         sb.AppendLine("}");
@@ -134,10 +159,12 @@ public sealed class RustEmitter : ICodeEmitter
     // UNION TYPES
     // ═══════════════════════════════════════════════════════════════════
 
-    public string UnionBaseDeclaration(string name, IEnumerable<string> caseNames, IEnumerable<FieldDecl>? sharedFields = null, string? doc = null)
+    public string UnionBaseDeclaration(string name, IEnumerable<string> caseNames, IEnumerable<FieldDecl>? sharedFields = null,
+        string? doc = null, IonDeprecation? deprecated = null)
     {
         var sb = new StringBuilder();
         sb.Append(DocComment(doc));
+        AppendDeprecated(sb, deprecated);
         sb.AppendLine("#[derive(Debug, Clone, PartialEq)]");
         sb.AppendLine($"pub enum {name} {{");
         foreach (var caseName in caseNames)
@@ -161,16 +188,19 @@ public sealed class RustEmitter : ICodeEmitter
         return sb.ToString();
     }
 
-    public string UnionCaseDeclaration(string caseName, string unionName, int caseIndex, IEnumerable<FieldDecl> fields, string? doc = null)
+    public string UnionCaseDeclaration(string caseName, string unionName, int caseIndex, IEnumerable<FieldDecl> fields,
+        string? doc = null, IonDeprecation? deprecated = null)
     {
         // Union cases are standalone structs in Rust
         var sb = new StringBuilder();
         sb.Append(DocComment(doc));
+        AppendDeprecated(sb, deprecated);
         sb.AppendLine("#[derive(Debug, Clone, PartialEq)]");
         sb.AppendLine($"pub struct {caseName} {{");
         foreach (var f in fields)
         {
             sb.Append(DocComment(f.Doc, Indent(1)));
+            AppendDeprecated(sb, f.Deprecated, Indent(1));
             sb.AppendLine($"    pub {FormatIdentifier(f.Name)}: {f.Type},");
         }
         sb.AppendLine("}");
@@ -236,10 +266,9 @@ public sealed class RustEmitter : ICodeEmitter
     public string DocComment(
         string? doc,
         string indent = "",
-        IReadOnlyList<DocParam>? parameters = null,
-        string? identifier = null)
+        IReadOnlyList<DocParam>? parameters = null)
         => DocCommentFormatter.RustDoc(doc, indent, parameters);
 
-    public string ModuleDocComment(string? doc, string? name = null)
+    public string ModuleDocComment(string? doc)
         => DocCommentFormatter.RustModuleDoc(doc);
 }

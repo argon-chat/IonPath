@@ -36,6 +36,19 @@ service MathInteraction(
     /// Returns the absolute value of rightOperand, or null when it is null.
     ToPositive(rightOperand: i4?): i4?;
 
+    /// `i4[]?` in both argument and return position: null in, null out; otherwise the
+    /// elementwise power, same length as the input.
+    ///
+    /// The return is the shape the C# client used to emit `CallAsyncNullable<Array>` for —
+    /// `Maybe<Array<i4>>` collapsed to the bare word `Array` instead of naming the element
+    /// type. A value-typed element is the interesting half: `IonArray<i4>?` is a nullable
+    /// struct, so a reader that peels only one wrapper cannot even be coerced into compiling.
+    PowArrayMaybe(rightOperand: i4[]?): i4[]?;
+
+    /// The same return shape over a reference-typed element, to pin that the fix is not
+    /// specific to value types.
+    Spell(rightOperand: i4[]?): string[]?;
+
     // Plain `//` is trivia: it is not attached to anything, not even to the
     // closing brace below.
 }

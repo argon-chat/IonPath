@@ -66,6 +66,28 @@ export class CborReader {
     }
   }
 
+  /**
+   * Reads the tag at the cursor **without consuming it**, so a formatter can validate the tag
+   * before deciding how to proceed. Throws if the next item is not a tag.
+   */
+  peekTag(): number | bigint {
+    const saved = this.r.position;
+    try {
+      return this.readTag();
+    } finally {
+      this.r.seek(saved);
+    }
+  }
+
+  /**
+   * Reads an arbitrary-precision integer: a plain CBOR integer (major type 0/1) or a tag 2/3
+   * bignum. The counterpart of {@link CborWriter.writeBigInteger}; used for the `decimal`
+   * mantissa.
+   */
+  readBigInteger(): bigint {
+    return this.readInt128();
+  }
+
   peekState(): CborReaderState {
     if (!this.hasData) return CborReaderState.Finished;
     const b = this.peekByte();
@@ -382,85 +404,96 @@ export class CborReader {
     this.readEndArray();
   }
 
+  /**
+   * Skips exactly one data item, including all of its children.
+   *
+   * The previous implementation drove itself off `peekState()`, which only
+   * reports `EndArray`/`EndMap` for *indefinite-length* containers — this reader
+   * does not track the remaining item count of a definite-length one. Skipping a
+   * definite-length array or map therefore ran past the end of the container and
+   * consumed whatever followed it. Nested containers are now walked by their
+   * declared length instead.
+   */
   skipValue(): void {
-    this.readEncodedValue();
-  }
+    // consume any tags in front of the value
+    while ((this.r.peekUint8() >> 5) === 6) this.readTag();
 
-  readEncodedValue() {
-    let depth = 0;
+    const initial = this.r.peekUint8();
+    const mt = initial >> 5;
+    const ai = initial & 0x1f;
 
-    do {
-      depth = this.skipNextNode(depth);
-    } while (depth > 0);
-  }
+    switch (mt) {
+      case 0: // unsigned
+      case 1: // negative
+        this.r.readUint8();
+        this.readLength(ai);
+        return;
 
-  skipNextNode(initialDepth: number): number {
-    let state: CborReaderState;
-    let depth = initialDepth;
-
-    while ((state = this.peekState()) === CborReaderState.Tag)
-      this.r.readUint8();
-
-    switch (state) {
-      case CborReaderState.UnsignedInteger:
-        this.readUInt64();
-        break;
-
-      case CborReaderState.NegativeInteger:
-        this.readInt64();
-        break;
-
-      case CborReaderState.ByteString:
+      case 2:
         this.readByteString();
-        break;
+        return;
 
-      case CborReaderState.TextString:
+      case 3:
         this.readTextString();
-        break;
+        return;
 
-      case CborReaderState.StartArray:
-        this.readStartArray();
-        depth++;
-        break;
-
-      case CborReaderState.EndArray:
-        if (depth === 0) throw new Error(`Skip invalid state: ${state}`);
-
+      case 4: {
+        const len = this.readStartArray();
+        if (len === null) {
+          while (this.r.peekUint8() !== 0xff) this.skipValue();
+        } else {
+          for (let i = 0; i < len; i++) this.skipValue();
+        }
         this.readEndArray();
-        depth--;
-        break;
+        return;
+      }
 
-      case CborReaderState.StartMap:
-        this.readStartMap();
-        depth++;
-        break;
-
-      case CborReaderState.EndMap:
-        if (depth === 0) throw new Error(`Skip invalid state: ${state}`);
-
+      case 5: {
+        const len = this.readStartMap();
+        if (len === null) {
+          while (this.r.peekUint8() !== 0xff) {
+            this.skipValue();
+            this.skipValue();
+          }
+        } else {
+          for (let i = 0; i < len; i++) {
+            this.skipValue();
+            this.skipValue();
+          }
+        }
         this.readEndMap();
-        depth--;
-        break;
+        return;
+      }
 
-      case CborReaderState.FloatingPointNumber:
-        this.readDouble();
-        break;
-
-      case CborReaderState.Null:
-        this.readNull();
-        break;
-      case CborReaderState.Boolean:
-        this.readBoolean();
-        break;
-      case CborReaderState.Undefined:
-        this.readUndefined();
-        break;
+      case 7:
+        if (ai === 25) {
+          this.r.readUint8();
+          this.r.readFloat16();
+          return;
+        }
+        if (ai === 26) {
+          this.r.readUint8();
+          this.r.readFloat32();
+          return;
+        }
+        if (ai === 27) {
+          this.r.readUint8();
+          this.r.readFloat64();
+          return;
+        }
+        if (ai === 31) throw new Error("Skip: unexpected break");
+        this.r.readUint8();
+        if (ai === 24) this.r.readUint8(); // one-byte simple value
+        return;
 
       default:
-        throw new Error(`Skip invalid state: ${state}`);
+        throw new Error(`Skip: invalid major type ${mt}`);
     }
+  }
 
-    return depth;
+  /** Alias of {@link skipValue}. */
+  readEncodedValue() {
+    this.skipValue();
   }
 
   // -------------------

@@ -38,6 +38,10 @@ public sealed class Ion_MathInteraction_ClientImpl(IonClientContext context) : I
         typeof(IMathInteraction).GetMethod(nameof(PowArray), BindingFlags.Public | BindingFlags.Instance)!);
     private static readonly Lazy<MethodInfo> ToPositive_Ref = new(() =>
         typeof(IMathInteraction).GetMethod(nameof(ToPositive), BindingFlags.Public | BindingFlags.Instance)!);
+    private static readonly Lazy<MethodInfo> PowArrayMaybe_Ref = new(() =>
+        typeof(IMathInteraction).GetMethod(nameof(PowArrayMaybe), BindingFlags.Public | BindingFlags.Instance)!);
+    private static readonly Lazy<MethodInfo> Spell_Ref = new(() =>
+        typeof(IMathInteraction).GetMethod(nameof(Spell), BindingFlags.Public | BindingFlags.Instance)!);
 
 
     
@@ -198,6 +202,57 @@ public sealed class Ion_MathInteraction_ClientImpl(IonClientContext context) : I
         writer.WriteEndArray();
     
         return await req.CallAsyncNullable<i4>(writer.Encode(), ct: ct);
+    }
+    /// <summary>
+    /// `i4[]?` in both argument and return position: null in, null out; otherwise the
+    /// elementwise power, same length as the input.
+    ///
+    /// The return is the shape the C# client used to emit `CallAsyncNullable&lt;Array&gt;` for —
+    /// `Maybe&lt;Array&lt;i4&gt;&gt;` collapsed to the bare word `Array` instead of naming the element
+    /// type. A value-typed element is the interesting half: `IonArray&lt;i4&gt;?` is a nullable
+    /// struct, so a reader that peels only one wrapper cannot even be coerced into compiling.
+    /// </summary>
+    /// <param name="__leftoperand">The left-hand operand shared by every method on this service.</param>
+    [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+    public async Task<IonArray<i4>?> PowArrayMaybe(i4 __leftoperand, IonArray<i4>? __rightoperand, CancellationToken ct = default)
+    {
+        var req = new IonRequest(context, typeof(IMathInteraction), PowArrayMaybe_Ref.Value);
+
+        var writer = new CborWriter();
+
+        const int argsSize = 2;
+
+        writer.WriteStartArray(argsSize);
+
+        IonFormatterStorage<i4>.Write(writer, __leftoperand);
+        IonFormatterStorage<i4>.WriteNullableArray(writer, __rightoperand);
+
+        writer.WriteEndArray();
+
+        return await req.CallAsyncNullableArray<i4>(writer.Encode(), ct: ct);
+    }
+    /// <summary>
+    /// The same return shape over a reference-typed element, to pin that the fix is not
+    /// specific to value types.
+    /// </summary>
+    /// <param name="__leftoperand">The left-hand operand shared by every method on this service.</param>
+    [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+    public async Task<IonArray<string>?> Spell(i4 __leftoperand, IonArray<i4>? __rightoperand, CancellationToken ct = default)
+    {
+        var req = new IonRequest(context, typeof(IMathInteraction), Spell_Ref.Value);
+
+        var writer = new CborWriter();
+
+        const int argsSize = 2;
+
+        writer.WriteStartArray(argsSize);
+
+        IonFormatterStorage<i4>.Write(writer, __leftoperand);
+        IonFormatterStorage<i4>.WriteNullableArray(writer, __rightoperand);
+
+        writer.WriteEndArray();
+
+        return await req.CallAsyncNullableArray<string>(writer.Encode(), ct: ct);
     }
 
 }

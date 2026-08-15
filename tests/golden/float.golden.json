@@ -1,0 +1,93 @@
+{
+  "$format": "ionpath/float-golden/1",
+  "$comment": [
+    "Cross-runtime golden vectors for Ion's three float widths (f2/f4/f8).",
+    "Consumed by all three in-repo runtimes; the three implementations must produce",
+    "byte-identical CBOR for the same value.",
+    "  C#   src/tests/IonTestClientServer/FloatGoldenTests.cs",
+    "  TS   packages/ion.webcore.js/test/float.golden.test.ts",
+    "  Rust packages/ion.rustcore/tests/float_golden.rs"
+  ],
+
+  "rule": {
+    "declaredWidth": "Every float is written at its DECLARED width: f2 -> 0xF9 + 2 bytes, f4 -> 0xFA + 4 bytes, f8 -> 0xFB + 8 bytes, always, regardless of value.",
+    "why": "Ion is schema-first — the field's width is declared in the contract, so the wire honours it. Shortest-form encoding would make f2 and f4 indistinguishable in a capture, would require reimplementing identical shrink logic in three runtimes, and would make golden vectors runtime-dependent (breaking any future signing, hashing, dedup or content-addressing of payloads).",
+    "readAcceptsEveryWidth": "Readers MUST accept f9, fa and fb for EVERY float type, in both directions: an f4 field may receive an f8-encoded value and an f8 field may receive an f2-encoded one. Widening from a narrower wire width is exact; narrowing from a wider one rounds. This is what makes the rule non-wire-breaking — payloads written by a peer that shrank floats still decode. See the `crossWidth` vectors.",
+    "history": "System.Formats.Cbor's CborWriter.WriteSingle/WriteDouble shrink a float to the shortest lossless CBOR float in every conformance mode except Ctap2Canonical (1.5f -> 'f93e00', 4f -> 'f94400', and a double could shrink all the way to float16), while packages/ion.webcore.js and packages/ion.rustcore (minicbor) always emitted the declared width. C# now forces the width via CborWriter.WriteEncodedValue with a hand-built header + big-endian payload, which works in all four conformance modes and leaves the writer's mode alone — switching to Ctap2Canonical would also mandate sorted map keys and forbid indefinite lengths, breaking Partial<T>'s declaration-order map (see partial.golden.json)."
+  },
+
+  "canonicalNaN": {
+    "rule": "NaN is canonicalised on write to the positive quiet NaN with an empty payload.",
+    "f2": "7e00",
+    "f4": "7fc00000",
+    "f8": "7ff8000000000000",
+    "why": "This is required for byte identity, not cosmetic. .NET's float.NaN has the sign bit SET (ffc00000) while Rust's f32::NAN and JavaScript's NaN literal are positive (7fc00000) — and a JS engine does not even guarantee that: Math.sqrt(-1) yields a sign-set NaN that survives a Float32Array store as ffc00000. JavaScript cannot observe or reproduce a NaN payload at all, so canonicalising is the only agreement the three runtimes can reach. Writers therefore emit these bits for ANY NaN input, including signalling NaNs and NaNs with a payload.",
+    "notCanonicalised": "Every other special value is written bit-for-bit. In particular -0.0 is preserved as -0.0 (f2 8000 / f4 80000000 / f8 8000000000000000) and is NOT folded into +0.0."
+  },
+
+  "types": {
+    "f2": { "header": "f9", "payloadBytes": 2, "cs": "Half",   "ts": "number", "rust": "IonF16" },
+    "f4": { "header": "fa", "payloadBytes": 4, "cs": "float",  "ts": "number", "rust": "f32" },
+    "f8": { "header": "fb", "payloadBytes": 8, "cs": "double", "ts": "number", "rust": "f64" }
+  },
+
+  "howToConsume": [
+    "For each entry of `vectors`:",
+    "  encode: build the value from `bits` (IEEE-754 bit pattern, big-endian hex, `payloadBytes` wide),",
+    "          write it with the runtime's formatter for `type`, expect exactly `hex`.",
+    "  decode: read `hex` with the runtime's formatter for `type`, re-encode it, expect `hex` back.",
+    "For each entry of `crossWidth`: read `hex` with the formatter for `type` (note the wire width",
+    "  differs from the declared width), re-encode, expect `reencodedHex`."
+  ],
+
+  "vectors": [
+    { "name": "f2-zero",          "type": "f2", "bits": "0000", "repr": "0",                        "hex": "f90000" },
+    { "name": "f2-neg-zero",      "type": "f2", "bits": "8000", "repr": "-0",                       "hex": "f98000", "notes": "-0.0 is preserved, not folded into +0.0." },
+    { "name": "f2-1.5",           "type": "f2", "bits": "3e00", "repr": "1.5",                      "hex": "f93e00" },
+    { "name": "f2-4",             "type": "f2", "bits": "4400", "repr": "4",                        "hex": "f94400" },
+    { "name": "f2-1.1",           "type": "f2", "bits": "3c66", "repr": "1.099609375",              "hex": "f93c66", "notes": "Nearest f2 to 1.1. The value 1.1 was the one the old partial vectors used to sidestep the shrinking bug." },
+    { "name": "f2-max",           "type": "f2", "bits": "7bff", "repr": "65504",                    "hex": "f97bff", "notes": "Largest finite f2." },
+    { "name": "f2-min-subnormal", "type": "f2", "bits": "0001", "repr": "5.960464477539063e-8",     "hex": "f90001", "notes": "Smallest positive subnormal f2 (2^-24)." },
+    { "name": "f2-nan",           "type": "f2", "bits": "7e00", "repr": "NaN",                      "hex": "f97e00", "notes": "Canonical positive quiet NaN. Writers must emit this for ANY NaN input." },
+    { "name": "f2-pos-inf",       "type": "f2", "bits": "7c00", "repr": "Infinity",                 "hex": "f97c00" },
+    { "name": "f2-neg-inf",       "type": "f2", "bits": "fc00", "repr": "-Infinity",                "hex": "f9fc00" },
+
+    { "name": "f4-zero",          "type": "f4", "bits": "00000000", "repr": "0",                    "hex": "fa00000000", "notes": "REGRESSION GUARD. The old C# writer shrank this to 'f90000'." },
+    { "name": "f4-neg-zero",      "type": "f4", "bits": "80000000", "repr": "-0",                   "hex": "fa80000000", "notes": "-0.0 is preserved. Old C#: 'f98000'." },
+    { "name": "f4-1.5",           "type": "f4", "bits": "3fc00000", "repr": "1.5",                  "hex": "fa3fc00000", "notes": "REGRESSION GUARD. The old C# writer shrank this to 'f93e00'." },
+    { "name": "f4-4",             "type": "f4", "bits": "40800000", "repr": "4",                    "hex": "fa40800000", "notes": "REGRESSION GUARD. The old C# writer shrank this to 'f94400'." },
+    { "name": "f4-1.1",           "type": "f4", "bits": "3f8ccccd", "repr": "1.100000023841858",    "hex": "fa3f8ccccd", "notes": "Not representable in f2, so this was the ONE value all three runtimes already agreed on — which is why the partial vectors used it." },
+    { "name": "f4-max",           "type": "f4", "bits": "7f7fffff", "repr": "3.4028234663852886e38","hex": "fa7f7fffff" },
+    { "name": "f4-min-subnormal", "type": "f4", "bits": "00000001", "repr": "1.401298464324817e-45","hex": "fa00000001", "notes": "Smallest positive subnormal f4. Does not fit f2, so it never shrank." },
+    { "name": "f4-nan",           "type": "f4", "bits": "7fc00000", "repr": "NaN",                  "hex": "fa7fc00000", "notes": "Canonical positive quiet NaN. .NET's float.NaN is ffc00000 and JS's Math.sqrt(-1) is ffc00000; both must still write fa7fc00000. Old C#: 'f97e00'." },
+    { "name": "f4-pos-inf",       "type": "f4", "bits": "7f800000", "repr": "Infinity",             "hex": "fa7f800000", "notes": "Old C#: 'f97c00'." },
+    { "name": "f4-neg-inf",       "type": "f4", "bits": "ff800000", "repr": "-Infinity",            "hex": "faff800000", "notes": "Old C#: 'f9fc00'." },
+
+    { "name": "f8-zero",          "type": "f8", "bits": "0000000000000000", "repr": "0",                     "hex": "fb0000000000000000", "notes": "REGRESSION GUARD. The old C# writer shrank a double all the way to f2: 'f90000'." },
+    { "name": "f8-neg-zero",      "type": "f8", "bits": "8000000000000000", "repr": "-0",                    "hex": "fb8000000000000000", "notes": "-0.0 is preserved. Old C#: 'f98000'." },
+    { "name": "f8-1.5",           "type": "f8", "bits": "3ff8000000000000", "repr": "1.5",                   "hex": "fb3ff8000000000000", "notes": "REGRESSION GUARD. Old C#: 'f93e00'." },
+    { "name": "f8-4",             "type": "f8", "bits": "4010000000000000", "repr": "4",                     "hex": "fb4010000000000000", "notes": "REGRESSION GUARD. Old C#: 'f94400'." },
+    { "name": "f8-1.1",           "type": "f8", "bits": "3ff199999999999a", "repr": "1.1",                   "hex": "fb3ff199999999999a" },
+    { "name": "f8-max",           "type": "f8", "bits": "7fefffffffffffff", "repr": "1.7976931348623157e308","hex": "fb7fefffffffffffff" },
+    { "name": "f8-min-subnormal", "type": "f8", "bits": "0000000000000001", "repr": "5e-324",                "hex": "fb0000000000000001", "notes": "Smallest positive subnormal f8." },
+    { "name": "f8-nan",           "type": "f8", "bits": "7ff8000000000000", "repr": "NaN",                   "hex": "fb7ff8000000000000", "notes": "Canonical positive quiet NaN. .NET's double.NaN is fff8000000000000 and must still write fb7ff8000000000000. Old C#: 'f97e00'." },
+    { "name": "f8-pos-inf",       "type": "f8", "bits": "7ff0000000000000", "repr": "Infinity",              "hex": "fb7ff0000000000000", "notes": "Old C#: 'f97c00'." },
+    { "name": "f8-neg-inf",       "type": "f8", "bits": "fff0000000000000", "repr": "-Infinity",             "hex": "fbfff0000000000000", "notes": "Old C#: 'f9fc00'." }
+  ],
+
+  "crossWidth": [
+    { "name": "f2-reads-f4", "type": "f2", "hex": "fa3fc00000",         "reencodedHex": "f93e00",             "notes": "An f2 field receiving an f4-encoded 1.5. minicbor's Decoder::f16 and .NET's CborReader.ReadHalf both reject this natively; both runtimes dispatch on the wire width instead." },
+    { "name": "f2-reads-f8", "type": "f2", "hex": "fb3ff8000000000000", "reencodedHex": "f93e00",             "notes": "An f2 field receiving an f8-encoded 1.5." },
+    { "name": "f4-reads-f2", "type": "f4", "hex": "f93e00",             "reencodedHex": "fa3fc00000",         "notes": "COMPATIBILITY GUARD. This is exactly what the previous C# release wrote for 1.5f. New readers must still accept it, so old payloads keep decoding." },
+    { "name": "f4-reads-f8", "type": "f4", "hex": "fb3ff8000000000000", "reencodedHex": "fa3fc00000",         "notes": "An f4 field receiving an f8-encoded 1.5. minicbor's Decoder::f32 and .NET's CborReader.ReadSingle both reject fb natively." },
+    { "name": "f8-reads-f2", "type": "f8", "hex": "f93e00",             "reencodedHex": "fb3ff8000000000000", "notes": "COMPATIBILITY GUARD. What the previous C# release wrote for 1.5d." },
+    { "name": "f8-reads-f4", "type": "f8", "hex": "fa3fc00000",         "reencodedHex": "fb3ff8000000000000" },
+
+    { "name": "f4-reads-legacy-zero",     "type": "f4", "hex": "f90000", "reencodedHex": "fa00000000", "notes": "COMPATIBILITY GUARD. Previous C# release's encoding of 0f." },
+    { "name": "f4-reads-legacy-neg-zero", "type": "f4", "hex": "f98000", "reencodedHex": "fa80000000", "notes": "COMPATIBILITY GUARD. -0.0 survives the legacy round-trip as -0.0." },
+    { "name": "f4-reads-legacy-4",        "type": "f4", "hex": "f94400", "reencodedHex": "fa40800000", "notes": "COMPATIBILITY GUARD. Previous C# release's encoding of 4f." },
+    { "name": "f4-reads-legacy-nan",      "type": "f4", "hex": "f97e00", "reencodedHex": "fa7fc00000", "notes": "COMPATIBILITY GUARD. Previous C# release's encoding of float.NaN." },
+    { "name": "f4-reads-legacy-pos-inf",  "type": "f4", "hex": "f97c00", "reencodedHex": "fa7f800000", "notes": "COMPATIBILITY GUARD. Previous C# release's encoding of +Inf." },
+    { "name": "f4-reads-legacy-neg-inf",  "type": "f4", "hex": "f9fc00", "reencodedHex": "faff800000", "notes": "COMPATIBILITY GUARD. Previous C# release's encoding of -Inf." }
+  ]
+}

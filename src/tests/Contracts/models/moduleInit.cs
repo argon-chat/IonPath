@@ -11,6 +11,27 @@
 #pragma warning disable
 #nullable enable
 
+// An instant.
+//
+// The alias exists to pin the *resolved* type name in each target. A field is emitted as
+// the primitive's own spelling, so only a typedef makes a generator write out what
+// `datetime` actually resolves to: `System.DateTimeOffset` in C# (never `System.DateTime`,
+// which has no offset field), `IonDateTime` in TypeScript, and
+// `chrono::DateTime<chrono::FixedOffset>` in Rust.
+global using Timestamp = System.DateTimeOffset;
+// An exact monetary amount.
+//
+// Same job as `Timestamp`, one primitive over: `System.Decimal`, `IonDecimal` and
+// `ion_rustcore::IonDecimal` — never a binary float.
+global using Money = System.Decimal;
+// A single vector component.
+//
+// A typedef is a transparent alias: on the wire this is an ordinary `f4`, and every
+// generated field below is emitted as `f4`. The alias exists only so hand written code
+// can name it.
+global using Scalar = System.Single;
+// A component count, used as a service operand.
+global using Rank = System.Byte;
 
 namespace TestContracts;
 [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
@@ -20,17 +41,67 @@ internal static class IonProjectFormatterStorageModuleInit
     internal static void Init()
     {
         
+      IonFormatterStorage<LegacyRequest>.Value = new Ion_LegacyRequest_Formatter();
+      IonFormatterStorage<CacheProbe>.Value = new Ion_CacheProbe_Formatter();
+      IonFormatterStorage<CacheRegion>.Value = new Ion_CacheRegion_Formatter();
+      IonFormatterStorage<Member>.Value = new Ion_Member_Formatter();
+      IonFormatterStorage<Doc>.Value = new Ion_Doc_Formatter();
+      IonFormatterStorage<KeyMatrix>.Value = new Ion_KeyMatrix_Formatter();
+      IonFormatterStorage<ContainerShapes>.Value = new Ion_ContainerShapes_Formatter();
+      IonFormatterStorage<Tier>.Value = new Ion_Tier_Formatter();
+      IonFormatterStorage<LedgerEntry>.Value = new Ion_LedgerEntry_Formatter();
+      IonFormatterStorage<LedgerPatch>.Value = new Ion_LedgerPatch_Formatter();
+      IonFormatterStorage<PatchTarget>.Value = new Ion_PatchTarget_Formatter();
+      IonFormatterStorage<PatchEnvelope>.Value = new Ion_PatchEnvelope_Formatter();
       IonFormatterStorage<Vector>.Value = new Ion_Vector_Formatter();
       IonFormatterStorage<VectorOfVector>.Value = new Ion_VectorOfVector_Formatter();
       IonFormatterStorage<VectorOfVectorOfVector>.Value = new Ion_VectorOfVectorOfVector_Formatter();
+      IonExecutorMetadataStorage.AddExecutor<Ion_LegacyCacheInteraction_ServiceExecutor>("ILegacyCacheInteraction");
+      IonExecutorMetadataStorage.AddExecutor<Ion_CacheInteraction_ServiceExecutor>("ICacheInteraction");
+      IonExecutorMetadataStorage.AddExecutor<Ion_CollectionInteraction_ServiceExecutor>("ICollectionInteraction");
       IonExecutorMetadataStorage.AddExecutor<Ion_TestBlobs_ServiceExecutor>("ITestBlobs");
+      IonExecutorMetadataStorage.AddExecutor<Ion_LedgerInteraction_ServiceExecutor>("ILedgerInteraction");
       IonExecutorMetadataStorage.AddExecutor<Ion_MathInteraction_ServiceExecutor>("IMathInteraction");
       IonExecutorMetadataStorage.AddExecutor<Ion_RandomStreamInteraction_ServiceExecutor>("IRandomStreamInteraction");
+      IonExecutorMetadataStorage.AddExecutor<Ion_PatchInteraction_ServiceExecutor>("IPatchInteraction");
       IonExecutorMetadataStorage.AddExecutor<Ion_VectorMathInteraction_ServiceExecutor>("IVectorMathInteraction");
+      IonExecutorMetadataStorage.AddClient<Ion_LegacyCacheInteraction_ClientImpl>("ILegacyCacheInteraction");
+      IonExecutorMetadataStorage.AddClient<Ion_CacheInteraction_ClientImpl>("ICacheInteraction");
+      IonExecutorMetadataStorage.AddClient<Ion_CollectionInteraction_ClientImpl>("ICollectionInteraction");
       IonExecutorMetadataStorage.AddClient<Ion_TestBlobs_ClientImpl>("ITestBlobs");
+      IonExecutorMetadataStorage.AddClient<Ion_LedgerInteraction_ClientImpl>("ILedgerInteraction");
       IonExecutorMetadataStorage.AddClient<Ion_MathInteraction_ClientImpl>("IMathInteraction");
       IonExecutorMetadataStorage.AddClient<Ion_RandomStreamInteraction_ClientImpl>("IRandomStreamInteraction");
+      IonExecutorMetadataStorage.AddClient<Ion_PatchInteraction_ClientImpl>("IPatchInteraction");
       IonExecutorMetadataStorage.AddClient<Ion_VectorMathInteraction_ClientImpl>("IVectorMathInteraction");
+      IonFormatterStorage.SetFormatterTypeFor(typeof(IonArray<>), typeof(Ion_nested_array_Formatter<>));
+      IonPartialSchema<Doc>.Register(
+          IonPartialSchema<Doc>.Field<string>("title"),
+          IonPartialSchema<Doc>.Field<i4>("revision"));
+      IonPartialSchema<PatchTarget>.Register(
+          IonPartialSchema<PatchTarget>.Field<i4>("n"),
+          IonPartialSchema<PatchTarget>.Field<f4>("f"),
+          IonPartialSchema<PatchTarget>.Field<string>("s"),
+          IonPartialSchema<PatchTarget>.Array<i4>("items"),
+          IonPartialSchema<PatchTarget>.NullableRef<string>("note"));
+      IonPartialSchema<LedgerPatch>.Register(
+          IonPartialSchema<LedgerPatch>.Field<datetime>("bookedAt"),
+          IonPartialSchema<LedgerPatch>.Field<decimal>("amount"),
+          IonPartialSchema<LedgerPatch>.NullableValue<datetime>("settledAt"),
+          IonPartialSchema<LedgerPatch>.Array<decimal>("adjustments"));
 
     }
+}
+/// <summary>
+/// Lets an <c>Array&lt;T&gt;</c> resolve through <c>IonFormatterStorage</c> when it sits in
+/// a <c>Map</c> value or a <c>Set</c> element, where only the CLR type — never the element
+/// type — is available at the call site.
+/// </summary>
+[GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+internal sealed class Ion_nested_array_Formatter<T> : IonFormatter<IonArray<T>>
+{
+    public IonArray<T> Read(CborReader reader) => IonFormatterStorage<T>.ReadArray(reader);
+
+    public void Write(CborWriter writer, IonArray<T> value)
+        => IonFormatterStorage<T>.WriteArray(writer, value);
 }

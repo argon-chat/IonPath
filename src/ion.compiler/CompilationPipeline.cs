@@ -23,13 +23,59 @@ public sealed class CompilationPipeline
 
     private void ConfigurePipeline()
     {
-        // Register stages in order of execution
+        // Register stages in order of execution.
+        //
+        // First: a `#feature` the project does not enable is the *cause* of every unresolved name
+        // and unknown attribute that follows, and the pipeline runs every stage before deciding, so
+        // this diagnostic has to be the one at the top of the report.
+        RegisterStage(new FeatureDirectiveStage(_context));
+        // Also purely syntactic — it reads only the `#use` directives — so it runs beside the other
+        // pre-IR checks. A cycle here does not stop the compile: the files are one compilation unit
+        // regardless, and reporting the cycle beats hiding every other diagnostic behind it.
+        RegisterStage(new ImportCycleDetectionStage(_context));
+        // Purely syntactic: `~`/`[]`/`?` spelling needs no name resolution, so it runs before the
+        // IR exists and a doubled modifier is reported alongside, not instead of, a bad type name.
+        //
+        // Before InlineTypeHoistingStage, and that ordering is load-bearing. Every one of these
+        // diagnostics echoes the type as the author wrote it, and `IonTypeSites.NameAsWritten`
+        // renders an inline body as `msg { … }` — but only while the body is still there. Run after
+        // hoisting, the same check read the name the compiler had just derived, so
+        // `msg M { m: msg { … }?~; }` advised the author to "write 'MM~?'", quoting a type that
+        // appears nowhere in their file, while the un-hoistable `Array<msg { … }[0]>` beside it
+        // echoed correctly for no reason other than that its body had survived. One rule now: the
+        // modifier suffixes are judged on the written tree, before anything rewrites it.
+        RegisterStage(new TypeModifierValidationStage(_context));
+        // Tree shaping, before anything reads the declaration list. Hoisting turns every inline
+        // `msg { … }` into an ordinary top level message, so duplicate detection sees the derived
+        // names as declarations and nothing after this point needs to know inline types exist. It
+        // runs before mixin expansion so an inline type written in a mixin is hoisted once, named
+        // after the mixin, rather than once per message that includes it.
+        RegisterStage(new InlineTypeHoistingStage(_context));
         RegisterStage(new DuplicateSymbolValidationStage(_context));
+        // Resolves every `with` clause and pins the field order the wire depends on. After
+        // duplicate detection (a mixin shares the declaration namespace, so a colliding name is
+        // ION0002's to report first) and before the transform, which reads the expansion.
+        RegisterStage(new MixinExpansionStage(_context));
         RegisterStage(new TransformStage(_context));
+        // Immediately after the transform, which is what populates the attribute *declarations* of
+        // every module. Attribute uses are checked against them here rather than during lowering:
+        // the syntax walk sees each written attribute once and knows what it is attached to, and
+        // the transform sees service base arguments once per method and has already erased targets.
+        RegisterStage(new AttributeValidationStage(_context));
         RegisterStage(new ImportValidationStage(_context));
         RegisterStage(new StreamParameterValidationStage(_context));
         RegisterStage(new RestoreUnresolvedTypeStage(_context));
+        // After type resolution: `T~` validation needs typedefs erased and every name resolved.
+        RegisterStage(new PartialTypeValidationStage(_context));
+        // Beside the partial checker and for the same reasons: generic arity and Map key legality
+        // are both about a written type, and both need typedefs erased first — a typedef is
+        // transparent, so `Map<UserId, V>` is judged on what `UserId` stands for.
+        RegisterStage(new GenericTypeValidationStage(_context));
         RegisterStage(new CircularTypeReferenceStage(_context));
+
+        // Advisory, non-blocking. Deprecation runs after resolution so every written name has a
+        // definition to inspect, and before the unused-symbol pass purely for report ordering.
+        RegisterStage(new DeprecatedUsageStage(_context));
 
         // Unused symbol detection (hints, non-blocking)
         RegisterStage(new UnusedSymbolDetectionStage(_context));

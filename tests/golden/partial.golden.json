@@ -1,0 +1,163 @@
+{
+  "$format": "ionpath/partial-golden/1",
+  "$comment": [
+    "Cross-runtime golden vectors for Partial<T> (written `T~` in Ion source).",
+    "Consumed by all three in-repo runtimes; the three implementations must produce",
+    "byte-identical CBOR for the same patch.",
+    "  C#   src/tests/IonTestClientServer/TestTypes.cs",
+    "  TS   packages/ion.webcore.js/test/partial.golden.test.ts",
+    "  Rust packages/ion.rustcore/tests/partial_golden.rs"
+  ],
+
+  "wireFormat": {
+    "container": "CBOR map. Definite length on write; readers MUST also accept an indefinite-length map (0xBF ... 0xFF).",
+    "key": "Text string holding the Ion field name.",
+    "value": "CBOR null (0xF6) => the field is CLEARED; otherwise the field's ordinary Ion encoding => the field is MODIFIED.",
+    "absent": "A field that does not appear in the map is UNTOUCHED.",
+    "unknownKeys": "Skipped on read (forward compatibility).",
+    "order": "Fields are written in Ion declaration order, so the same patch is byte-identical in every runtime.",
+    "removalEncoding": "Removal is decided by the patch state, never by null-checking a stored value. `Modified(null)` and `Removed()` are the same three bytes; `null` in the map means CLEARED, and for a Maybe<T> field 'cleared' and 'set to none' are therefore the same patch.",
+    "migrationNote": "roadmap 1.1 (explicit field indices) would let the key become an unsigned integer index instead of a name. Not implemented: the language has no field indices yet."
+  },
+
+  "$floatEncoding": [
+    "RESOLVED — see /tests/golden/float.golden.json for the full f2/f4/f8 vector set.",
+    "Every runtime now writes a float at its DECLARED width: f2 -> 0xF9 + 2 bytes,",
+    "f4 -> 0xFA + 4 bytes, f8 -> 0xFB + 8 bytes, always, regardless of value.",
+    "Previously System.Formats.Cbor's CborWriter.WriteSingle/WriteDouble shrank a float to the",
+    "shortest lossless CBOR float (1.5f -> 'f93e00', 4f -> 'f94400') in every conformance mode",
+    "except Ctap2Canonical, while packages/ion.webcore.js and packages/ion.rustcore (minicbor)",
+    "always emitted the declared width — so the three runtimes differed byte-wise on any f4/f8",
+    "value that happened to fit a smaller float. The vectors below originally used 1.1f to",
+    "sidestep that; 'modified-scalar-float-half-representable' now pins 1.5f, which is exactly",
+    "the case that used to diverge. src/ion.runtime/formatter.floats.cs forces the width with",
+    "CborWriter.WriteEncodedValue rather than switching conformance mode, because Ctap2Canonical",
+    "would also mandate sorted map keys and forbid indefinite lengths — which would break the",
+    "declaration-order map this file specifies under `wireFormat.order`."
+  ],
+
+  "message": {
+    "name": "GoldenPatchTarget",
+    "ion": "msg GoldenPatchTarget { n: i4; f: f4; s: string; items: i4[]; note: string?; }",
+    "fields": [
+      { "name": "n",     "kind": "value",  "ion": "i4",     "cs": "int",              "ts": "number",   "rust": "i32" },
+      { "name": "f",     "kind": "value",  "ion": "f4",     "cs": "float",            "ts": "number",   "rust": "f32" },
+      { "name": "s",     "kind": "value",  "ion": "string", "cs": "string",           "ts": "string",   "rust": "String" },
+      { "name": "items", "kind": "array",  "ion": "i4[]",   "cs": "IonArray<int>",    "ts": "number[]", "rust": "Vec<i32>" },
+      { "name": "note",  "kind": "maybe",  "ion": "string?","cs": "IonMaybe<string>", "ts": "string|null", "rust": "Option<String>" }
+    ]
+  },
+
+  "vectors": [
+    {
+      "name": "empty",
+      "direction": "roundtrip",
+      "hex": "a0",
+      "patch": {},
+      "notes": "Empty patch: definite-length map with zero entries."
+    },
+    {
+      "name": "modified-scalar-int",
+      "direction": "roundtrip",
+      "hex": "a1616e07",
+      "patch": { "n": { "state": "modified", "value": 7 } },
+      "notes": "One modified value-typed scalar."
+    },
+    {
+      "name": "modified-scalar-float",
+      "direction": "roundtrip",
+      "hex": "a16166fa3f8ccccd",
+      "patch": { "f": { "state": "modified", "value": 1.1 } },
+      "notes": "f4 value written as CBOR float32 (0xFA). 1.1f is not losslessly representable as float16, so this was the one float value all three runtimes already agreed on before the width rule landed — see $floatEncoding."
+    },
+    {
+      "name": "modified-scalar-float-half-representable",
+      "direction": "roundtrip",
+      "hex": "a16166fa3fc00000",
+      "patch": { "f": { "state": "modified", "value": 1.5 } },
+      "notes": "R-FLOAT REGRESSION GUARD. 1.5f IS losslessly representable as float16, so this is precisely the case that used to diverge: C# wrote 'a16166f93e00' while TS and Rust wrote 'a16166fa3fc00000'. The declared f4 width must win. See $floatEncoding and /tests/golden/float.golden.json."
+    },
+    {
+      "name": "cleared-scalar-float",
+      "direction": "roundtrip",
+      "hex": "a16166f6",
+      "patch": { "f": { "state": "removed" } },
+      "notes": "R3 REGRESSION GUARD. Clearing a float MUST encode as null (0xF6). The old C# writer decided removal by null-checking the boxed value, so Removed() on a value-typed field wrote the field's default instead — 'a16166fa00000000' in every runtime today, and 'a16166f90000' in C# before the width rule landed — and removal silently became 'set to zero'."
+    },
+    {
+      "name": "cleared-scalar-reference",
+      "direction": "roundtrip",
+      "hex": "a16173f6",
+      "patch": { "s": { "state": "removed" } },
+      "notes": "Clearing a reference-typed field."
+    },
+    {
+      "name": "modified-array",
+      "direction": "roundtrip",
+      "hex": "a1656974656d7383010203",
+      "patch": { "items": { "state": "modified", "value": [1, 2, 3] } },
+      "notes": "A msg with an array field. R7 GUARD: the old C# formatter looked for a registered IonFormatter<IonArray<X>>, which never exists, and threw."
+    },
+    {
+      "name": "cleared-array",
+      "direction": "roundtrip",
+      "hex": "a1656974656d73f6",
+      "patch": { "items": { "state": "removed" } },
+      "notes": "Clearing an array field."
+    },
+    {
+      "name": "modified-optional-some",
+      "direction": "roundtrip",
+      "hex": "a1646e6f7465626869",
+      "patch": { "note": { "state": "modified", "value": "hi" } },
+      "notes": "A msg with an optional field, patched to Some."
+    },
+    {
+      "name": "cleared-optional",
+      "direction": "roundtrip",
+      "hex": "a1646e6f7465f6",
+      "patch": { "note": { "state": "removed" } },
+      "notes": "Clearing an optional field."
+    },
+    {
+      "name": "modified-optional-none",
+      "direction": "encode",
+      "hex": "a1646e6f7465f6",
+      "patch": { "note": { "state": "modified", "value": null } },
+      "decodesAs": "cleared-optional",
+      "notes": "Deliberate aliasing (R4): 'modified to none' and 'cleared' are the same bytes and decode as 'cleared'. Encode-only, because the decode direction is covered by cleared-optional."
+    },
+    {
+      "name": "all-fields",
+      "direction": "roundtrip",
+      "hex": "a5616e076166f66173626162656974656d7383010203646e6f7465626869",
+      "patch": {
+        "n": { "state": "modified", "value": 7 },
+        "f": { "state": "removed" },
+        "s": { "state": "modified", "value": "ab" },
+        "items": { "state": "modified", "value": [1, 2, 3] },
+        "note": { "state": "modified", "value": "hi" }
+      },
+      "notes": "Every field touched. Entry order is Ion declaration order (n, f, s, items, note), NOT insertion order."
+    },
+    {
+      "name": "unknown-keys-skipped",
+      "direction": "decode",
+      "hex": "a3637a7a7a820102616e07627171f6",
+      "patch": { "n": { "state": "modified", "value": 7 } },
+      "reencodedHex": "a1616e07",
+      "notes": "Decode-only. Map holds 'zzz': [1,2] and 'qq': null, neither of which is in the schema; both are skipped, including the null one."
+    },
+    {
+      "name": "indefinite-length-map",
+      "direction": "decode",
+      "hex": "bf616e076166f6ff",
+      "patch": {
+        "n": { "state": "modified", "value": 7 },
+        "f": { "state": "removed" }
+      },
+      "reencodedHex": "a2616e076166f6",
+      "notes": "Decode-only. R5 GUARD: an indefinite-length map (0xBF ... 0xFF). The old C# reader used length.GetValueOrDefault() and read zero entries, then desynchronised the reader on ReadEndMap(). Writers always emit definite length, so re-encoding produces 'a2616e076166f6'."
+    }
+  ]
+}

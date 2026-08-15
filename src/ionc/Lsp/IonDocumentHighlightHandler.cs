@@ -48,10 +48,30 @@ public class IonDocumentHighlightHandler(IonWorkspace workspace) : DocumentHighl
         // Definitions (Write highlights)
         foreach (var msg in file.messageSyntaxes)
         {
-            if (msg.Name.Identifier.Equals(word, StringComparison.OrdinalIgnoreCase))
+            // A hoisted inline type's name token spans the whole `msg { … }` body, so highlighting
+            // it would light up the entire declaration rather than an identifier.
+            if (!IonLspHelpers.IsHoistedInlineType(msg)
+                && msg.Name.Identifier.Equals(word, StringComparison.OrdinalIgnoreCase))
                 highlights.Add(MakeHighlight(msg.Name, DocumentHighlightKind.Write));
 
+            CollectMixinHighlights(msg.Mixins, word, highlights);
+
             foreach (var field in msg.Fields)
+            {
+                if (field.Name.Identifier.Equals(word, StringComparison.OrdinalIgnoreCase))
+                    highlights.Add(MakeHighlight(field.Name, DocumentHighlightKind.Write));
+                CollectTypeHighlights(field.Type, word, highlights);
+            }
+        }
+
+        foreach (var mixin in file.mixinSyntaxes)
+        {
+            if (mixin.Name.Identifier.Equals(word, StringComparison.OrdinalIgnoreCase))
+                highlights.Add(MakeHighlight(mixin.Name, DocumentHighlightKind.Write));
+
+            CollectMixinHighlights(mixin.Mixins, word, highlights);
+
+            foreach (var field in mixin.Fields)
             {
                 if (field.Name.Identifier.Equals(word, StringComparison.OrdinalIgnoreCase))
                     highlights.Add(MakeHighlight(field.Name, DocumentHighlightKind.Write));
@@ -162,17 +182,41 @@ public class IonDocumentHighlightHandler(IonWorkspace workspace) : DocumentHighl
         return Task.FromResult<DocumentHighlightContainer?>(new DocumentHighlightContainer(highlights));
     }
 
+    /// <summary>
+    /// Every occurrence of <paramref name="word"/> inside one type reference, at any depth.
+    /// </summary>
+    /// <remarks>
+    /// Recurses through <see cref="IonTypeParameterSyntax.Type"/>. Reading each argument's head
+    /// <c>Name</c> instead found the <c>Array</c> of <c>Map&lt;string, Array&lt;User&gt;&gt;</c>
+    /// and never the <c>User</c>, so putting the cursor on a nested type highlighted the
+    /// declaration but not the use.
+    /// </remarks>
     private static void CollectTypeHighlights(
         IonUnderlyingTypeSyntax type, string word, List<DocumentHighlight> highlights)
     {
+        // A rewritten inline reference carries the span of the whole body it was hoisted from.
+        if (type.IsInline || IonLspHelpers.IsSynthesizedSpan(type.Name))
+            return;
+
         if (type.Name.Identifier.Equals(word, StringComparison.OrdinalIgnoreCase))
             highlights.Add(MakeHighlight(type.Name, DocumentHighlightKind.Read));
 
         foreach (var generic in type.generics)
         {
-            if (generic.Name.Identifier.Equals(word, StringComparison.OrdinalIgnoreCase))
+            if (generic.Type is { } written)
+                CollectTypeHighlights(written, word, highlights);
+            else if (generic.Name.Identifier.Equals(word, StringComparison.OrdinalIgnoreCase))
                 highlights.Add(MakeHighlight(generic.Name, DocumentHighlightKind.Read));
         }
+    }
+
+    /// <summary>Occurrences of a name in a <c>with</c> clause.</summary>
+    private static void CollectMixinHighlights(
+        List<IonIdentifier>? clause, string word, List<DocumentHighlight> highlights)
+    {
+        foreach (var entry in clause ?? [])
+            if (entry.Identifier.Equals(word, StringComparison.OrdinalIgnoreCase))
+                highlights.Add(MakeHighlight(entry, DocumentHighlightKind.Read));
     }
 
     private static DocumentHighlight MakeHighlight(IonSyntaxBase node, DocumentHighlightKind kind)

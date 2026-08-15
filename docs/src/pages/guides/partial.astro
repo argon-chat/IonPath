@@ -1,0 +1,179 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+
+const toc = [
+  { id: 'syntax', title: 'Syntax' },
+  { id: 'tri-state', title: 'The three states' },
+  { id: 'wire-format', title: 'Wire format' },
+  { id: 'maybe-fields', title: 'Partial and Maybe<T>' },
+  { id: 'generated', title: 'Generated code' },
+  { id: 'schema-lock', title: 'Schema lock' },
+];
+---
+
+<DocsLayout title="Partial<T> — IonPath" current="/guides/partial/" toc={toc}>
+  <div class="animate-fade-in-up">
+    <h1 class="text-3xl font-bold tracking-tight mb-2">Partial&lt;T&gt;</h1>
+    <p class="text-text-secondary mb-8">A sparse patch over a message. Each field is independently <em>untouched</em>, <em>modified</em> or <em>cleared</em>, and only the fields you touch travel on the wire — the shape you want for PATCH-style updates and delta broadcasts.</p>
+  </div>
+
+  <div class="space-y-12 animate-fade-in-up-delay-1">
+
+    <section>
+      <h2 id="syntax" class="text-xl font-bold mb-4">Syntax</h2>
+      <p class="text-sm text-text-secondary mb-4">Write <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">~</code> as a <strong>suffix</strong>, after the type name — the same position as <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">?</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">[]</code>:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">msg</span> <span class="type-name">User</span> {'{'}
+    id: <span class="type-keyword">u4</span>;
+    name: <span class="type-keyword">string</span>;
+    email: <span class="type-keyword">string</span>?;
+{'}'}
+
+<span class="text-accent-3">service</span> <span class="type-name">UserService</span>() {'{'}
+    UpdateUser(id: <span class="type-keyword">u4</span>, patch: <span class="type-name">User</span>~): <span class="type-name">User</span>;
+{'}'}
+
+<span class="text-accent-3">msg</span> <span class="type-name">UserChanged</span> {'{'}
+    userId: <span class="type-keyword">u4</span>;
+    delta: <span class="type-name">User</span>~;      <span class="text-text-muted">// works in a field position too</span>
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T~</code> is shorthand for the built-in generic <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Partial&lt;T&gt;</code>, exactly as <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T?</code> is shorthand for <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Maybe&lt;T&gt;</code>. Both come from the standard library, so the <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">std</code> <a href="/guides/directives/" class="text-accent hover:underline">feature</a> must be enabled.</p>
+
+      <div class="glass rounded-xl p-4 mt-4 border-l-2 border-accent/40">
+        <p class="text-sm font-medium mb-1">Only meaningful on a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg</code></p>
+        <p class="text-xs text-text-secondary">A partial is a per-field patch, so it needs a type that <em>has</em> fields. <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">u4~</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">string~</code> or <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Status~</code> over an enum describe nothing — there are no field names to key the map by. Apply <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">~</code> to message types only.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="tri-state" class="text-xl font-bold mb-4">The three states</h2>
+      <p class="text-sm text-text-secondary mb-4">This is what separates a partial from "a message where every field is optional". An optional field can only say <em>present</em> or <em>absent</em>; a partial distinguishes <em>"do not touch this"</em> from <em>"set this to nothing"</em>:</p>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>State</span>
+          <span>Meaning</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">untouched</span>
+          <span class="text-[12px] text-text-secondary">The sender said nothing about this field. The receiver keeps whatever it already had.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">modified</span>
+          <span class="text-[12px] text-text-secondary">The sender supplied a new value. The receiver overwrites the field.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="font-mono text-[12px] type-keyword">cleared</span>
+          <span class="text-[12px] text-text-secondary">The sender explicitly erased the field. The receiver resets it.</span>
+        </div>
+      </div>
+      <p class="text-sm text-text-secondary mt-4">A patch that touches nothing is a legal, empty patch — an "apply no changes" message, not an error.</p>
+    </section>
+
+    <section>
+      <h2 id="wire-format" class="text-xl font-bold mb-4">Wire format</h2>
+      <p class="text-sm text-text-secondary mb-4">Every other Ion type encodes as a <strong>positional CBOR array</strong>: field identity is the slot index, which is why reordering fields is a breaking change (<a href="/guides/diagnostics/#ION0021" class="text-accent hover:underline">ION0021</a>). A partial is the one exception. It encodes as a <strong>definite-length CBOR map</strong>:</p>
+      <div class="type-grid">
+        <div class="type-grid-header">
+          <span>Element</span>
+          <span>Encoding</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="text-[12px]">Container</span>
+          <span class="text-[12px] text-text-secondary">CBOR map. Writers emit a <strong>definite</strong> length equal to the number of touched fields; readers must also accept an indefinite-length map.</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="text-[12px]">Key</span>
+          <span class="text-[12px] text-text-secondary">CBOR text string holding the <strong>Ion field name</strong> — not an index</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="text-[12px]">Modified value</span>
+          <span class="text-[12px] text-text-secondary">The field's own encoding, exactly as it would appear inside the full message</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="text-[12px]">Cleared value</span>
+          <span class="text-[12px] text-text-secondary">CBOR <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">null</code></span>
+        </div>
+        <div class="type-grid-row">
+          <span class="text-[12px]">Untouched field</span>
+          <span class="text-[12px] text-text-secondary">No key at all</span>
+        </div>
+        <div class="type-grid-row">
+          <span class="text-[12px]">Unknown key</span>
+          <span class="text-[12px] text-text-secondary">Skipped on read — a reader tolerates keys it does not recognise</span>
+        </div>
+      </div>
+      <p class="text-sm text-text-secondary mt-4">A patch that sets <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">name</code> and clears <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">email</code>, leaving <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">id</code> untouched:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// CBOR diagnostic notation</span>
+{'{'}
+    <span class="text-accent-2">"name"</span>: <span class="text-accent-2">"New Name"</span>,
+    <span class="text-accent-2">"email"</span>: <span class="text-accent-3">null</span>
+{'}'}</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">Entries are written in Ion declaration order, so the same patch produces the same bytes on every target. Two further consequences follow from keying by name rather than index:</p>
+      <ul class="text-sm text-text-secondary space-y-2 mt-3 ml-4">
+        <li>• <strong>Reordering a message's fields does not break its partials.</strong> The lock still rejects the reorder for the message itself, because the full message is positional.</li>
+        <li>• <strong>Renaming a field does break its partials.</strong> A rename is invisible to the positional encoding of the message itself — the array carries no names — but inside a partial the name <em>is</em> the wire identity.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 id="maybe-fields" class="text-xl font-bold mb-4">Partial and Maybe&lt;T&gt;</h2>
+      <p class="text-sm text-text-secondary mb-4">For a field that is already optional — <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">email: string?</code> — <em>cleared</em> and <em>set to none</em> coincide. Both are a CBOR <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">null</code> under the field's key, and a receiver cannot tell them apart. That is deliberate: for a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Maybe&lt;T&gt;</code> field the two requests mean the same thing.</p>
+      <p class="text-sm text-text-secondary">The distinction that survives is still the useful one: <em>untouched</em> (key absent, keep the current value, whatever it is) versus <em>null</em> (key present, the field ends up empty).</p>
+      <p class="text-sm text-text-secondary mt-3">For a non-optional field, clearing means resetting to the target language's default — there is no "absent" state to fall back to. Prefer marking a field <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T?</code> if clearing it is a meaningful operation.</p>
+    </section>
+
+    <section>
+      <h2 id="generated" class="text-xl font-bold mb-4">Generated code</h2>
+      <p class="text-sm text-text-secondary mb-4">The CBOR map above is the contract. What each target hands you to build and read that map differs.</p>
+
+      <h3 class="text-lg font-semibold mt-6 mb-3">C#</h3>
+      <p class="text-sm text-text-secondary mb-3"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Partial&lt;T&gt;</code> resolves to <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">IonPartial&lt;T&gt;</code> from <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ion.runtime</code>. Field state is a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">PartialField&lt;T&gt;</code>, whose <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">State</code> is <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">None</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Modified</code> or <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Removed</code>:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-text-muted">// Build a patch — Modify and Remove are chainable</span>
+<span class="text-accent-3">var</span> patch = <span class="text-accent-3">new</span> <span class="type-name">IonPartial</span>&lt;<span class="type-name">User</span>&gt;()
+    .Modify(u => u.name, <span class="text-accent-2">"New Name"</span>)
+    .Remove(u => u.email);
+<span class="text-text-muted">// u.id was never mentioned — it stays untouched</span>
+
+<span class="text-text-muted">// Apply a patch: On() fires only for modified and cleared fields</span>
+patch
+    .On(u => u.name,  v => user = user <span class="text-accent-3">with</span> {'{'} name = v {'}'})
+    .On(u => u.email, v => user = user <span class="text-accent-3">with</span> {'{'} email = v {'}'});
+
+<span class="text-text-muted">// Or inspect a single field</span>
+<span class="text-accent-3">var</span> name = patch.GetField(u => u.name);
+<span class="text-accent-3">if</span> (name.State == <span class="type-name">PartialState</span>.Modified)
+    Console.WriteLine(name.Value);</pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">The single-handler <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">On</code> passes <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">default</code> for a cleared field, which for a value type is indistinguishable from "modified to zero". When that distinction matters — and for a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">u4</code> or <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">f4</code> field it usually does — use the two-handler overload, which separates the cases:</p>
+      <div class="code-block text-[13px]">
+        <pre>patch.On(u => u.score,
+    v  => user = user <span class="text-accent-3">with</span> {'{'} score = v {'}'},   <span class="text-text-muted">// modified</span>
+    () => user = user <span class="text-accent-3">with</span> {'{'} score = <span class="text-accent-3">0</span> {'}'});  <span class="text-text-muted">// cleared</span></pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3"><code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">SetField</code> / <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">GetField</code> take an explicit <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">PartialField&lt;T&gt;</code> if you need to move field state around as a value; both also have name-based overloads. The map keys are the Ion field names, which are also the generated member names.</p>
+
+      <h3 class="text-lg font-semibold mt-6 mb-3">TypeScript and Rust</h3>
+      <p class="text-sm text-text-secondary mb-3">Both runtimes model the same three states over the same CBOR map, but the generated surface is target-idiomatic rather than a transliteration of the C# API — check the emitted <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">.ts</code> / <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">.rs</code> for the concrete names. What is fixed across targets is the encoding:</p>
+      <ul class="text-sm text-text-secondary space-y-2 mt-3 ml-4">
+        <li>• A patch produced by any target is readable by any other.</li>
+        <li>• An absent key means untouched.</li>
+        <li>• <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">null</code> means cleared.</li>
+        <li>• Unrecognised keys are skipped rather than treated as an error.</li>
+      </ul>
+
+      <h3 class="text-lg font-semibold mt-6 mb-3">Rust — one field-name restriction</h3>
+      <p class="text-sm text-text-secondary">Rust supports patches, with one limit. The patch macro derives its CBOR map keys from the Rust field identifiers, and that preserves the raw-identifier prefix, so a field named after a Rust keyword would go on the wire as <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">"r#type"</code> rather than <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">"type"</code> and desynchronise from the other runtimes. The generator reports <a href="/guides/diagnostics/#ION0051" class="text-accent hover:underline">ION0051</a> instead of emitting it. This only applies to a <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">msg</code> actually used as a patch target — an ordinary Rust struct is positional and its field names never reach the wire.</p>
+    </section>
+
+    <section>
+      <h2 id="schema-lock" class="text-xl font-bold mb-4">Schema lock</h2>
+      <p class="text-sm text-text-secondary mb-4">A partial is recorded in <code class="bg-oled-elevated px-1.5 py-0.5 rounded font-mono text-[11px]">ion.lock.json</code> as the field type <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">Partial&lt;T&gt;</code>, like any other generic. Switching a field between <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T</code> and <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T~</code> is a type change and raises <a href="/guides/diagnostics/#ION0022" class="text-accent hover:underline">ION0022</a> — as it should, since the encoding changes from a positional array to a map.</p>
+      <p class="text-sm text-text-secondary">The lock tracks <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T</code>'s fields, not the patch's. Because a partial keys by name, treat a field <em>rename</em> in a message that is used as <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T~</code> anywhere as a wire-breaking change even where the lock stays quiet about it.</p>
+    </section>
+
+  </div>
+</DocsLayout>

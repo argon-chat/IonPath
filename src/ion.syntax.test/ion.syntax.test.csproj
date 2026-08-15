@@ -26,6 +26,9 @@
     <ProjectReference Include="..\ion.compiler\ion.compiler.csproj" />
     <ProjectReference Include="..\ion.runtime\ion.runtime.csproj" />
     <ProjectReference Include="..\ion.syntax\ion.syntax.csproj" />
+    <!-- The code generators live in ionc; TypedefTests asserts on their output
+         (a typedef must not produce a formatter). -->
+    <ProjectReference Include="..\ionc\ionc.csproj" />
   </ItemGroup>
 
   <ItemGroup>
