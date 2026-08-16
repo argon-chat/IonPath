@@ -1,5 +1,5 @@
 import { CborReader, CborWriter } from "../cbor";
-import { IonFormatter, IonFormatterStorage } from "../logic/IonFormatter";
+import { type IonFormatter, IonFormatterStorage } from "../logic/IonFormatter";
 
 
 const f2Formatter: IonFormatter<number> = {

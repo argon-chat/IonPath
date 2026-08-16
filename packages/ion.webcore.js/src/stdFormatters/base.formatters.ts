@@ -1,11 +1,11 @@
 import {
-  DateOnly,
-  Duration,
-  Guid,
-  IonBytes,
+  type DateOnly,
+  type Duration,
+  type Guid,
+  type IonBytes,
   IonDateTime,
   IonDecimal,
-  TimeOnly,
+  type TimeOnly,
 } from "../baseTypes";
 import { CborReader, CborWriter } from "../cbor";
 import { CborReaderState } from "../cbor/CborReader";

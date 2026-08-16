@@ -1,4 +1,4 @@
-import { IonArray, IonPartial } from "../baseTypes";
+import type { IonArray, IonPartial } from "../baseTypes";
 import { CborReader, CborWriter } from "../cbor";
 import { CborReaderState } from "../cbor/CborReader";
 import {
@@ -8,8 +8,8 @@ import {
   IonMalformedValueError,
   IonUnexpectedTagError,
 } from "../errors";
-import { IonClientContext } from "../unary/IonUnaryRequest";
-import { IIonService } from "./IIonService";
+import type { IonClientContext } from "../unary/IonUnaryRequest";
+import type { IIonService } from "./IIonService";
 import { ServiceExecutor } from "./ServiceExecutor";
 
 /** CBOR tag 258 — the IANA-registered "set" tag. */

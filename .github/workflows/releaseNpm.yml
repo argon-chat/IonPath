@@ -1,0 +1,112 @@
+# Publishes @argon-chat/ion.webcore to npm using Trusted Publishing (OIDC).
+#
+# There is no NPM_TOKEN and there must not be one: npm mints a short-lived credential from the
+# GitHub OIDC token this workflow requests. That requires two things to line up.
+#
+#   1. `id-token: write` below. Without it there is no OIDC token to exchange and `npm publish`
+#      falls back to looking for a token it will not find.
+#   2. A Trusted Publisher configured on npmjs.com for the package, pointing at this repository
+#      and at this workflow *by filename*. That is why the file is named `releaseNpm.yml` and why
+#      renaming it silently breaks publishing — npm matches the filename, not the workflow name.
+#
+# Provenance is generated automatically under trusted publishing; it is not requested explicitly.
+#
+# Releasing is a version bump: push to master with a new `version` in package.json and this
+# publishes it. A push that leaves the version alone still builds and tests, then stops — see the
+# "Check the version is not already published" step.
+
+name: Release npm — ion.webcore
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "packages/ion.webcore.js/**"
+      - ".github/workflows/releaseNpm.yml"
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Build, test and pack, but do not publish"
+        type: boolean
+        default: false
+
+concurrency:
+  # Two pushes to master in quick succession would otherwise race on the same version; npm rejects
+  # the loser with a bare 409 rather than saying they collided.
+  group: release-npm-ion-webcore
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: packages/ion.webcore.js
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write # required — this is what trusted publishing exchanges
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Ensure an npm that supports trusted publishing
+        # OIDC publishing needs npm >= 11.5.1; the npm bundled with the Node 22 runner is older.
+        run: npm install -g npm@latest
+        working-directory: .
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Type-check and build
+        run: bun run build
+
+      - name: Test
+        run: bun run test
+
+      - name: Resolve package identity
+        id: pkg
+        run: |
+          name=$(node -p "require('./package.json').name")
+          version=$(node -p "require('./package.json').version")
+          echo "name=$name"       >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Resolved $name@$version"
+
+      - name: Check the version is not already published
+        id: published
+        # Load-bearing, not a nicety. Every push to master that touches the package runs this
+        # workflow, and most of those pushes will not have bumped the version. Publishing is
+        # therefore gated on the version being new: bump `version` in package.json to release,
+        # and every other push is a build-and-test run that stops short of npm.
+        #
+        # `npm view` exits non-zero when the exact version does not exist, which is the success
+        # case here.
+        run: |
+          if npm view "${{ steps.pkg.outputs.name }}@${{ steps.pkg.outputs.version }}" version >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::${{ steps.pkg.outputs.name }}@${{ steps.pkg.outputs.version }} is already on npm — building and testing only."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Pack (dry run)
+        if: inputs.dry-run || steps.published.outputs.exists == 'true'
+        run: npm pack --dry-run
+
+      - name: Publish
+        if: '!inputs.dry-run && steps.published.outputs.exists == ''false'''
+        # No NODE_AUTH_TOKEN: the credential comes from the OIDC exchange. `--access public` is
+        # required because the package is scoped and scoped packages default to restricted.
+        run: npm publish --access public

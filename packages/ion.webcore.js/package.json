@@ -1,32 +1,35 @@
 {
   "name": "@argon-chat/ion.webcore",
-  "version": "1.1.24",
+  "version": "1.2.0",
   "main": "./dist/ion.webcore.cjs",
   "module": "./dist/ion.webcore.js",
   "devDependencies": {
-    "@commitlint/cli": "^19.8.0",
-    "@commitlint/config-conventional": "^19.8.0",
-    "@types/node": "^22.13.14",
-    "@vitest/coverage-v8": "^3.0.9",
-    "camelcase": "^8.0.0",
-    "cbor-x": "^1.6.0",
-    "changelogen": "^0.6.1",
-    "typescript": "^5.8.2",
-    "vite": "^6.2.3",
-    "vite-plugin-dts": "^4.5.3",
-    "vitest": "^3.0.9"
+    "@commitlint/cli": "^21.2.2",
+    "@commitlint/config-conventional": "^21.2.2",
+    "@microsoft/api-extractor": "^7.58.12",
+    "@types/node": "^26.2.0",
+    "@vitest/coverage-v8": "^4.1.10",
+    "camelcase": "^9.0.0",
+    "cbor-x": "^1.6.5",
+    "changelogen": "^0.6.2",
+    "typescript": "6.0.3",
+    "vite": "^8.2.1",
+    "vite-plugin-dts": "5.0.3",
+    "vitest": "^4.1.10"
   },
   "exports": {
     ".": {
+      "types": "./dist/ion.webcore.d.ts",
       "import": "./dist/ion.webcore.js",
       "require": "./dist/ion.webcore.cjs"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": ["dist"],
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "release": "bun test && bun build && changelogen --release --push && bun publish",
+    "release": "bun run test && bun run build && changelogen --release --no-tag",
     "test": "vitest --run",
     "test:watch": "vitest",
     "test:coverage": "vitest --coverage"

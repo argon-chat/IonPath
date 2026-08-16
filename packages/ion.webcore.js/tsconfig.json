@@ -1,21 +1,42 @@
 {
   "compilerOptions": {
-    "target": "ESNext",
-    "lib": ["ESNext", "DOM"],
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "rootDir": "./src",
-    "module": "node16",
-    "moduleResolution": "node16",
+
+    // The package ships only `dist/`, bundled by Vite, and `tsc` runs purely as a type gate
+    // (`noEmit`). `bundler` is the resolution Vite actually implements: relative imports resolve
+    // without a `.js` suffix, and `exports` maps in dependencies are honoured. The previous
+    // `node16` pair demanded explicit extensions on every relative import and failed the build
+    // with ~40 TS2834/TS2835 errors, none of which said anything about this code.
+    "module": "esnext",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
+
+    // Every file must be transpilable on its own: Vite/esbuild compile per-file and never see the
+    // type graph. `verbatimModuleSyntax` makes the type-only imports explicit rather than leaving
+    // elision up to the bundler.
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+
     "strict": true,
+    "noImplicitOverride": true,
     "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
+    "useUnknownInCatchVariables": true,
+
     "noEmit": true,
     "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+    "emitDeclarationOnly": false,
+
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true
   },
   "include": ["src/**/*"],
-  "exclude": ["**/*.test.ts", "test/**", "node_modules"]
+  "exclude": ["**/*.test.ts", "test/**", "node_modules", "dist"]
 }

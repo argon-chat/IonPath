@@ -17,7 +17,11 @@ export default defineConfig({
     },
   },
   plugins: [
-    dts({ rollupTypes: true }),
+    // `bundleTypes` is what `rollupTypes` was called before vite-plugin-dts 5 moved onto
+    // unplugin-dts. The old name is silently ignored, which drops the rollup and emits a tree of
+    // per-file `.d.ts` instead of the single `dist/ion.webcore.d.ts` that `package.json` points
+    // `types` at — a published package with no types and no error to say so.
+    dts({ bundleTypes: true }),
   ],
   test: {},
 })

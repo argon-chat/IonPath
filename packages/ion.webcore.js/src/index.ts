@@ -37,7 +37,7 @@ export {
 } from "./unary/IonUnaryRequest";
 
 import type { IonCallContext, IonClientContext, IonInterceptor, IonProtocolError } from "./unary/IonUnaryRequest";
-import { IIonService } from "./logic/IIonService";
+import type { IIonService } from "./logic/IIonService";
 import { ServiceExecutor } from "./logic/ServiceExecutor";
 export type { IonArray, IonPartial, IonPartialOf } from "./baseTypes";
 export {
@@ -51,4 +51,4 @@ export {
 
 export { IonCorrelation, createIonClientContext } from "./logic/IonCorrelation";
 
-export { IonCallContext, IonClientContext, IonInterceptor, IonProtocolError }
+export type { IonCallContext, IonClientContext, IonInterceptor, IonProtocolError }

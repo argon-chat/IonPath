@@ -1,5 +1,5 @@
 import { CborReader } from "../cbor";
-import { IonArray } from "../baseTypes";
+import type { IonArray } from "../baseTypes";
 import { IonFormatterStorage } from "../logic/IonFormatter";
 import { safeFetchBuffer } from "../yetAnotherFetch";
 

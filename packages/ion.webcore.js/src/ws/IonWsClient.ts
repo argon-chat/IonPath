@@ -2,8 +2,8 @@ import { CborReader, CborWriter } from "../cbor";
 import { IonFormatterStorage } from "../logic/IonFormatter";
 import { safeFetchBuffer } from "../yetAnotherFetch";
 import {
-  IonCallContext,
-  IonClientContext,
+  type IonCallContext,
+  type IonClientContext,
   IonContentType,
   IonProtocolError,
   IonRequestException,
