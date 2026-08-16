@@ -1,6 +1,19 @@
 {
   "name": "@argon-chat/ion.webcore",
   "version": "1.2.0",
+  "description": "Browser and Node runtime for the IonPath protocol: CBOR formatters, unary and WebSocket clients, and service executors for code generated from .ion contracts.",
+  "license": "MIT",
+  "author": "Argon Inc. LLC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/argon-chat/IonPath.git",
+    "directory": "packages/ion.webcore.js"
+  },
+  "homepage": "https://github.com/argon-chat/IonPath",
+  "bugs": {
+    "url": "https://github.com/argon-chat/IonPath/issues"
+  },
+  "keywords": ["ion", "ionpath", "cbor", "rpc", "codegen", "protocol"],
   "main": "./dist/ion.webcore.cjs",
   "module": "./dist/ion.webcore.js",
   "devDependencies": {
