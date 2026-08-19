@@ -419,6 +419,12 @@ public static class RpcEndpoints
                     if (error is not null)
                     {
                         log.LogWarning(error.ToString());
+                        // Every other failure branch sets a status before writing the body; this one did not, so a
+                        // refused ticket answered 200 OK with an error payload. A WebSocket client sees only that
+                        // the handshake did not upgrade — "Incomplete handshake, status code: 200" — with no way to
+                        // reach the reason. 401 rather than the neighbouring 412: the ticket parsed fine, it was
+                        // rejected.
+                        http.Response.StatusCode = StatusCodes.Status401Unauthorized;
                         await WriteError(http.Response, error.Value);
                         sw.Stop();
                         IonInstruments.RecordRequest("ws", endpoint, http.Response.StatusCode);

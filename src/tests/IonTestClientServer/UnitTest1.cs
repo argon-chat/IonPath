@@ -115,7 +115,10 @@ public class Tests
     public async Task FullDuplexStream_Test_StreamRandomFloats()
     {
         await using var scope = _factoryAsp.Services.CreateAsyncScope();
-        var client = IonClient.Create(httpClient, WsFactory);
+        // Authenticates like its server-streaming sibling above. Without the interceptor there is no
+        // authToken, so the ticket exchange refuses the connection — which used to surface as an
+        // unexplained "Incomplete handshake, status code: 200" rather than as a rejected ticket.
+        var client = IonClient.Create(httpClient, WsFactory).WithInterceptor<InterceptorTest>();
         var service = client.ForService<IRandomStreamInteraction>(scope);
 
         var result = new List<float>();

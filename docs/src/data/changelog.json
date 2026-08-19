@@ -1,5 +1,44 @@
 [
   {
+    "version": "1.16.0",
+    "date": "2026-08-20",
+    "title": "Real Errors From the .NET Client",
+    "changes": [
+      {
+        "type": "fixed",
+        "description": "The .NET client discarded the error the server actually sent. On the unary path the decoded IonProtocolError was thrown inside a try whose own catch(Exception) caught it and replaced it with the HTTP reason phrase, so every server-side failure surfaced as a bare \"UPSTREAM_ERROR: Bad Request\" with the real code and message gone. The sibling code path rethrew correctly; the two had drifted and are now one helper"
+      },
+      {
+        "type": "changed",
+        "description": "When a failed response body is not an Ion error at all — a proxy, a load balancer, an ASP.NET error page, or a crash before the Ion handler ran — the client no longer throws the body away. The exception now carries the HTTP status, the reason phrase, why the CBOR decode failed, and a preview of the body: text when it is text, hex when it is not"
+      },
+      {
+        "type": "added",
+        "description": "IonRequestException exposes HttpStatusCode and ResponseBody, so a transport failure can be inspected programmatically instead of by parsing the message string"
+      },
+      {
+        "type": "fixed",
+        "description": "A WebSocket connection with a rejected ticket answered 200 OK with an error body, because that one branch wrote the payload without setting a status while every neighbouring branch set one. A client saw only that the handshake did not upgrade, with no way to reach the reason. It is now 401 — the ticket parsed and was refused, which is a different thing from the malformed-ticket 412 beside it"
+      },
+      {
+        "type": "changed",
+        "description": "ion.webcore is built with TypeScript 6. Its tsconfig moved to bundler module resolution, which is what Vite actually implements; the previous node16 pair demanded an explicit .js suffix on every relative import and failed the build with about fifty errors, none of them about the code. isolatedModules and verbatimModuleSyntax are on, because Vite compiles per file and never sees the type graph"
+      },
+      {
+        "type": "changed",
+        "description": "ion.webcore dependencies updated to current: Vite 8, Vitest 4, @types/node 26, api-extractor 7.58, vite-plugin-dts 5. The dts plugin renamed its rollup option and silently ignores the old name, which left unchanged would have shipped a package whose types field pointed at a file that no longer existed"
+      },
+      {
+        "type": "fixed",
+        "description": "ion.webcore had no repository, license, homepage or description in its manifest, and its exports map had no types condition — so npm could not verify build provenance, and modern resolvers, which read exports first, found no types at all"
+      },
+      {
+        "type": "added",
+        "description": "ion.webcore publishes from CI through npm Trusted Publishing over OIDC. There is no publish token: the credential is minted from the identity of the workflow itself, and provenance is signed with the source and build it came from. A push to master carrying a new version releases it; a push that leaves the version alone builds and tests, then stops"
+      }
+    ]
+  },
+  {
     "version": "1.15.0",
     "date": "2026-08-15",
     "title": "Comments, Typedefs, Partial<T>, Typed Attributes, Collections and decimal — and Removing What Never Worked",

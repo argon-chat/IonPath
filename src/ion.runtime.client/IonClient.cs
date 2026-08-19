@@ -140,20 +140,7 @@ public class IonWsClient(IonClientContext context, Type interfaceName, MethodInf
             callContext.ResponseItems.Add(header.Key, header.Value.ToString() ?? "");
 
         if (!c.HttpResponse.IsSuccessStatusCode)
-        {
-            try
-            {
-                var reader = new CborReader(buf);
-                var error = IonFormatterStorage<IonProtocolError>.Read(reader);
-                throw new IonRequestException(error);
-            }
-            catch (IonRequestException) { throw; }
-            catch
-            {
-                throw new IonRequestException(
-                    IonProtocolError.UPSTREAM_ERROR(((int)c.HttpResponse.StatusCode).ToString()));
-            }
-        }
+            throw IonResponseError.From(c.HttpResponse, buf);
 
         if (buf.Length == 0)
             throw new IonRequestException(IonProtocolError.UPSTREAM_ERROR("Empty response from ion.att"));
@@ -585,18 +572,7 @@ public class IonRequest(IonClientContext context, Type interfaceName, MethodInfo
             c.ResponsePayload = respBytes;
 
             if (!c.HttpResponse.IsSuccessStatusCode)
-            {
-                try
-                {
-                    var error = IonFormatterStorage<IonProtocolError>.Read(new CborReader(respBytes));
-                    throw new IonRequestException(error);
-                }
-                catch (Exception)
-                {
-                    throw new IonRequestException(IonProtocolError.UPSTREAM_ERROR(c.HttpResponse.ReasonPhrase ??
-                        c.HttpResponse.StatusCode.ToString()));
-                }
-            }
+                throw IonResponseError.From(c.HttpResponse, respBytes);
         }
     }
 
@@ -756,5 +732,73 @@ public sealed class IonCallContext(
         HttpRequest?.Dispose();
         HttpResponse?.Dispose();
         Stopwatch.Stop();
+    }
+}
+
+/// <summary>
+/// Builds the exception for a non-2xx Ion response.
+/// </summary>
+/// <remarks>
+/// Both call sites used to inline this, and they had drifted. One wrapped the decode in
+/// <c>try { … throw new IonRequestException(error); } catch (Exception) { … }</c> — so the
+/// correctly decoded server error was caught by its own catch and replaced with the HTTP reason
+/// phrase. Every server-side failure on that path surfaced as a bare
+/// <c>UPSTREAM_ERROR: Bad Request</c> with the real code and message discarded.
+/// <para>
+/// The other site rethrew correctly but still threw the body away when it was not CBOR, which is
+/// exactly the case where the body is the only evidence there is.
+/// </para>
+/// </remarks>
+internal static class IonResponseError
+{
+    private const int PreviewLimit = 2048;
+
+    public static IonRequestException From(HttpResponseMessage response, ReadOnlyMemory<byte> body)
+    {
+        var status = (int)response.StatusCode;
+
+        try
+        {
+            // The happy path for a failure: the server wrote a real IonProtocolError.
+            var decoded = IonFormatterStorage<IonProtocolError>.Read(new CborReader(body));
+            return new IonRequestException(decoded, status, null);
+        }
+        catch (Exception decodeFailure)
+        {
+            // Not an Ion error at all — a proxy, a load balancer, an ASP.NET error page, or a
+            // failure that happened before the Ion handler ran. Carry everything we have.
+            var reason = string.IsNullOrWhiteSpace(response.ReasonPhrase)
+                ? response.StatusCode.ToString()
+                : response.ReasonPhrase;
+
+            return new IonRequestException(
+                IonProtocolError.UPSTREAM_ERROR(
+                    $"HTTP {status} {reason}; the response body is not an Ion error ({decodeFailure.Message})"),
+                status,
+                Preview(body));
+        }
+    }
+
+    /// <summary>Renders a body for a human: text when it is text, hex when it is not.</summary>
+    private static string Preview(ReadOnlyMemory<byte> body)
+    {
+        if (body.Length == 0)
+            return "<empty>";
+
+        var span = body.Span;
+        var probe = span[..Math.Min(span.Length, 512)];
+        var printable = 0;
+
+        foreach (var b in probe)
+            if (b is 0x09 or 0x0A or 0x0D or (>= 0x20 and < 0x7F) or >= 0x80)
+                printable++;
+
+        // A CBOR payload the decoder rejected is still worth showing, just not as mojibake.
+        if (probe.Length > 0 && printable * 10 < probe.Length * 9)
+            return $"<{body.Length} bytes, not text> " +
+                   Convert.ToHexString(span[..Math.Min(span.Length, 128)]).ToLowerInvariant();
+
+        var text = Encoding.UTF8.GetString(span[..Math.Min(span.Length, PreviewLimit)]);
+        return body.Length > PreviewLimit ? text + $"… (+{body.Length - PreviewLimit} bytes)" : text;
     }
 }

@@ -178,7 +178,10 @@ public class BytesTest : ITestBlobs
     public async Task<IonBytes> DoIt(IonBytes data, CancellationToken ct = default)
     {
         var blob = data.Memory.ToArray();
-        blob.Reverse();
+        // `blob.Reverse()` binds to LINQ's Enumerable.Reverse, which returns a new sequence and
+        // discards it — the array was never actually reversed, so DoIt/DoIt2/DoIt3 echoed the input
+        // back unchanged and every UnaryCall_Bytes case failed on the first byte.
+        Array.Reverse(blob);
         return new IonBytes(blob);
     }
 
