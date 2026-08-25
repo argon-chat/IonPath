@@ -146,14 +146,30 @@ public static class SchemaLockGenerator
         };
     }
 
+    /// <remarks>
+    /// The case payload lists this writes are what <see cref="IonSchemaLock.CurrentVersion"/> 2 is
+    /// for; see <see cref="IonLockedUnionCase.Fields"/> for why they have to exist and why their
+    /// indices are offset by the shared field count.
+    /// </remarks>
     private static IonLockedDefinition LockUnion(IonUnion union)
     {
+        // `TransformStage.PrependFields` copies the union's shared fields onto the front of every
+        // case's field list, so a case's own payload is the tail after them. Only the tail is
+        // written — the prefix is already recorded once, under `sharedFields` — but the indices are
+        // the real encoded positions, not 0-based within the tail, because that is what a reader
+        // consumes and what ION0021 has to be able to compare.
+        var sharedCount = union.sharedFields.Count;
+
         var cases = union.types
             .Select((t, i) => new IonLockedUnionCase
             {
                 Index = i,
                 Name = t.name.Identifier,
-                Type = t.IsUnionCase ? null : GetCanonicalTypeName(t)
+                // A `case Foo` reference resolves to Foo's own declaration, which is locked under
+                // its own name and carries no shared-field prefix. Recording its fields here would
+                // duplicate that entry and report one edit to Foo twice, so it stays type-only.
+                Type = t.IsUnionCase ? null : GetCanonicalTypeName(t),
+                Fields = t.IsUnionCase ? LockCaseFields(t, sharedCount) : null
             })
             .ToList();
 
@@ -174,6 +190,25 @@ public static class SchemaLockGenerator
             NextIndex = cases.Count
         };
     }
+
+    /// <summary>
+    /// One inline union case's own payload fields, at their encoded indices.
+    /// </summary>
+    /// <remarks>
+    /// Returns an empty list rather than <see langword="null"/> for a case with no payload:
+    /// <see cref="IonLockedUnionCase.Fields"/> uses <see langword="null"/> to mean "not recorded",
+    /// and a payload-less <c>A()</c> is a recorded fact about the wire, not a gap.
+    /// </remarks>
+    private static List<IonLockedField> LockCaseFields(IonType @case, int sharedCount) =>
+        @case.fields
+            .Skip(sharedCount)
+            .Select((f, i) => new IonLockedField
+            {
+                Index = sharedCount + i,
+                Name = f.name.Identifier,
+                Type = GetCanonicalTypeName(f.type)
+            })
+            .ToList();
 
     /// <summary>
     /// The wire identity of a type, as one string — this is what ION0022 compares between runs.

@@ -314,30 +314,73 @@ public partial class IonParser
         ).Optional();
 
     /// <summary>
-    /// One field. Parameterised by the type parser so that the body of an inline anonymous type is
-    /// the very same production one level down, rather than a copy that can drift from it.
+    /// What makes a field recognisable as one: its leading section, its name, and a <c>:</c> in
+    /// sight. Everything after this is the field's <em>type</em>, and a mistake there is a mistake in
+    /// a field that was written — see <see cref="IonMemberSlot{T}"/> for why that distinction is the
+    /// whole of member level recovery.
     /// </summary>
-    private static Parser<char, IonFieldSyntax> FieldOf(Parser<char, IonUnderlyingTypeSyntax> type) =>
+    /// <remarks>
+    /// The lookahead accepts <c>?</c> as well as <c>:</c> so that <c>a?: i4;</c> is recognised as the
+    /// field it is trying to be, and the <c>ForbidNext</c> in the tail gets to say
+    /// "'?' is not allowed after field name" instead of the whole field being skipped as noise.
+    /// It looks rather than consumes, so the tail below is character for character the production it
+    /// always was.
+    /// </remarks>
+    private readonly record struct IonFieldHead(IonLeading Lead, SourcePos Position, IonIdentifier Name);
+
+    private static Parser<char, IonFieldHead> FieldHead =>
         Map(
-            (lead, pos, name, _, _, fieldType, __) => new IonFieldSyntax(name, fieldType)
-                .WithComments(lead.Doc)
-                .WithAttributes(lead.Attributes)
-                .WithPos(pos),
+            (lead, pos, name, _) => new IonFieldHead(lead, pos, name),
             LeadingSection,
             CurrentPos,
             Identifier.Labelled("field name").Before(SkipTrivia),
+            Lookahead(OneOf(Char(':'), Char('?'))).Labelled("':' after field name")
+        );
+
+    private static Parser<char, IonUnderlyingTypeSyntax> FieldTailOf(
+        Parser<char, IonUnderlyingTypeSyntax> type) =>
+        Map(
+            (_, _, fieldType, __) => fieldType,
             ForbidNext('?', "'?' is not allowed after field name"),
             Char(':').Labelled("':' after field name").Before(SkipTrivia),
             type,
             Char(';').Before(SkipTrivia)
         );
 
+    private static IonFieldSyntax BuildField(IonFieldHead head, IonUnderlyingTypeSyntax type) =>
+        new IonFieldSyntax(head.Name, type)
+            .WithComments(head.Lead.Doc)
+            .WithAttributes(head.Lead.Attributes)
+            .WithPos(head.Position);
+
+    /// <summary>
+    /// One field. Parameterised by the type parser so that the body of an inline anonymous type is
+    /// the very same production one level down, rather than a copy that can drift from it.
+    /// </summary>
+    private static Parser<char, IonFieldSyntax> FieldOf(Parser<char, IonUnderlyingTypeSyntax> type) =>
+        Map(BuildField, FieldHead, FieldTailOf(type));
+
+    /// <summary>
+    /// <see cref="FieldOf"/> with the recognition prefix made atomic, for the recovering grammar.
+    /// A field that never reaches its <c>:</c> backs out without consuming, so the enclosing list can
+    /// offer it to recovery; one that did reach it fails as loudly as it always has.
+    /// </summary>
+    private static Parser<char, IonFieldSyntax> RecoverableFieldOf(Parser<char, IonUnderlyingTypeSyntax> type) =>
+        Map(BuildField, Try(FieldHead), FieldTailOf(type));
+
+    /// <summary>
+    /// The field list of an inline anonymous type. Always strict: an inline body is written in
+    /// <em>type</em> position, so the enclosing field has already committed at its <c>:</c> and a
+    /// mistake inside the body is a mistake in that field's type, not an unreadable member of the
+    /// enclosing declaration.
+    /// </summary>
     private static Parser<char, IEnumerable<IonFieldSyntax>> FieldListOf(
         Parser<char, IonUnderlyingTypeSyntax> type) =>
         FieldOf(type).ManyBetween(Char('{').Before(SkipTrivia), SkipTriviaAll.Then(Char('}')));
 
     /// <summary>The field list of a declaration, at the top of the type chain.</summary>
-    private static Parser<char, IEnumerable<IonFieldSyntax>> FieldList => FieldListOf(Type);
+    private static Parser<char, IonMembers<IonFieldSyntax>> FieldList(bool recover) =>
+        Braced(TerminatedMembers(FieldOf(Type), RecoverableFieldOf(Type), recover));
 
     /// <summary>
     /// <c>with Audited, Traced</c>. Shared by <c>msg</c> and <c>mixin</c>, and by nothing else — a
@@ -357,16 +400,22 @@ public partial class IonParser
                 .SeparatedAtLeastOnce(Char(',').Before(SkipTrivia)))
             .Select(names => names.ToList());
 
-    private static Parser<char, IonSyntaxMember> MessageCore =>
+    private static Parser<char, IonSyntaxMember> MessageCore(bool recover) =>
         Map(IonSyntaxMember
                 (pos, msgName, mixins, fields, endPos) =>
-                new IonMessageSyntax(msgName, fields.ToList(), mixins.GetValueOrDefault()).WithPos(pos, endPos),
+                new IonMessageSyntax(msgName, fields.Members, mixins.GetValueOrDefault())
+                    .WithPos(pos, endPos)
+                    .WithInvalidMembers(fields.Invalid),
             CurrentPos,
             MsgKeyword.Then(Identifier),
             WithClause.Optional(),
-            FieldList,
+            FieldList(recover),
             CurrentPos
         );
 
-    public static Parser<char, IonSyntaxMember> Message => WithLeading(MessageCore);
+    /// <remarks>
+    /// The recovering variant, like every other single-declaration entry point. The strict grammar
+    /// is reached through <see cref="IonFile"/>.
+    /// </remarks>
+    public static Parser<char, IonSyntaxMember> Message => WithLeading(MessageCore(recover: true));
 }

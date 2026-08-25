@@ -244,7 +244,10 @@ public class CompileCommand : AsyncCommand<CompileOptions>
         // Check-only mode: validate, generate lock if needed, but no code gen
         if (options.CheckOnly)
         {
-            if (!options.NoLock)
+            // A check must be read-only — that is the entire point of running it in CI. This wrote the
+            // lock on any exit-0 run, so a warning-only breaking edit re-baselined itself and the
+            // next check saw nothing. `lock init` / `lock update` pass UpdateLock and still write.
+            if (!options.NoLock && options.UpdateLock)
                 WriteLockFile(currentDir, project.Name, ctx);
             AnsiConsole.MarkupLine($"\n[green]:sparkles: Check passed in {watch.Elapsed.TotalSeconds:0.000}s[/]");
             return Task.FromResult(0);
@@ -523,6 +526,11 @@ public class CompileCommand : AsyncCommand<CompileOptions>
 
         fileBuilder.AppendLine(generator.GenerateAllServiceClientImpl(distinctServices));
         fileBuilder.AppendLine(generator.GenerateClientProxy(distinctServices));
+
+        // The dotnet and rust targets both create their output directory; this one did not, so a
+        // browser `outputFile` pointing anywhere that does not already exist failed the whole
+        // compile with a bare DirectoryNotFoundException after all the work was done.
+        outputFile.Directory?.Create();
 
         File.WriteAllText(outputFile.FullName, fileBuilder.ToString());
     }

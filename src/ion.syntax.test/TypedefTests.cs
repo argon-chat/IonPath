@@ -1093,6 +1093,6 @@ public class TypedefTests
 
     [Test]
     public void SchemaLock_LockVersionIsUnchanged()
-        => Assert.That(IonSchemaLock.CurrentVersion, Is.EqualTo(1),
+        => Assert.That(IonSchemaLock.CurrentVersion, Is.EqualTo(2),
             "typedef support must not change the lock format");
 }

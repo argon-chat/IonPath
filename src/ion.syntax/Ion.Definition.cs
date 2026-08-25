@@ -13,25 +13,34 @@ public partial class IonParser
     /// made Pidgin commit to that alternative as soon as a comment was consumed, which turned
     /// every documented top level declaration into a parse error.)
     /// </summary>
-    private static Parser<char, IonSyntaxMember> DefinitionCore =>
+    /// <param name="recover">
+    /// Whether the declaration bodies recover from an unreadable member. <see langword="false"/> is
+    /// the strict grammar behind <see cref="IonFile"/>, in which one bad member still kills its
+    /// declaration; <see langword="true"/> is the grammar behind <see cref="IonFileRecovery"/> and
+    /// the single-declaration entry points. See <see cref="IonMemberSlot{T}"/>.
+    /// </param>
+    private static Parser<char, IonSyntaxMember> DefinitionCore(bool recover) =>
         OneOf(
             AttributeDefCore.OfType<IonSyntaxMember>(),
-            ServiceCore.OfType<IonSyntaxMember>(),
+            ServiceCore(recover).OfType<IonSyntaxMember>(),
             ImportDirectiveCore,
             UseDirectiveCore,
             FeatureDirectiveCore,
-            MessageCore,
+            MessageCore(recover),
             // After MessageCore only for readability: `msg` and `mixin` share a first letter but
             // MsgKeyword is atomic, so neither can consume the other's input.
-            MixinCore.OfType<IonSyntaxMember>(),
-            FlagsCore,
-            EnumsCore,
+            MixinCore(recover).OfType<IonSyntaxMember>(),
+            FlagsCore(recover),
+            EnumsCore(recover),
             TypedefCore.OfType<IonSyntaxMember>(),
-            UnionCore.OfType<IonSyntaxMember>()
+            UnionCore(recover).OfType<IonSyntaxMember>()
         );
 
-    public static Parser<char, IonSyntaxMember> Definition =>
-        WithLeading(DefinitionCore).Before(SkipTopLevelTrivia);
+    private static Parser<char, IonSyntaxMember> DefinitionOf(bool recover) =>
+        WithLeading(DefinitionCore(recover)).Before(SkipTopLevelTrivia);
+
+    /// <summary>One declaration, read with the strict grammar. See <see cref="IonFile"/>.</summary>
+    public static Parser<char, IonSyntaxMember> Definition => DefinitionOf(recover: false);
 
     /// <summary>
     /// One or more consecutive <c>//!</c> lines, materialised as a synthetic member so that
@@ -44,10 +53,10 @@ public partial class IonParser
             ModuleDocLine.AtLeastOnce());
 
     /// <summary>A module doc block or a definition.</summary>
-    private static Parser<char, IonSyntaxMember> TopLevelItem =>
+    private static Parser<char, IonSyntaxMember> TopLevelItem(bool recover) =>
         OneOf(
             Try(SkipTopLevelTrivia.Then(ModuleDocDeclaration)),
-            Definition);
+            DefinitionOf(recover));
 
     /// <summary>
     /// Keywords that start a definition. Used for error recovery to skip
@@ -64,7 +73,7 @@ public partial class IonParser
     /// producing an <see cref="InvalidIonBlock"/>.
     /// </summary>
     public static Parser<char, IonSyntaxMember> DefinitionOrRecover =>
-        Try(TopLevelItem).Or(RecoverToNextDefinition);
+        Try(TopLevelItem(recover: true)).Or(RecoverToNextDefinition);
 
     /// <summary>A definition keyword at the beginning of a line (leading indentation allowed).</summary>
     private static Parser<char, Unit> DefinitionKeywordAtLineStart =>
@@ -99,17 +108,28 @@ public partial class IonParser
     /// </summary>
     private static Parser<char, IonSyntaxMember> RecoverToNextDefinition =>
         Try(Not(Try(SkipTriviaAll.Then(End))))
-            .Then(RecoverUnit.AtLeastOnceUntil(ResyncPoint))
-            .Select(chunks => (IonSyntaxMember)new InvalidIonBlock(string.Concat(chunks)));
+            .Then(Map(
+                IonSyntaxMember (start, chunks, end) =>
+                    new InvalidIonBlock(string.Concat(chunks)).WithPos(start, end),
+                CurrentPos,
+                RecoverUnit.AtLeastOnceUntil(ResyncPoint),
+                CurrentPos));
 
+    /// <summary>
+    /// The strict grammar: no recovery of any kind, at file level or inside a declaration body.
+    /// Anything short of a clean parse is a failure here, which is what makes it the entry point
+    /// worth pinning the checked-in contracts against.
+    /// </summary>
     public static Parser<char, IEnumerable<IonSyntaxMember>> IonFile =>
-        TopLevelItem.Many()
+        TopLevelItem(recover: false).Many()
             .Before(SkipTriviaAll)
             .Before(End);
 
     /// <summary>
     /// Recovery variant of <see cref="IonFile"/>. Skips over invalid blocks
-    /// between definitions, collecting them as <see cref="InvalidIonBlock"/>.
+    /// between definitions, collecting them as <see cref="InvalidIonBlock"/>, and reads declaration
+    /// bodies with member level recovery so that one bad field no longer costs the whole message —
+    /// see <see cref="IonMemberSlot{T}"/>.
     /// </summary>
     public static Parser<char, IEnumerable<IonSyntaxMember>> IonFileRecovery =>
         DefinitionOrRecover.Many()
@@ -158,6 +178,23 @@ public partial class IonParser
 
         var membersList = all.Where(x => x is not IonModuleDocSyntax).ToList();
 
+        // Spans that member level recovery could not read are hung off the declaration that
+        // contained them, where nothing downstream would ever look. Lifting them here, each right
+        // after its own declaration, puts them on the one list `ionc` and `IonWorkspace` already
+        // scan — so a file with a bad member cannot compile clean, exactly as a file with a bad
+        // declaration cannot. The typed lists below are still taken from `membersList`, so no
+        // consumer sees an invalid block where a definition is expected.
+        var allTokens = membersList;
+        if (membersList.Exists(x => x.InvalidMembers.Count != 0))
+        {
+            allTokens = new List<IonSyntaxMember>(membersList.Count);
+            foreach (var member in membersList)
+            {
+                allTokens.Add(member);
+                allTokens.AddRange(member.InvalidMembers);
+            }
+        }
+
         return new IonFileSyntax(name, fileInfo,
             membersList.OfType<IonUseSyntax>().ToList(),
             membersList.OfType<IonImportSyntax>().ToList(),
@@ -169,7 +206,7 @@ public partial class IonParser
             membersList.OfType<IonTypedefSyntax>().ToList(),
             membersList.OfType<IonServiceSyntax>().ToList(),
             membersList.OfType<IonUnionSyntax>().ToList(),
-            membersList,
+            allTokens,
             moduleDoc
         )
         {

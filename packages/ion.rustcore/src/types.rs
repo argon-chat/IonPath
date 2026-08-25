@@ -78,6 +78,53 @@ pub enum IonError {
     /// whether the peer is on an older schema revision or the payload was truncated.
     #[error("Ion fixed-size array declared length {expected}, got {actual}")]
     FixedArrayLength { expected: usize, actual: usize },
+
+    /// The payload nests CBOR containers more deeply than [`crate::formatter::MAX_DEPTH`] allows.
+    ///
+    /// Nesting is the one dimension of a payload that costs **stack** rather than heap, and the
+    /// stack is the one resource whose exhaustion is not recoverable: a Rust stack overflow
+    /// aborts the process and cannot be caught, so a `catch_unwind` around the decode does not
+    /// help. It is also reachable without knowing the schema — a field the reader only *skips*
+    /// still has to be walked, so 100 KB of `0x81` bytes is 100 000 levels deep.
+    ///
+    /// The counterparts are `ion.runtime.IonDepthLimitException` (C#) and `IonDepthLimitError`
+    /// (TypeScript), and all three share the limit of 128.
+    #[error("Ion payload nests CBOR containers {depth} deep, past the limit of {limit} (see ion_rustcore::formatter::MAX_DEPTH)")]
+    DepthLimit { limit: usize, depth: usize },
+
+    /// A declared container length is larger than the remaining input could possibly contain.
+    ///
+    /// Every CBOR data item occupies at least one byte, so a declared item count above the number
+    /// of bytes left is *provably* a lie. Checking it before reserving is what keeps a nine-byte
+    /// payload (`9bffffffffffffffff` — an array header claiming 2^64-1 items) from reaching
+    /// `Vec::with_capacity` and aborting the process on a capacity overflow.
+    ///
+    /// The counterpart is `IonLengthOverclaimError` in TypeScript.
+    #[error("Ion '{context}' declares {declared} item(s) but only {available} byte(s) of input remain")]
+    LengthOverclaim { context: &'static str, declared: u64, available: usize },
+
+    /// A message array declared fewer items than this revision of the schema reads.
+    ///
+    /// `minicbor::Decoder` is a flat cursor with no container stack, so reading past a definite
+    /// array is not refused by anything — the reader simply takes the *next* bytes in the stream,
+    /// which belong to whatever follows. Left unchecked this is silent wrong data, not a failure:
+    /// the peer is on an older revision and the field genuinely is not there.
+    ///
+    /// The counterparts are `IonFieldCountException` (C#) and `IonFieldCountError` (TypeScript).
+    #[error("Ion message declares {declared} field(s) but this schema reads {expected}")]
+    FieldCount { declared: u64, expected: u64 },
+
+    /// A `union` envelope was not the two-item `[index, payload]` array the format defines.
+    ///
+    /// The envelope is fixed at two items in **every** revision of **every** union; a union grows
+    /// by adding cases, and a case grows inside its payload, which is a message and skips its own
+    /// trailing fields. A longer envelope is therefore never a forward-compatibility signal, and
+    /// reading `[index, payload]` out of it and walking away leaves the stray items in the stream
+    /// for the *next* field of the enclosing message to pick up as its own value.
+    ///
+    /// The counterpart is `IonUnionEnvelopeError` in TypeScript.
+    #[error("Ion union '{union_type}' envelope must be exactly [index, payload] (2 items), got {actual_items}")]
+    UnionEnvelope { union_type: &'static str, actual_items: u64 },
 }
 
 impl From<minicbor::decode::Error> for IonError {

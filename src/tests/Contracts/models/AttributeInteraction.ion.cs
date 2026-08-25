@@ -66,7 +66,7 @@ public sealed record CacheProbe([property: Cache(5, "field", false, new i4[] { 0
 /// </summary>
 [Obsolete("Since 0.5: regions were replaced by explicit key parts")]
 [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
-public enum CacheRegion
+public enum CacheRegion : i4
 {
     /// <summary>
     /// Never produced any more. Bare `@deprecated` on an enum member.
@@ -87,6 +87,29 @@ public enum CacheRegion
     /// The surviving member.
     /// </summary>
     Shared = 3,
+}
+
+/// <summary>Open-enum helpers for <see cref="CacheRegion"/>.</summary>
+/// <remarks>
+/// A value the peer's schema declares and this one does not is carried through decoding
+/// rather than rejected, so that adding a member stays a safe schema change. These say
+/// whether that happened — a <c>switch</c> over the enum cannot, because an undeclared
+/// value simply matches no arm.
+/// </remarks>
+[GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
+public static class Ion_CacheRegion_OpenEnum
+{
+    /// <summary>Whether <paramref name="value"/> is a member this schema revision declares.</summary>
+    public static bool IsKnown(this CacheRegion value)
+        => value == CacheRegion.None || value == CacheRegion.Local || value == CacheRegion.Session || value == CacheRegion.Shared;
+
+    /// <summary>
+    /// The raw <c>i4</c> the peer sent when <paramref name="value"/> names no
+    /// declared member, or <see langword="null"/> when it does.
+    /// </summary>
+    /// <remarks>This is the exact number that will be written back out.</remarks>
+    public static i4? UnknownValue(this CacheRegion value)
+        => value.IsKnown() ? null : (i4)value;
 }
 
 

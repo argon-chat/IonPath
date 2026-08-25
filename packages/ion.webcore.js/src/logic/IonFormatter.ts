@@ -5,8 +5,14 @@ import {
   IonDuplicateMapKeyError,
   IonDuplicateSetElementError,
   IonFixedArrayLengthError,
+  IonFieldCountError,
+  IonIndefiniteLengthError,
+  IonInvalidUnionIndexError,
   IonMalformedValueError,
+  IonTruncatedPayloadError,
+  IonUnexpectedCborTypeError,
   IonUnexpectedTagError,
+  IonUnionEnvelopeError,
 } from "../errors";
 import type { IonClientContext } from "../unary/IonUnaryRequest";
 import type { IIonService } from "./IIonService";
@@ -191,8 +197,7 @@ export class IonFormatterStorage {
 
   static readArray<T>(reader: CborReader, typeName: string): IonArray<T> {
     const size = reader.readStartArray();
-    if (size === null)
-      throw new Error("Indefinite arrays are not supported here");
+    if (size === null) throw new IonIndefiniteLengthError(`${typeName}[]`);
 
     const formatter = IonFormatterStorage.get<T>(typeName);
     const values: T[] = [];
@@ -604,6 +609,129 @@ export class IonFormatterStorage {
     return formatter;
   }
 
+  /**
+   * Opens a message's positional array and checks it against the declared field count.
+   *
+   * The front half of the trailing-skip mechanism, and the only point at which a payload that is
+   * too short can still be reported honestly: a positional array with fewer items than the schema
+   * declares is an {@link IonFieldCountError} naming both counts, never a read that walks past the
+   * array into whatever follows it.
+   *
+   * Emitted by `ionc` in place of the older
+   * `reader.readStartArray() ?? (() => { throw new Error("undefined len array not allowed") })()`.
+   */
+  static readStartMessage(
+    reader: CborReader,
+    expectedFields: number,
+    context: string
+  ): number {
+    const state = reader.peekState();
+
+    // Checked before the major type: an empty or exhausted buffer is a truncation, not "an array
+    // was expected and something else arrived". C# reaches the same answer because `PeekState()`
+    // throws there and `IonDecodeGuard` maps that to a truncation.
+    if (state === CborReaderState.Finished) throw new IonTruncatedPayloadError(context);
+
+    if (state !== CborReaderState.StartArray)
+      throw new IonUnexpectedCborTypeError(context, "an array", CborReaderState[state]);
+
+    const declared = reader.readStartArray();
+    if (declared === null) throw new IonIndefiniteLengthError(context);
+    if (declared < expectedFields)
+      throw new IonFieldCountError(context, expectedFields, declared);
+
+    return declared;
+  }
+
+  /**
+   * Opens a `union` envelope and reads its case index.
+   *
+   * **A union envelope is exactly `[index, payload]` — two items, in every revision of every
+   * union.** Growth happens inside the case payload, which is a message and skips its own tail;
+   * the envelope itself never grows. A third item is therefore a malformed frame, not a newer
+   * peer, and the generated reader used to walk straight past it: it read the index and the
+   * payload and stopped, leaving the stray item for the *next field of the enclosing message* to
+   * read as its own value. In the compat suite that turned `n: 5` into `n: 9` with no error
+   * anywhere.
+   *
+   * An unknown index is {@link IonInvalidUnionIndexError} — the generated `else` arm used to be
+   * `throw new Error()`, with no message at all.
+   */
+  static readStartUnion(
+    reader: CborReader,
+    unionType: string,
+    declaredCases: number
+  ): number {
+    const state = reader.peekState();
+
+    if (state === CborReaderState.Finished) throw new IonTruncatedPayloadError(unionType);
+
+    if (state !== CborReaderState.StartArray)
+      throw new IonUnexpectedCborTypeError(
+        unionType,
+        "a [index, payload] array",
+        CborReaderState[state]
+      );
+
+    const declared = reader.readStartArray();
+    if (declared === null) throw new IonIndefiniteLengthError(unionType);
+    if (declared !== 2) throw new IonUnionEnvelopeError(unionType, declared);
+
+    const index = reader.readUInt32();
+    if (index >= declaredCases)
+      throw new IonInvalidUnionIndexError(unionType, index, declaredCases);
+
+    return index;
+  }
+
+  /** Closes a `union` envelope opened by {@link readStartUnion}. */
+  static readEndUnion(reader: CborReader): void {
+    reader.readEndArray();
+  }
+
+  /**
+   * Raises {@link IonInvalidUnionIndexError} — the generated union reader's final `else`.
+   *
+   * `readStartUnion` has already rejected an index this revision does not declare, so the arm is
+   * unreachable in practice; it stays as the thing that fires if the emitted case list and the
+   * emitted case *count* ever disagree, and it must not be the `throw new Error()` with an empty
+   * message that used to stand there.
+   *
+   * **Why it is a method here rather than a `new` in the generated file.** The import preamble
+   * `ionc` writes at the top of a generated module is a fixed list that does not include the error
+   * classes, so generated code reaches the typed hierarchy through this class or not at all.
+   */
+  static invalidUnionIndex(unionType: string, index: number, declaredCases: number): never {
+    throw new IonInvalidUnionIndexError(unionType, index, declaredCases);
+  }
+
+  /**
+   * Reads an Ion `enum` as an **open** enum.
+   *
+   * Two different failures used to be conflated here. A value that does not fit the declared base
+   * type — 256 or -1 into a `u1` — is a decode error, and the base-type formatter raises it. A
+   * value that *fits* but names no declared member is not an error at all: it is a peer on a newer
+   * revision of the schema, and the whole point of a positional wire format with a trailing skip
+   * is that such a peer stays readable. The generated reader used to
+   * `throw new Error('invalid enum type')` for the second case, so adding an enum member was a
+   * breaking change in TypeScript while C# carried it through happily.
+   *
+   * The unknown value is returned as-is, so it re-encodes byte-identically. A `switch` over the
+   * enum must therefore have a default arm — which it needed anyway, for the same reason a
+   * protobuf `enum` does.
+   *
+   * A TypeScript numeric `enum` is a `number` at run time and its members are not a closed set at
+   * run time either, so the undeclared value needs no new representation: it *is* a value of the
+   * enum type. `Ion_TierV1_OpenEnum.isKnown(v)` — emitted beside every generated enum — is how a
+   * caller asks whether the peer sent a member this build declares.
+   *
+   * `T` is the generated enum type, so the caller needs no cast; it also lets an `i8`/`u8`-based
+   * enum, whose values are `bigint` in this runtime, come back without one.
+   */
+  static readOpenEnum<T = number>(reader: CborReader, baseType: string): T {
+    return IonFormatterStorage.get<T>(baseType).read(reader);
+  }
+
   private static readPartialFieldValue(
     reader: CborReader,
     field: IonPartialField
@@ -700,7 +828,10 @@ export class IonFormatterStorage {
         if (length === null) {
           while (reader.peekState() !== CborReaderState.EndMap) {
             if (reader.peekState() === CborReaderState.Finished)
-              throw new Error("Unexpected end of CBOR data inside a Partial map");
+              throw new IonMalformedValueError(
+                "Partial",
+                "unexpected end of CBOR data inside a Partial map"
+              );
             readEntry();
           }
         } else {

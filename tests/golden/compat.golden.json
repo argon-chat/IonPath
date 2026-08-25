@@ -1,0 +1,3715 @@
+{
+  "$format": "ionpath/compat-golden/1",
+  "$comment": [
+    "Cross-runtime BACKWARD/FORWARD COMPATIBILITY vectors.",
+    "",
+    "The other files in this directory pin the bytes a VALUE encodes to. This one pins what a",
+    "reader DOES when the bytes were written against a different revision of the schema, or by",
+    "something hostile. Consumed by all three in-repo runtimes:",
+    "  C#   src/tests/IonTestClientServer/CompatGoldenTests.cs",
+    "  TS   packages/ion.webcore.js/test/compat.golden.test.ts",
+    "  Rust packages/ion.rustcore/tests/compat_golden.rs",
+    "",
+    "IMPORTANT: a vector's `expect` block records what the runtimes do TODAY, not what they",
+    "should do. Read `verdict` first:",
+    "  correct     - the behaviour is right, and the vector guards it against regression.",
+    "  defect      - the behaviour is wrong; `shouldBe` says what it must become. The assertion",
+    "                pins the wrong behaviour ON PURPOSE, so that fixing the runtime turns the",
+    "                test red and forces the pin to be updated - rather than leaving the gap",
+    "                invisible.",
+    "  divergence  - the three runtimes disagree about the same bytes. Same rule: pinned, with",
+    "                `shouldBe` naming the behaviour they should converge on.",
+    "  acceptable  - not wrong, but worth knowing and worth not changing by accident.",
+    "",
+    "Outcomes:",
+    "  ok            - decoded. `reencodedHex` is the decoded value re-encoded with the SAME",
+    "                  reader schema, which catches a wrong value without having to model every",
+    "                  message in JSON; `consumed` is how many bytes the read advanced.",
+    "  error         - a TYPED Ion decode failure; `error` names the class or variant.",
+    "  untyped-error - threw something that is NOT an Ion decode failure. Always a defect: a",
+    "                  caller cannot tell 'the peer speaks an older schema' from 'the peer sent",
+    "                  garbage', and cannot catch it with a single handler.",
+    "",
+    "OVER-READ DETECTION. Every `evolution` vector is decoded from `hex` + `trailerHex`, and",
+    "`consumed` is asserted. A message is a positional array with no self-delimiting end marker,",
+    "so a reader that mis-counts fields does not fail - it walks into whatever bytes come next.",
+    "Inside a `T[]` that is the next element; over a stream it is the next frame. `consumed` is",
+    "the only thing that catches it. `malformed` vectors are read WITHOUT the trailer, so a",
+    "truncation stays a truncation.",
+    "",
+    "HOW THE BYTES WERE PRODUCED. The schemas live in",
+    "src/tests/IonTestClientServer/Compat/Compat.ion, are compiled by `ionc` into all three",
+    "targets, and are vendored into the three test trees (see Compat/README.md). The payload",
+    "hexes were then written by those vendored GENERATED formatters - see `$producer`. All three",
+    "runtimes re-derive the same bytes when the suite runs, so a divergence between the writers",
+    "shows up as a failing vector rather than as a stale constant."
+  ],
+  "$producer": "tests/golden/compat.build.py assembles this file from tests/golden/compat.hex.json; the hexes in that file come from `bun run test/compat/__emit.ts` in packages/ion.webcore.js, which writes each value with the vendored generated TypeScript formatters. The `expect` blocks are filled in by tests/golden/compat.record.py from the three runtimes' record mode (ION_COMPAT_RECORD=1).",
+  "schema": {
+    "source": "src/tests/IonTestClientServer/Compat/Compat.ion",
+    "module": "IonCompat",
+    "note": "Every V1/V2 pair is the same logical message at two revisions, spelled with distinct names so that both revisions link into one test binary."
+  },
+  "trailerHex": "f5f5f5f5",
+  "readers": {
+    "<MsgName>": "the generated formatter for that message, read at the root",
+    "Array<T>": "what a `T[]` field reads: the runtime's array helper over element formatter T",
+    "Fixed<T,N>": "what a `T[N]` field reads",
+    "Map<K,V>": "what a `Map<K,V>` field reads",
+    "Set<T>": "what a `Set<T>` field reads (CBOR tag 258)",
+    "Maybe<T>": "what a `T?` field reads",
+    "Union<U>": "the generated union formatter for U",
+    "Args<T0,T1,...>": "the method-argument envelope: ReadStartArray(), each argument, ReadEndArrayAndSkip(len - argc) - the generated executor prologue, verbatim"
+  },
+  "lockCheck": {
+    "$comment": [
+      "`ionc lock check` over one v1 -> v2 edit per axis, recorded by",
+      "tests/golden/compat.lockprobe.sh. This is the other half of the picture: the vectors",
+      "below say what a reader DOES with a payload from another revision, and this says what",
+      "stops that payload from being written in the first place. A positional array cannot",
+      "carry the information a reader would need to detect a non-append edit, so ion.lock.json",
+      "is the ONLY place the toolchain can reject one.",
+      "",
+      "`caught` is 'error' when `ionc lock check` exits non-zero and leaves the lock file",
+      "alone, 'warning' when it reports but exits 0 and rewrites the lock, and 'no' when it",
+      "says nothing at all. Every 'no' on an axis whose vectors below are red is a hole: the",
+      "edit ships, and the failure surfaces at a peer."
+    ],
+    "recordedBy": "tests/golden/compat.lockprobe.sh",
+    "axes": [
+      {
+        "axis": "append",
+        "caught": "warning",
+        "diagnostic": "ION0029 (field added is not nullable)",
+        "note": "Correct: appending is the one safe edit, and the warning is about the reader's inability to distinguish 'absent' from 'default', not about the wire."
+      },
+      {
+        "axis": "optional-add",
+        "caught": "no",
+        "diagnostic": null,
+        "note": "Correct on the wire, but see the `optional-added.backward` vectors: a NEW reader still cannot read an OLD writer's payload, because `?` describes the value, not its presence."
+      },
+      {
+        "axis": "insert-middle",
+        "caught": "error",
+        "diagnostic": "ION0021 (field changed index)",
+        "note": "Correct - this is the edit the `inserted.forward.same-type` vectors show silently corrupting all three runtimes."
+      },
+      {
+        "axis": "remove-field",
+        "caught": "error",
+        "diagnostic": "ION0020 (field removed)",
+        "note": "Correct."
+      },
+      {
+        "axis": "reorder-fields",
+        "caught": "error",
+        "diagnostic": "ION0021 (field changed index)",
+        "note": "Correct - matches the `reordered.*.same-type` vectors."
+      },
+      {
+        "axis": "retype-field",
+        "caught": "error",
+        "diagnostic": "ION0022 (field changed type)",
+        "note": "Correct."
+      },
+      {
+        "axis": "widen-field",
+        "caught": "error",
+        "diagnostic": "ION0022 (i4 -> i8)",
+        "note": "Correct, and stricter than the wire needs: the vectors show i4 -> i8 is invisible until a value exceeds the old range."
+      },
+      {
+        "axis": "rename-field",
+        "caught": "error",
+        "diagnostic": "ION0020 + ION0029",
+        "note": "Correct, though reported as a removal plus an addition rather than as a rename."
+      },
+      {
+        "axis": "optional-tighten",
+        "caught": "error",
+        "diagnostic": "ION0022 (string? -> string)",
+        "note": "Correct."
+      },
+      {
+        "axis": "array-to-fixed",
+        "caught": "error",
+        "diagnostic": "ION0022 (Array<i4> -> Array<i4,3>)",
+        "note": "Correct."
+      },
+      {
+        "axis": "fixed-resize",
+        "caught": "error",
+        "diagnostic": "ION0022 (Array<i4,3> -> Array<i4,4>)",
+        "note": "Correct."
+      },
+      {
+        "axis": "msg-remove",
+        "caught": "error",
+        "diagnostic": "ION0023 (definition removed)",
+        "note": "Correct."
+      },
+      {
+        "axis": "enum-add",
+        "caught": "error",
+        "diagnostic": "ION0070 (closed value space gained a member)",
+        "note": "Closed. A new member lands inside a value the reader is already obliged to interpret, unlike an appended field which lands past the end of what it reads - hence an error where ION0029 is a warning."
+      },
+      {
+        "axis": "enum-remove",
+        "caught": "error",
+        "diagnostic": "ION0023 (enum member removed)",
+        "note": "Closed. An old peer still sending the removed value now fails to decode, so the edit is breaking."
+      },
+      {
+        "axis": "enum-renumber",
+        "caught": "error",
+        "diagnostic": "ION0027 (member changed value)",
+        "note": "Correct."
+      },
+      {
+        "axis": "enum-basetype",
+        "caught": "error",
+        "diagnostic": "ION0022 (enum changed base type)",
+        "note": "Closed. The base type is the wire width, so changing it is a retype."
+      },
+      {
+        "axis": "enum-rename-member",
+        "caught": "warning",
+        "diagnostic": "ION0025 (member renamed, value unchanged)",
+        "note": "Warning by design: the ordinal is what is on the wire and the name never is, so every payload ever written still decodes to the identical value. Only generated code that names the member breaks."
+      },
+      {
+        "axis": "union-add-case",
+        "caught": "error",
+        "diagnostic": "ION0070 (closed value space gained a member)",
+        "note": "Closed. An unknown case index is a typed failure in all three runtimes - there is no payload shape to skip."
+      },
+      {
+        "axis": "union-reorder-cases",
+        "caught": "error",
+        "diagnostic": "ION0028 (case changed index)",
+        "note": "Correct."
+      },
+      {
+        "axis": "union-rename-case",
+        "caught": "error",
+        "diagnostic": "ION0023 (union case removed)",
+        "note": "Correct."
+      },
+      {
+        "axis": "union-case-append",
+        "caught": "warning",
+        "diagnostic": "ION0029 (field added is not nullable)",
+        "note": "Deliberately identical to appending to a msg: a case payload is a positional array nested in the union envelope, so the same rule applies."
+      },
+      {
+        "axis": "union-case-insert",
+        "caught": "error",
+        "diagnostic": "ION0021 (field changed index)",
+        "note": "Closed. The lock now records each inline case payload field by index, name and canonical type, so the silent-corruption shape is visible."
+      },
+      {
+        "axis": "union-case-retype",
+        "caught": "error",
+        "diagnostic": "ION0022 (field changed type)",
+        "note": "Closed by the same change."
+      },
+      {
+        "axis": "method-add-arg",
+        "caught": "error",
+        "diagnostic": "ION0026 (argument count)",
+        "note": "Correct - stricter than the wire, which skips a trailing argument (see `argument-added.forward`)."
+      },
+      {
+        "axis": "method-arg-retype",
+        "caught": "error",
+        "diagnostic": "ION0026 (argument type)",
+        "note": "Correct."
+      },
+      {
+        "axis": "method-retype",
+        "caught": "error",
+        "diagnostic": "ION0026 (return type)",
+        "note": "Correct."
+      },
+      {
+        "axis": "method-remove",
+        "caught": "warning",
+        "diagnostic": "ION0025 (method removed)",
+        "note": "Reported, but exit 0 and the lock is rewritten, so it does not stop a build."
+      },
+      {
+        "axis": "method-rename",
+        "caught": "warning",
+        "diagnostic": "ION0025 (method removed)",
+        "note": "Same, and a rename is indistinguishable from a removal plus an addition."
+      }
+    ],
+    "note": [
+      "`ionc lock check` REWRITES ion.lock.json whenever the edit is non-breaking, so it is not",
+      "a read-only command. On a breaking edit it exits non-zero and leaves the file alone."
+    ]
+  },
+  "crossRuntime": {
+    "$comment": [
+      "Computed from the `expect` blocks by compat.record.py and asserted by",
+      "src/tests/IonTestClientServer/CompatGoldenTests.CrossRuntimeCensus, so an `expect`",
+      "block cannot be edited without the census being redone.",
+      "",
+      "`divergentAcceptance` is the list that matters: on those bytes at least one runtime",
+      "decodes and at least one refuses (or one panics). A payload that one peer writes",
+      "without complaint is a hard error at the next, and which peer you are decides",
+      "whether you notice. Every entry is a wire-compatibility bug even where each",
+      "runtime's own behaviour looks defensible in isolation.",
+      "",
+      "`divergentValue` means all three accepted the bytes and disagree about what they",
+      "mean - the worst outcome available. It must stay empty.",
+      "",
+      "`divergentErrorTyping` is the long tail: all three reject, but one raises a typed",
+      "Ion decode failure and another an untyped exception. Wire-compatible, and still a",
+      "defect - a caller cannot write one handler that works against all three."
+    ],
+    "agreeCount": 144,
+    "divergentAcceptance": [],
+    "divergentValue": [],
+    "divergentErrorTypingCount": 0,
+    "divergentErrorTyping": []
+  },
+  "evolution": [
+    {
+      "name": "appended.forward.bare",
+      "axis": "field-appended",
+      "position": "bare",
+      "direction": "v2-writes-v1-reads",
+      "reader": "AppendedV1",
+      "hex": "8301616207",
+      "notes": "The whole point of the trailing-skip mechanism: an old reader must accept a longer array and drop the tail.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 5
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 5
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 5
+        }
+      }
+    },
+    {
+      "name": "appended.backward.bare",
+      "axis": "field-appended",
+      "position": "bare",
+      "direction": "v1-writes-v2-reads",
+      "reader": "AppendedV2",
+      "hex": "82016162",
+      "notes": "A new reader against an old writer. There is no field to read, so this must be a typed decode error naming what was expected - never a default value, and never a read past the array.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonFieldCountException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonFieldCountError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "appended.forward.array",
+      "axis": "field-appended",
+      "position": "T[]",
+      "direction": "v2-writes-v1-reads",
+      "reader": "Array<AppendedV1>",
+      "hex": "818301616207",
+      "notes": "The same message one element inside `T[]`.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "8182016162",
+          "consumed": 6
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "8182016162",
+          "consumed": 6
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "8182016162",
+          "consumed": 6
+        }
+      }
+    },
+    {
+      "name": "appended.backward.array",
+      "axis": "field-appended",
+      "position": "T[]",
+      "direction": "v1-writes-v2-reads",
+      "reader": "Array<AppendedV2>",
+      "hex": "8182016162",
+      "notes": "A short element inside an array is the dangerous shape: if the element reader runs off the end of its own array it lands in the NEXT element, not somewhere diagnosable.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonFieldCountException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonFieldCountError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "appended.forward.array2",
+      "axis": "field-appended",
+      "position": "T[]",
+      "direction": "v2-writes-v1-reads",
+      "reader": "Array<AppendedV1>",
+      "hex": "8283016162078301616207",
+      "notes": "Two elements, so a per-element over-read shows up as a corrupted second element rather than as end-of-input.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "828201616282016162",
+          "consumed": 11
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "828201616282016162",
+          "consumed": 11
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "828201616282016162",
+          "consumed": 11
+        }
+      }
+    },
+    {
+      "name": "appended.backward.array2",
+      "axis": "field-appended",
+      "position": "T[]",
+      "direction": "v1-writes-v2-reads",
+      "reader": "Array<AppendedV2>",
+      "hex": "828201616282016162",
+      "notes": "Two short elements. A reader that runs off element 0 consumes element 1's header.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonFieldCountException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonFieldCountError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "appended.forward.fixed",
+      "axis": "field-appended",
+      "position": "T[N]",
+      "direction": "v2-writes-v1-reads",
+      "reader": "Fixed<AppendedV1,2>",
+      "hex": "8283016162078301616207",
+      "notes": "`T[N]` holds N whole messages; each is skipped independently.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "828201616282016162",
+          "consumed": 11
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "828201616282016162",
+          "consumed": 11
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "828201616282016162",
+          "consumed": 11
+        }
+      }
+    },
+    {
+      "name": "appended.backward.fixed",
+      "axis": "field-appended",
+      "position": "T[N]",
+      "direction": "v1-writes-v2-reads",
+      "reader": "Fixed<AppendedV2,2>",
+      "hex": "828201616282016162",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonFieldCountException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonFieldCountError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "appended.forward.map",
+      "axis": "field-appended",
+      "position": "Map value",
+      "direction": "v2-writes-v1-reads",
+      "reader": "Map<string,AppendedV1>",
+      "hex": "a1616b8301616207",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "a1616b82016162",
+          "consumed": 8
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "a1616b82016162",
+          "consumed": 8
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "a1616b82016162",
+          "consumed": 8
+        }
+      }
+    },
+    {
+      "name": "appended.backward.map",
+      "axis": "field-appended",
+      "position": "Map value",
+      "direction": "v1-writes-v2-reads",
+      "reader": "Map<string,AppendedV2>",
+      "hex": "a1616b82016162",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonFieldCountException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonFieldCountError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "appended.forward.maybe",
+      "axis": "field-appended",
+      "position": "T?",
+      "direction": "v2-writes-v1-reads",
+      "reader": "Maybe<AppendedV1>",
+      "hex": "8301616207",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 5
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 5
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 5
+        }
+      }
+    },
+    {
+      "name": "appended.backward.maybe",
+      "axis": "field-appended",
+      "position": "T?",
+      "direction": "v1-writes-v2-reads",
+      "reader": "Maybe<AppendedV2>",
+      "hex": "82016162",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonFieldCountException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonFieldCountError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "appended.forward.union-payload",
+      "axis": "field-appended",
+      "position": "union case payload",
+      "direction": "v2-writes-v1-reads",
+      "reader": "Union<GrowV1>",
+      "hex": "82008301616207",
+      "notes": "A union is `[caseIndex, payload]`. The payload is an ordinary message, so appending a field to a case should behave exactly like appending to a message.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "820082016162",
+          "consumed": 7
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "820082016162",
+          "consumed": 7
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "820082016162",
+          "consumed": 7
+        }
+      }
+    },
+    {
+      "name": "appended.backward.union-payload",
+      "axis": "field-appended",
+      "position": "union case payload",
+      "direction": "v1-writes-v2-reads",
+      "reader": "Union<GrowV2>",
+      "hex": "820082016162",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonFieldCountException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonFieldCountError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "appended.forward.union-holder",
+      "axis": "field-appended",
+      "position": "union in a field",
+      "direction": "v2-writes-v1-reads",
+      "reader": "GrowHolderV1",
+      "hex": "828200830161620705",
+      "notes": "The same union with a sentinel `n: i4` behind it, so a union reader that leaves bytes unconsumed corrupts the NEXT field instead of merely being untidy.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "8282008201616205",
+          "consumed": 9
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "8282008201616205",
+          "consumed": 9
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "8282008201616205",
+          "consumed": 9
+        }
+      }
+    },
+    {
+      "name": "appended.backward.union-holder",
+      "axis": "field-appended",
+      "position": "union in a field",
+      "direction": "v1-writes-v2-reads",
+      "reader": "GrowHolderV2",
+      "hex": "8282008201616205",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonFieldCountException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonFieldCountError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "FieldCount"
+        }
+      }
+    },
+    {
+      "name": "appended.forward.method-arg",
+      "axis": "field-appended",
+      "position": "method argument",
+      "direction": "v2-writes-v1-reads",
+      "reader": "Args<AppendedV1>",
+      "hex": "818301616207",
+      "notes": "The argument envelope is a positional array with the same trailing-skip as a message; the harness reproduces the generated executor prologue verbatim.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "8182016162",
+          "consumed": 6
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "8182016162",
+          "consumed": 6
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "8182016162",
+          "consumed": 6
+        }
+      }
+    },
+    {
+      "name": "appended.backward.method-arg",
+      "axis": "field-appended",
+      "position": "method argument",
+      "direction": "v1-writes-v2-reads",
+      "reader": "Args<AppendedV2>",
+      "hex": "8182016162",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonFieldCountException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonFieldCountError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "appended.forward.method-return",
+      "axis": "field-appended",
+      "position": "method return",
+      "direction": "v2-writes-v1-reads",
+      "reader": "AppendedV1",
+      "hex": "8301616207",
+      "notes": "A return value is written bare at the root with no envelope of its own, so the only thing between it and the next frame is its own declared array length.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 5
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 5
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 5
+        }
+      }
+    },
+    {
+      "name": "appended.backward.method-return",
+      "axis": "field-appended",
+      "position": "method return",
+      "direction": "v1-writes-v2-reads",
+      "reader": "AppendedV2",
+      "hex": "82016162",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonFieldCountException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonFieldCountError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "appended.forward.every-position",
+      "axis": "field-appended",
+      "position": "all at once",
+      "direction": "v2-writes-v1-reads",
+      "reader": "NestV1",
+      "hex": "89830161620b81830261630c82830361640d830461650ea1616b830561660f830661671001d90102820001820081071863",
+      "notes": "One message carrying the evolved type in every position at once (bare, `T[]`, `T[N]`, Map value, `T?`) with `tail: i4 = 99` as the sentinel. If any position leaves the cursor misplaced, `tail` is the field that shows it.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "89820161628182026163828203616482046165a1616b820561668206616701d90102820001820081071863",
+          "consumed": 49
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "89820161628182026163828203616482046165a1616b820561668206616701d90102820001820081071863",
+          "consumed": 49
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "89820161628182026163828203616482046165a1616b820561668206616701d90102820001820081071863",
+          "consumed": 49
+        }
+      }
+    },
+    {
+      "name": "appended.backward.every-position",
+      "axis": "field-appended",
+      "position": "all at once",
+      "direction": "v1-writes-v2-reads",
+      "reader": "NestV2",
+      "hex": "89820161628182026163828203616482046165a1616b820561668206616701d90102820001820081071863",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonFieldCountException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonFieldCountError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "appended.forward.method-args-nested",
+      "axis": "field-appended",
+      "position": "method argument",
+      "direction": "v2-writes-v1-reads",
+      "reader": "Args<NestV1,i4>",
+      "hex": "8289830161620b81830261630c82830361640d830461650ea1616b830561660f830661671001d901028200018200810718631863",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "8289820161628182026163828203616482046165a1616b820561668206616701d901028200018200810718631863",
+          "consumed": 52
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "8289820161628182026163828203616482046165a1616b820561668206616701d901028200018200810718631863",
+          "consumed": 52
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "8289820161628182026163828203616482046165a1616b820561668206616701d901028200018200810718631863",
+          "consumed": 52
+        }
+      }
+    },
+    {
+      "name": "appended.backward.method-args-nested",
+      "axis": "field-appended",
+      "position": "method argument",
+      "direction": "v1-writes-v2-reads",
+      "reader": "Args<NestV2,i4>",
+      "hex": "8289820161628182026163828203616482046165a1616b820561668206616701d901028200018200810718631863",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonFieldCountException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonFieldCountError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "argument-added.forward",
+      "axis": "argument-added",
+      "position": "method argument",
+      "direction": "v2-writes-v1-reads",
+      "reader": "Args<AppendedV1>",
+      "hex": "828301616207182a",
+      "notes": "v2 added a second method argument; the v1 executor declares one and skips the rest.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "8182016162",
+          "consumed": 8
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "8182016162",
+          "consumed": 8
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "8182016162",
+          "consumed": 8
+        }
+      }
+    },
+    {
+      "name": "argument-added.backward",
+      "axis": "argument-added",
+      "position": "method argument",
+      "direction": "v1-writes-v2-reads",
+      "reader": "Args<AppendedV2,i4>",
+      "hex": "818301616207",
+      "notes": "v2's executor wants two arguments and the v1 caller sent one.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonContainerExhaustedException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonContainerOverreadError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "inserted.forward.typed",
+      "axis": "field-inserted",
+      "position": "bare",
+      "direction": "v2-writes-v1-reads",
+      "reader": "InsertedV1",
+      "hex": "83016162f5",
+      "notes": "Insertion caught only because the inserted field's type differs from the field it displaced (`string` where `bool` was).",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "inserted.backward.typed",
+      "axis": "field-inserted",
+      "position": "bare",
+      "direction": "v1-writes-v2-reads",
+      "reader": "InsertedV2",
+      "hex": "8201f5",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonFieldCountException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonFieldCountError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "inserted.forward.same-type",
+      "axis": "field-inserted",
+      "position": "bare",
+      "direction": "v2-writes-v1-reads",
+      "reader": "ShiftedV1",
+      "hex": "83010203",
+      "notes": "THE DANGEROUS CASE. Every field is `i4`, so the insertion slides `c` along with nothing to notice. v2 wrote {a=1,b=2,c=3}; a v1 reader cannot decode this correctly at all, and the one thing it must not do is hand back {a=1,c=2} as if it were fine.",
+      "verdict": "acceptable",
+      "shouldBe": "Nothing a decoder can do. The wire is a positional array, so an inserted or reordered field of the same type is indistinguishable from the original - every runtime decodes it and hands back shifted values. ion.lock.json is the only mechanism that can see it, and it does: ION0021 on both edits.",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "820102",
+          "consumed": 4
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "820102",
+          "consumed": 4
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "820102",
+          "consumed": 4
+        }
+      }
+    },
+    {
+      "name": "inserted.backward.same-type",
+      "axis": "field-inserted",
+      "position": "bare",
+      "direction": "v1-writes-v2-reads",
+      "reader": "ShiftedV2",
+      "hex": "820103",
+      "notes": "The mirror: v1 wrote {a=1,c=3}; v2 reads a=1, b=3 and then has nothing left for c.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonFieldCountException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonFieldCountError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "inserted.forward.same-type.array",
+      "axis": "field-inserted",
+      "position": "T[]",
+      "direction": "v2-writes-v1-reads",
+      "reader": "Array<ShiftedV1>",
+      "hex": "828301020383010203",
+      "verdict": "acceptable",
+      "shouldBe": "Nothing a decoder can do. The wire is a positional array, so an inserted or reordered field of the same type is indistinguishable from the original - every runtime decodes it and hands back shifted values. ion.lock.json is the only mechanism that can see it, and it does: ION0021 on both edits.",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "82820102820102",
+          "consumed": 9
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "82820102820102",
+          "consumed": 9
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "82820102820102",
+          "consumed": 9
+        }
+      }
+    },
+    {
+      "name": "inserted.forward.same-type.map",
+      "axis": "field-inserted",
+      "position": "Map value",
+      "direction": "v2-writes-v1-reads",
+      "reader": "Map<string,ShiftedV1>",
+      "hex": "a1616b83010203",
+      "verdict": "acceptable",
+      "shouldBe": "Nothing a decoder can do. The wire is a positional array, so an inserted or reordered field of the same type is indistinguishable from the original - every runtime decodes it and hands back shifted values. ion.lock.json is the only mechanism that can see it, and it does: ION0021 on both edits.",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "a1616b820102",
+          "consumed": 7
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "a1616b820102",
+          "consumed": 7
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "a1616b820102",
+          "consumed": 7
+        }
+      }
+    },
+    {
+      "name": "inserted.forward.same-type.fixed",
+      "axis": "field-inserted",
+      "position": "T[N]",
+      "direction": "v2-writes-v1-reads",
+      "reader": "Fixed<ShiftedV1,2>",
+      "hex": "828301020383010203",
+      "verdict": "acceptable",
+      "shouldBe": "Nothing a decoder can do. The wire is a positional array, so an inserted or reordered field of the same type is indistinguishable from the original - every runtime decodes it and hands back shifted values. ion.lock.json is the only mechanism that can see it, and it does: ION0021 on both edits.",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "82820102820102",
+          "consumed": 9
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "82820102820102",
+          "consumed": 9
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "82820102820102",
+          "consumed": 9
+        }
+      }
+    },
+    {
+      "name": "inserted.forward.same-type.args",
+      "axis": "field-inserted",
+      "position": "method argument",
+      "direction": "v2-writes-v1-reads",
+      "reader": "Args<ShiftedV1>",
+      "hex": "8183010203",
+      "verdict": "acceptable",
+      "shouldBe": "Nothing a decoder can do. The wire is a positional array, so an inserted or reordered field of the same type is indistinguishable from the original - every runtime decodes it and hands back shifted values. ion.lock.json is the only mechanism that can see it, and it does: ION0021 on both edits.",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "81820102",
+          "consumed": 5
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "81820102",
+          "consumed": 5
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "81820102",
+          "consumed": 5
+        }
+      }
+    },
+    {
+      "name": "removed.forward.typed",
+      "axis": "field-removed",
+      "position": "bare",
+      "direction": "v2-writes-v1-reads",
+      "reader": "RemovedV1",
+      "hex": "8201f5",
+      "notes": "v2 dropped the middle field. The v1 reader runs off the end of a shorter array - the case `Math.Abs(skipCount)` in `CborReaderEx.ReadEndArrayAndSkip` is reachable from.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonFieldCountException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonFieldCountError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "removed.backward.typed",
+      "axis": "field-removed",
+      "position": "bare",
+      "direction": "v1-writes-v2-reads",
+      "reader": "RemovedV2",
+      "hex": "83016162f5",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "reordered.forward.typed",
+      "axis": "field-reordered",
+      "position": "bare",
+      "direction": "v2-writes-v1-reads",
+      "reader": "ReorderedV1",
+      "hex": "82616201",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "reordered.backward.typed",
+      "axis": "field-reordered",
+      "position": "bare",
+      "direction": "v1-writes-v2-reads",
+      "reader": "ReorderedV2",
+      "hex": "82016162",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "reordered.forward.same-type",
+      "axis": "field-reordered",
+      "position": "bare",
+      "direction": "v2-writes-v1-reads",
+      "reader": "SwapV1",
+      "hex": "820201",
+      "notes": "THE DANGEROUS CASE. Two `i4` fields swapped: both revisions decode, and each hands back the other one's values.",
+      "verdict": "acceptable",
+      "shouldBe": "Nothing a decoder can do. The wire is a positional array, so an inserted or reordered field of the same type is indistinguishable from the original - every runtime decodes it and hands back shifted values. ion.lock.json is the only mechanism that can see it, and it does: ION0021 on both edits.",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "820201",
+          "consumed": 3
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "820201",
+          "consumed": 3
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "820201",
+          "consumed": 3
+        }
+      }
+    },
+    {
+      "name": "reordered.backward.same-type",
+      "axis": "field-reordered",
+      "position": "bare",
+      "direction": "v1-writes-v2-reads",
+      "reader": "SwapV2",
+      "hex": "820102",
+      "verdict": "acceptable",
+      "shouldBe": "Nothing a decoder can do. The wire is a positional array, so an inserted or reordered field of the same type is indistinguishable from the original - every runtime decodes it and hands back shifted values. ion.lock.json is the only mechanism that can see it, and it does: ION0021 on both edits.",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "820102",
+          "consumed": 3
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "820102",
+          "consumed": 3
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "820102",
+          "consumed": 3
+        }
+      }
+    },
+    {
+      "name": "retyped.forward",
+      "axis": "field-retyped",
+      "position": "bare",
+      "direction": "v2-writes-v1-reads",
+      "reader": "RetypedV1",
+      "hex": "820102",
+      "notes": "`string` -> `i4`.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "retyped.backward",
+      "axis": "field-retyped",
+      "position": "bare",
+      "direction": "v1-writes-v2-reads",
+      "reader": "RetypedV2",
+      "hex": "82016162",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "widened.forward.in-range",
+      "axis": "field-retyped",
+      "position": "bare",
+      "direction": "v2-writes-v1-reads",
+      "reader": "WidenedV1",
+      "hex": "8105",
+      "notes": "`i4` -> `i8` with a value that fits in 32 bits. CBOR integers are width-agnostic, so this is the one type change invisible on the wire - and therefore the one that keeps working right up until a value exceeds the old range.",
+      "verdict": "acceptable",
+      "shouldBe": "Nothing to fix on the wire - CBOR integers carry no width, so i4 -> i8 is invisible until a value exceeds the old range. Worth knowing: this edit passes every test until production data grows.",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "8105",
+          "consumed": 2
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "8105",
+          "consumed": 2
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "8105",
+          "consumed": 2
+        }
+      }
+    },
+    {
+      "name": "widened.forward.out-of-range",
+      "axis": "field-retyped",
+      "position": "bare",
+      "direction": "v2-writes-v1-reads",
+      "reader": "WidenedV1",
+      "hex": "811b0000010000000000",
+      "notes": "The same widening with 2^40. Must be a typed range error.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonIntegerRangeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonIntegerRangeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "widened.backward",
+      "axis": "field-retyped",
+      "position": "bare",
+      "direction": "v1-writes-v2-reads",
+      "reader": "WidenedV2",
+      "hex": "8105",
+      "notes": "A narrow value into a wide field: always fine.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "8105",
+          "consumed": 2
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "8105",
+          "consumed": 2
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "8105",
+          "consumed": 2
+        }
+      }
+    },
+    {
+      "name": "optional-added.forward.null",
+      "axis": "optional-added",
+      "position": "bare",
+      "direction": "v2-writes-v1-reads",
+      "reader": "OptAddedV1",
+      "hex": "8201f6",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "8101",
+          "consumed": 3
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "8101",
+          "consumed": 3
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "8101",
+          "consumed": 3
+        }
+      }
+    },
+    {
+      "name": "optional-added.forward.set",
+      "axis": "optional-added",
+      "position": "bare",
+      "direction": "v2-writes-v1-reads",
+      "reader": "OptAddedV1",
+      "hex": "82016162",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "8101",
+          "consumed": 4
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "8101",
+          "consumed": 4
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "8101",
+          "consumed": 4
+        }
+      }
+    },
+    {
+      "name": "optional-added.backward",
+      "axis": "optional-added",
+      "position": "bare",
+      "direction": "v1-writes-v2-reads",
+      "reader": "OptAddedV2",
+      "hex": "8101",
+      "notes": "Adding an OPTIONAL field is still adding a field: `?` describes the value, not its presence on the wire. A v2 reader is not entitled to treat the missing slot as null.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonFieldCountException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonFieldCountError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "optional-tightened.forward.null",
+      "axis": "optional-tightened",
+      "position": "bare",
+      "direction": "v1-writes-v2-reads",
+      "reader": "OptTightenedV2",
+      "hex": "8201f6",
+      "notes": "`string?` became `string`, and the old writer sent null.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "optional-tightened.forward.set",
+      "axis": "optional-tightened",
+      "position": "bare",
+      "direction": "v1-writes-v2-reads",
+      "reader": "OptTightenedV2",
+      "hex": "82016162",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 4
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 4
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 4
+        }
+      }
+    },
+    {
+      "name": "optional-tightened.backward",
+      "axis": "optional-tightened",
+      "position": "bare",
+      "direction": "v2-writes-v1-reads",
+      "reader": "OptTightenedV1",
+      "hex": "82016162",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 4
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 4
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 4
+        }
+      }
+    },
+    {
+      "name": "array-to-fixed.forward.right-length",
+      "axis": "array-shape",
+      "position": "bare",
+      "direction": "v1-writes-v2-reads",
+      "reader": "VarToFixedV2",
+      "hex": "8183010203",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "8183010203",
+          "consumed": 5
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "8183010203",
+          "consumed": 5
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "8183010203",
+          "consumed": 5
+        }
+      }
+    },
+    {
+      "name": "array-to-fixed.forward.wrong-length",
+      "axis": "array-shape",
+      "position": "bare",
+      "direction": "v1-writes-v2-reads",
+      "reader": "VarToFixedV2",
+      "hex": "81820102",
+      "notes": "`i4[]` holding 2 read as `i4[3]`.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonFixedArrayLengthException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonFixedArrayLengthError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "FixedArrayLength"
+        }
+      }
+    },
+    {
+      "name": "array-to-fixed.backward",
+      "axis": "array-shape",
+      "position": "bare",
+      "direction": "v2-writes-v1-reads",
+      "reader": "VarToFixedV1",
+      "hex": "8183010203",
+      "notes": "`i4[3]` read as `i4[]`: a fixed array is an ordinary CBOR array on the wire, so this direction is always safe.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "8183010203",
+          "consumed": 5
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "8183010203",
+          "consumed": 5
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "8183010203",
+          "consumed": 5
+        }
+      }
+    },
+    {
+      "name": "fixed.direct.short",
+      "axis": "array-shape",
+      "position": "T[N]",
+      "direction": "wrong-length",
+      "reader": "Fixed<i4,3>",
+      "hex": "820102",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonFixedArrayLengthException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonFixedArrayLengthError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "FixedArrayLength"
+        }
+      }
+    },
+    {
+      "name": "fixed.direct.long",
+      "axis": "array-shape",
+      "position": "T[N]",
+      "direction": "wrong-length",
+      "reader": "Fixed<i4,3>",
+      "hex": "8401020304",
+      "notes": "THE DOCUMENTED ASYMMETRY. `read_fixed_array` in Rust says extra items are deliberately NOT skipped for forward compatibility, unlike a message's trailing fields. This vector pins that it is a real rule and not a Rust-only accident, and the asymmetry is right: a message's length is schema (so a longer array is a newer revision, and the surplus is skippable), while a `T[N]`'s length IS the declared type (so a longer array is a different type, and skipping would hide exactly the schema change the feature exists to report). A plain `T[]` sits between them - its length is data, so there is nothing to skip - and a message ELEMENT inside either container still skips its own trailing fields, which `appended.forward.array` and `appended.forward.fixed` pin.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonFixedArrayLengthException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonFixedArrayLengthError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "FixedArrayLength"
+        }
+      }
+    },
+    {
+      "name": "enum-added.forward.known",
+      "axis": "enum-added",
+      "position": "bare",
+      "direction": "v2-writes-v1-reads",
+      "reader": "EnumHolderV1",
+      "hex": "820105",
+      "notes": "Control: a value both revisions know.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "820105",
+          "consumed": 3
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "820105",
+          "consumed": 3
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "820105",
+          "consumed": 3
+        }
+      }
+    },
+    {
+      "name": "enum-added.forward.unknown",
+      "axis": "enum-added",
+      "position": "bare",
+      "direction": "v2-writes-v1-reads",
+      "reader": "EnumHolderV1",
+      "hex": "820205",
+      "notes": "v2 sent Trial=2, which v1's enum cannot represent. `n: i4 = 5` behind it is the sentinel.",
+      "verdict": "correct",
+      "shouldBe": "An enum value that fits the declared base type but is not a declared member is carried through and re-encoded byte-identically, so adding a member does not break an older reader. A value that does not fit the base type stays a typed error.",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "820205",
+          "consumed": 3
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "820205",
+          "consumed": 3
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "820205",
+          "consumed": 3
+        }
+      }
+    },
+    {
+      "name": "enum-added.backward",
+      "axis": "enum-added",
+      "position": "bare",
+      "direction": "v1-writes-v2-reads",
+      "reader": "EnumHolderV2",
+      "hex": "820105",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "820105",
+          "consumed": 3
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "820105",
+          "consumed": 3
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "820105",
+          "consumed": 3
+        }
+      }
+    },
+    {
+      "name": "enum-added.forward.unknown.set",
+      "axis": "enum-added",
+      "position": "Set",
+      "direction": "v2-writes-v1-reads",
+      "reader": "Set<TierV1>",
+      "hex": "d9010283000102",
+      "verdict": "correct",
+      "shouldBe": "An enum value that fits the declared base type but is not a declared member is carried through and re-encoded byte-identically, so adding a member does not break an older reader. A value that does not fit the base type stays a typed error.",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "d9010283000102",
+          "consumed": 7
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "d9010283000102",
+          "consumed": 7
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "d9010283000102",
+          "consumed": 7
+        }
+      }
+    },
+    {
+      "name": "enum-added.forward.known.set",
+      "axis": "enum-added",
+      "position": "Set",
+      "direction": "v2-writes-v1-reads",
+      "reader": "Set<TierV1>",
+      "hex": "d90102820001",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "d90102820001",
+          "consumed": 6
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "d90102820001",
+          "consumed": 6
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "d90102820001",
+          "consumed": 6
+        }
+      }
+    },
+    {
+      "name": "enum-added.forward.unknown.setholder",
+      "axis": "enum-added",
+      "position": "Set in a field",
+      "direction": "v2-writes-v1-reads",
+      "reader": "SetHolderV1",
+      "hex": "82d901028300010205",
+      "verdict": "correct",
+      "shouldBe": "An enum value that fits the declared base type but is not a declared member is carried through and re-encoded byte-identically, so adding a member does not break an older reader. A value that does not fit the base type stays a typed error.",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "82d901028300010205",
+          "consumed": 9
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "82d901028300010205",
+          "consumed": 9
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "82d901028300010205",
+          "consumed": 9
+        }
+      }
+    },
+    {
+      "name": "enum-added.forward.unknown.array",
+      "axis": "enum-added",
+      "position": "T[]",
+      "direction": "v2-writes-v1-reads",
+      "reader": "Array<TierV1>",
+      "hex": "8102",
+      "verdict": "correct",
+      "shouldBe": "An enum value that fits the declared base type but is not a declared member is carried through and re-encoded byte-identically, so adding a member does not break an older reader. A value that does not fit the base type stays a typed error.",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "8102",
+          "consumed": 2
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "8102",
+          "consumed": 2
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "8102",
+          "consumed": 2
+        }
+      }
+    },
+    {
+      "name": "enum-added.forward.unknown.every-position",
+      "axis": "enum-added",
+      "position": "all at once",
+      "direction": "v2-writes-v1-reads",
+      "reader": "NestV1",
+      "hex": "89830161620b81830261630c82830361640d830461650ea1616b830561660f830661671002d9010283000102820281071863",
+      "notes": "An unknown enum AND an unknown union case in one payload, in a message that also exercises every container position.",
+      "verdict": "correct",
+      "shouldBe": "An enum value that fits the declared base type but is not a declared member is carried through and re-encoded byte-identically, so adding a member does not break an older reader. A value that does not fit the base type stays a typed error.",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonInvalidUnionIndexException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonInvalidUnionIndexError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "InvalidUnionIndex"
+        }
+      }
+    },
+    {
+      "name": "union-added.forward.known",
+      "axis": "union-added",
+      "position": "bare",
+      "direction": "v2-writes-v1-reads",
+      "reader": "UnionHolderV1",
+      "hex": "828200810705",
+      "notes": "Control.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "828200810705",
+          "consumed": 6
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "828200810705",
+          "consumed": 6
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "828200810705",
+          "consumed": 6
+        }
+      }
+    },
+    {
+      "name": "union-added.forward.unknown",
+      "axis": "union-added",
+      "position": "bare",
+      "direction": "v2-writes-v1-reads",
+      "reader": "UnionHolderV1",
+      "hex": "828202810705",
+      "notes": "Case index 2 does not exist in v1. `n: i4 = 5` behind it is the sentinel.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonInvalidUnionIndexException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonInvalidUnionIndexError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "InvalidUnionIndex"
+        }
+      }
+    },
+    {
+      "name": "union-added.backward",
+      "axis": "union-added",
+      "position": "bare",
+      "direction": "v1-writes-v2-reads",
+      "reader": "UnionHolderV2",
+      "hex": "828200810705",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "828200810705",
+          "consumed": 6
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "828200810705",
+          "consumed": 6
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "828200810705",
+          "consumed": 6
+        }
+      }
+    },
+    {
+      "name": "union-added.forward.unknown.direct",
+      "axis": "union-added",
+      "position": "union",
+      "direction": "v2-writes-v1-reads",
+      "reader": "Union<ShapeV1>",
+      "hex": "82028107",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonInvalidUnionIndexException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonInvalidUnionIndexError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "InvalidUnionIndex"
+        }
+      }
+    },
+    {
+      "name": "union-added.arity3",
+      "axis": "union-added",
+      "position": "union",
+      "direction": "hostile",
+      "reader": "Union<ShapeV1>",
+      "hex": "83008107f5",
+      "notes": "A union envelope declaring three items. The generated reader reads the index and the payload and then ends the array without consulting the declared length, so this pins whether a longer union envelope is rejected or quietly leaves a stray item behind.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnionEnvelopeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnionEnvelopeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "UnionEnvelope"
+        }
+      }
+    },
+    {
+      "name": "tree.depth3",
+      "axis": "recursion",
+      "position": "T[] self-reference",
+      "direction": "roundtrip",
+      "reader": "TreeV1",
+      "hex": "820181820281820380",
+      "notes": "Control for the depth probes in `malformed`.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "820181820281820380",
+          "consumed": 9
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "820181820281820380",
+          "consumed": 9
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "820181820281820380",
+          "consumed": 9
+        }
+      }
+    }
+  ],
+  "malformed": [
+    {
+      "name": "truncated.empty",
+      "group": "truncated",
+      "reader": "AppendedV1",
+      "hex": "",
+      "notes": "Nothing at all.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonTruncatedPayloadException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonTruncatedPayloadError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "truncated.header-only",
+      "group": "truncated",
+      "reader": "AppendedV1",
+      "hex": "82",
+      "notes": "The array header and no items.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonMalformedValueException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonLengthOverclaimError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "truncated.mid-message",
+      "group": "truncated",
+      "reader": "AppendedV1",
+      "hex": "8201",
+      "notes": "First field present, second missing entirely.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonMalformedValueException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonLengthOverclaimError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "truncated.mid-field",
+      "group": "truncated",
+      "reader": "AppendedV1",
+      "hex": "820162",
+      "notes": "A text string declaring 2 bytes with none following: truncation INSIDE a field rather than between fields.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonMalformedValueException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonLengthOverclaimError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "truncated.mid-field-partial",
+      "group": "truncated",
+      "reader": "AppendedV1",
+      "hex": "82016261",
+      "notes": "The same text string with one of its two bytes.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonMalformedValueException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonLengthOverclaimError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "truncated.nested-element",
+      "group": "truncated",
+      "reader": "Array<AppendedV1>",
+      "hex": "82820161628201",
+      "notes": "A two-element array whose second element is truncated.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonMalformedValueException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonLengthOverclaimError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "truncated.map-value",
+      "group": "truncated",
+      "reader": "Map<string,AppendedV1>",
+      "hex": "a1616b8201",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonMalformedValueException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonLengthOverclaimError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "truncated.set",
+      "group": "truncated",
+      "reader": "Set<TierV1>",
+      "hex": "d90102830001",
+      "notes": "A tagged set declaring three elements and holding two.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonMalformedValueException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonLengthOverclaimError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "length.overclaim.array",
+      "group": "length-lie",
+      "reader": "AppendedV1",
+      "hex": "83016162",
+      "notes": "The message array header claims three items and the buffer holds two.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonTruncatedPayloadException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonTruncatedPayloadError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "length.overclaim.inner-array",
+      "group": "length-lie",
+      "reader": "Array<i4>",
+      "hex": "830102",
+      "notes": "A `T[]` header claiming three and holding two.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonMalformedValueException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonLengthOverclaimError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "LengthOverclaim"
+        }
+      }
+    },
+    {
+      "name": "length.overclaim.map",
+      "group": "length-lie",
+      "reader": "Map<string,i4>",
+      "hex": "a2616b01",
+      "notes": "A map header claiming two entries and holding one.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonMalformedValueException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonLengthOverclaimError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "length.underclaim.negative-skip",
+      "group": "length-lie",
+      "reader": "ShiftedV2",
+      "hex": "8201020304",
+      "notes": "THE NEGATIVE-SKIP CASE, in isolation. `ShiftedV2` has three `i4` fields; the array header declares two, and two more integers follow it in the buffer. A reader that does not enforce the declared length reads the third field from OUTSIDE its own array, and then computes skipCount = 2 - 3 = -1. `CborReaderEx.ReadEndArrayAndSkip` (C#) and `readEndArrayAndSkip` (TypeScript) both take `abs(skipCount)`, so a negative delta skips FORWARD - consuming a fourth item that belongs to whatever comes next. `consumed` is what shows it: 3 bytes is the message, anything more is somebody else's data.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonFieldCountException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonFieldCountError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "FieldCount"
+        }
+      }
+    },
+    {
+      "name": "union.arity3.corrupts-next-field",
+      "group": "length-lie",
+      "reader": "GrowHolderV1",
+      "hex": "828300820161620905",
+      "notes": "The union stray-item hazard with a field behind it. The union envelope declares three items; the generated union reader reads the index and the payload and then ends the array without consulting the declared length. `n: i4` is next, and the value it picks up is the union's leftover 9 rather than its own 5.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnionEnvelopeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnionEnvelopeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "UnionEnvelope"
+        }
+      }
+    },
+    {
+      "name": "length.overclaim.set",
+      "group": "length-lie",
+      "reader": "Set<TierV1>",
+      "hex": "d901028300",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonMalformedValueException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonLengthOverclaimError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "indefinite.array.message",
+      "group": "indefinite",
+      "reader": "AppendedV1",
+      "hex": "9f016162ff",
+      "notes": "A message written as an indefinite-length array. Generated readers call `ReadStartArray()` and reject a null length outright, so this is where the 'undefined len array not allowed' guard is observable.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonIndefiniteLengthException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonIndefiniteLengthError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "IndefiniteArray"
+        }
+      }
+    },
+    {
+      "name": "indefinite.array.inner",
+      "group": "indefinite",
+      "reader": "Array<i4>",
+      "hex": "9f0102ff",
+      "notes": "A `T[]` field as an indefinite-length array.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonIndefiniteLengthException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonIndefiniteLengthError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "IndefiniteArray"
+        }
+      }
+    },
+    {
+      "name": "indefinite.map",
+      "group": "indefinite",
+      "reader": "Map<string,i4>",
+      "hex": "bf616b01ff",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "a1616b01",
+          "consumed": 5
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "a1616b01",
+          "consumed": 5
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "a1616b01",
+          "consumed": 5
+        }
+      }
+    },
+    {
+      "name": "indefinite.set",
+      "group": "indefinite",
+      "reader": "Set<TierV1>",
+      "hex": "d901029f0001ff",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "d90102820001",
+          "consumed": 7
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "d90102820001",
+          "consumed": 7
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "d90102820001",
+          "consumed": 7
+        }
+      }
+    },
+    {
+      "name": "indefinite.fixed",
+      "group": "indefinite",
+      "reader": "Fixed<i4,3>",
+      "hex": "9f010203ff",
+      "notes": "`read_fixed_array` in Rust documents that an indefinite-length array is accepted as long as it turns out to hold exactly N. This pins whether C# and TypeScript agree.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "83010203",
+          "consumed": 5
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "83010203",
+          "consumed": 5
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "83010203",
+          "consumed": 5
+        }
+      }
+    },
+    {
+      "name": "indefinite.text",
+      "group": "indefinite",
+      "reader": "AppendedV1",
+      "hex": "82017f6162ff",
+      "notes": "An indefinite-length (chunked) text string in a `string` field.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 6
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 6
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 6
+        }
+      }
+    },
+    {
+      "name": "indefinite.bytes-in-array",
+      "group": "indefinite",
+      "reader": "Array<i4>",
+      "hex": "5f41ff41ffff",
+      "notes": "An indefinite-length byte string where an array is expected.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "huge.length.array",
+      "group": "allocation-guard",
+      "reader": "Array<i4>",
+      "hex": "9bffffffffffffffff",
+      "notes": "An array header declaring 2^64-1 items with no payload. A reader that pre-sizes a buffer from the declared length before reading anything is a one-packet out-of-memory.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonMalformedValueException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonLengthOverclaimError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "LengthOverclaim"
+        }
+      }
+    },
+    {
+      "name": "huge.length.array-32",
+      "group": "allocation-guard",
+      "reader": "Array<i4>",
+      "hex": "9a7fffffff",
+      "notes": "2^31-1 items - the realistic version, small enough that a pre-allocating reader will actually try.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonMalformedValueException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonLengthOverclaimError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "LengthOverclaim"
+        }
+      }
+    },
+    {
+      "name": "huge.length.fixed",
+      "group": "allocation-guard",
+      "reader": "Fixed<i4,3>",
+      "hex": "9bffffffffffffffff",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonMalformedValueException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonLengthOverclaimError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "FixedArrayLength"
+        }
+      }
+    },
+    {
+      "name": "huge.length.map",
+      "group": "allocation-guard",
+      "reader": "Map<string,i4>",
+      "hex": "bbffffffffffffffff",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonMalformedValueException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonLengthOverclaimError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "huge.length.set",
+      "group": "allocation-guard",
+      "reader": "Set<TierV1>",
+      "hex": "d901029bffffffffffffffff",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonMalformedValueException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonLengthOverclaimError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "huge.length.text",
+      "group": "allocation-guard",
+      "reader": "AppendedV1",
+      "hex": "82017bffffffffffffffff",
+      "notes": "A text string declaring 2^64-1 bytes.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonMalformedValueException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonLengthOverclaimError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "huge.length.bytes",
+      "group": "allocation-guard",
+      "reader": "Array<i4>",
+      "hex": "5bffffffffffffffff",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "huge.length.message",
+      "group": "allocation-guard",
+      "reader": "AppendedV1",
+      "hex": "9bffffffffffffffff",
+      "notes": "The message's own array header.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonMalformedValueException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonLengthOverclaimError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "deep.nesting.skipped-tail",
+      "group": "recursion-depth",
+      "reader": "AppendedV1",
+      "build": {
+        "prefix": "83016162",
+        "repeat": "81",
+        "count": 2000,
+        "suffix": "00"
+      },
+      "notes": "A well-formed AppendedV1 with a third array item 2000 nested arrays deep. The reader never looks at the value - it only SKIPS it - so this measures the skip path's recursion, which is the part an attacker reaches without knowing the schema.",
+      "verdict": "acceptable",
+      "shouldBe": "The skip path is iterative in both System.Formats.Cbor and minicbor, so 2000 levels of nesting the reader never even looks at cost nothing. TypeScript's CborReader.skipValue is recursive.",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonDepthLimitException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonDepthLimitError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "DepthLimit"
+        }
+      }
+    },
+    {
+      "name": "deep.nesting.skipped-tail-100k",
+      "group": "recursion-depth",
+      "reader": "AppendedV1",
+      "build": {
+        "prefix": "83016162",
+        "repeat": "81",
+        "count": 100000,
+        "suffix": "00"
+      },
+      "notes": "The same at 100000 deep.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonDepthLimitException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonDepthLimitError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "DepthLimit"
+        }
+      }
+    },
+    {
+      "name": "deep.nesting.tree",
+      "group": "recursion-depth",
+      "reader": "TreeV1",
+      "build": {
+        "prefix": "",
+        "repeat": "820181",
+        "count": 2000,
+        "suffix": "820180"
+      },
+      "notes": "A legitimately typed recursive message 2000 levels deep. Unlike the skip path, this one goes through the generated reader.",
+      "verdict": "acceptable",
+      "shouldBe": "2000 levels of a legitimately typed recursive message decode in all three - but only because the harness runs every probe on a 64 MB stack. On a default 1 MB stack this is a StackOverflowException in .NET (uncatchable, takes the process) and an abort in Rust. There is no depth limit anywhere in the three runtimes; the schema author is the only guard.",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonDepthLimitException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonDepthLimitError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "DepthLimit"
+        }
+      }
+    },
+    {
+      "name": "trailing.garbage",
+      "group": "trailing",
+      "reader": "AppendedV1",
+      "hex": "82016162f5f5f5f5",
+      "notes": "A complete message with four stray bytes behind it. Framing is the transport's job, so the decode must succeed - but it must consume exactly four bytes and leave the rest.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 4
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 4
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 4
+        }
+      }
+    },
+    {
+      "name": "trailing.garbage.args",
+      "group": "trailing",
+      "reader": "Args<AppendedV1>",
+      "hex": "8182016162f5",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "8182016162",
+          "consumed": 5
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "8182016162",
+          "consumed": 5
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "8182016162",
+          "consumed": 5
+        }
+      }
+    },
+    {
+      "name": "majortype.field0.int",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "82016162",
+      "notes": "CONTROL: field 0 is declared `i4` and this IS an integer, so the payload is well formed. The sweep needs its baseline.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 4
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 4
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 4
+        }
+      }
+    },
+    {
+      "name": "majortype.field1.int",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "820101",
+      "notes": "Field 1 is declared `string`; here it is a CBOR int.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.root.int",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "01",
+      "notes": "The message's own array header replaced by a CBOR int.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.field0.text",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "8261616162",
+      "notes": "Field 0 is declared `i4`; here it is a CBOR text.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.field1.text",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "82016161",
+      "notes": "CONTROL: field 1 is declared `string` and this IS a text string, so the payload is well formed.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "82016161",
+          "consumed": 4
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "82016161",
+          "consumed": 4
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "82016161",
+          "consumed": 4
+        }
+      }
+    },
+    {
+      "name": "majortype.root.text",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "6161",
+      "notes": "The message's own array header replaced by a CBOR text.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.field0.bytes",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "8241ff6162",
+      "notes": "Field 0 is declared `i4`; here it is a CBOR bytes.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.field1.bytes",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "820141ff",
+      "notes": "Field 1 is declared `string`; here it is a CBOR bytes.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.root.bytes",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "41ff",
+      "notes": "The message's own array header replaced by a CBOR bytes.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.field0.array",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "82806162",
+      "notes": "Field 0 is declared `i4`; here it is a CBOR array.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.field1.array",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "820180",
+      "notes": "Field 1 is declared `string`; here it is a CBOR array.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.root.array",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "80",
+      "notes": "The message's own array header replaced by an EMPTY CBOR array - the right major type, the wrong length, which is the one case in this sweep that reaches the field reads.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonFieldCountException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonFieldCountError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.field0.map",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "82a06162",
+      "notes": "Field 0 is declared `i4`; here it is a CBOR map.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.field1.map",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "8201a0",
+      "notes": "Field 1 is declared `string`; here it is a CBOR map.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.root.map",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "a0",
+      "notes": "The message's own array header replaced by a CBOR map.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.field0.bool",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "82f56162",
+      "notes": "Field 0 is declared `i4`; here it is a CBOR bool.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.field1.bool",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "8201f5",
+      "notes": "Field 1 is declared `string`; here it is a CBOR bool.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.root.bool",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "f5",
+      "notes": "The message's own array header replaced by a CBOR bool.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.field0.null",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "82f66162",
+      "notes": "Field 0 is declared `i4`; here it is a CBOR null.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.field1.null",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "8201f6",
+      "notes": "Field 1 is declared `string`; here it is a CBOR null.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.root.null",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "f6",
+      "notes": "The message's own array header replaced by a CBOR null.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.field0.undefined",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "82f76162",
+      "notes": "Field 0 is declared `i4`; here it is a CBOR undefined.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.field1.undefined",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "8201f7",
+      "notes": "Field 1 is declared `string`; here it is a CBOR undefined.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.root.undefined",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "f7",
+      "notes": "The message's own array header replaced by a CBOR undefined.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.field0.float",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "82fa3f8000006162",
+      "notes": "Field 0 is declared `i4`; here it is a CBOR float.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.field1.float",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "8201fa3f800000",
+      "notes": "Field 1 is declared `string`; here it is a CBOR float.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.root.float",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "fa3f800000",
+      "notes": "The message's own array header replaced by a CBOR float.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.field0.tag",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "82c1016162",
+      "notes": "Field 0 is declared `i4`; here it is a CBOR tag.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.field1.tag",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "8201c101",
+      "notes": "Field 1 is declared `string`; here it is a CBOR tag.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.root.tag",
+      "group": "wrong-major-type",
+      "reader": "AppendedV1",
+      "hex": "c101",
+      "notes": "The message's own array header replaced by a CBOR tag.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.enum.text",
+      "group": "wrong-major-type",
+      "reader": "EnumHolderV1",
+      "hex": "82616105",
+      "notes": "An enum field carrying a text string.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.enum.negative",
+      "group": "wrong-major-type",
+      "reader": "EnumHolderV1",
+      "hex": "822005",
+      "notes": "An enum field carrying -1, which no `u1`-based enum can hold.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonIntegerRangeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonIntegerRangeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.enum.overflow",
+      "group": "wrong-major-type",
+      "reader": "EnumHolderV1",
+      "hex": "8219010005",
+      "notes": "An enum field carrying 256, one past `u1`.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonIntegerRangeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonIntegerRangeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.set.untagged",
+      "group": "wrong-major-type",
+      "reader": "Set<TierV1>",
+      "hex": "820001",
+      "notes": "A `Set<T>` payload without tag 258.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonMalformedValueException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonMalformedValueError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "MalformedValue"
+        }
+      }
+    },
+    {
+      "name": "majortype.set.wrong-tag",
+      "group": "wrong-major-type",
+      "reader": "Set<TierV1>",
+      "hex": "d90101820001",
+      "notes": "Tag 257 instead of 258.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedTagException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedTagError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "UnexpectedTag"
+        }
+      }
+    },
+    {
+      "name": "majortype.map.array",
+      "group": "wrong-major-type",
+      "reader": "Map<string,i4>",
+      "hex": "82616b01",
+      "notes": "A map written as an array of alternating keys and values.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonMalformedValueException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonMalformedValueError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.union.index-negative",
+      "group": "wrong-major-type",
+      "reader": "Union<ShapeV1>",
+      "hex": "82208107",
+      "notes": "Union case index -1.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonIntegerRangeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonIntegerRangeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.union.index-huge",
+      "group": "wrong-major-type",
+      "reader": "Union<ShapeV1>",
+      "hex": "821bffffffffffffffff8107",
+      "notes": "Union case index 2^64-1.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonIntegerRangeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonIntegerRangeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.union.index-text",
+      "group": "wrong-major-type",
+      "reader": "Union<ShapeV1>",
+      "hex": "8261618107",
+      "notes": "Union case index as a text string.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnexpectedCborTypeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "Decode"
+        }
+      }
+    },
+    {
+      "name": "majortype.union.no-payload",
+      "group": "wrong-major-type",
+      "reader": "Union<ShapeV1>",
+      "hex": "8100",
+      "notes": "A union envelope with an index and no payload.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonUnionEnvelopeException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonUnionEnvelopeError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "UnionEnvelope"
+        }
+      }
+    }
+  ]
+}

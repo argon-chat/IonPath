@@ -57,33 +57,43 @@ public partial class IonParser
             CurrentPos
         );
 
-    private static Parser<char, IonSyntaxMember> FlagsCore =>
-        EnumLikeCore("flags", (identifier, syntax, members) => new IonFlagsSyntax(identifier, syntax, members.ToList()));
+    private static Parser<char, IonSyntaxMember> FlagsCore(bool recover) =>
+        EnumLikeCore("flags", (identifier, syntax, members) => new IonFlagsSyntax(identifier, syntax, members.ToList()),
+            recover);
 
-    private static Parser<char, IonSyntaxMember> EnumsCore =>
-        EnumLikeCore("enum", (identifier, syntax, members) => new IonEnumSyntax(identifier, syntax, members.ToList()));
+    private static Parser<char, IonSyntaxMember> EnumsCore(bool recover) =>
+        EnumLikeCore("enum", (identifier, syntax, members) => new IonEnumSyntax(identifier, syntax, members.ToList()),
+            recover);
 
-    public static Parser<char, IonSyntaxMember> Flags => WithLeading(FlagsCore);
+    public static Parser<char, IonSyntaxMember> Flags => WithLeading(FlagsCore(recover: true));
 
-    public static Parser<char, IonSyntaxMember> Enums => WithLeading(EnumsCore);
+    public static Parser<char, IonSyntaxMember> Enums => WithLeading(EnumsCore(recover: true));
 
     public static Parser<char, IonSyntaxMember> EnumLike(string keyword,
         Func<IonIdentifier, IonUnderlyingTypeSyntax, IEnumerable<IonFlagEntrySyntax>, IonSyntaxMember> ctor) =>
-        WithLeading(EnumLikeCore(keyword, ctor));
+        WithLeading(EnumLikeCore(keyword, ctor, recover: true));
 
+    /// <remarks>
+    /// An entry is just a name and an optional value, so the member itself hardly ever fails — it is
+    /// the <em>separator</em> that goes missing, which is why
+    /// <see cref="SeparatedMembers{T}"/> attaches the <c>,</c> to the slot that follows it rather
+    /// than parsing it between slots. <c>Invalid Entry With Spaces,</c> reads as the entry
+    /// <c>Invalid</c> plus an unreadable span where its <c>,</c> should have been.
+    /// </remarks>
     private static Parser<char, IonSyntaxMember> EnumLikeCore(string keyword,
-        Func<IonIdentifier, IonUnderlyingTypeSyntax, IEnumerable<IonFlagEntrySyntax>, IonSyntaxMember> ctor) =>
+        Func<IonIdentifier, IonUnderlyingTypeSyntax, IEnumerable<IonFlagEntrySyntax>, IonSyntaxMember> ctor,
+        bool recover) =>
         Map(IonSyntaxMember (pos, name, baseType, entries, endPos) =>
                 ctor(name, baseType.HasValue
                         ? baseType.Value
-                        : new IonUnderlyingTypeSyntax(new IonIdentifier("u4"), [], false, false, false), entries)
-                    .WithPos(pos, endPos),
+                        : new IonUnderlyingTypeSyntax(new IonIdentifier("u4"), [], false, false, false),
+                        entries.Members)
+                    .WithPos(pos, endPos)
+                    .WithInvalidMembers(entries.Invalid),
             CurrentPos,
             String(keyword).Before(SkipTrivia).Then(Identifier),
             Try(Char(':').Before(SkipTrivia).Then(Type)).Optional(),
-            FlagEntry
-                .Separated(Char(',').Before(SkipTrivia))
-                .Between(Char('{').Before(SkipTrivia), SkipTriviaAll.Then(Char('}'))),
+            Braced(SeparatedMembers(FlagEntry, ',', recover)),
             CurrentPos
         );
 }

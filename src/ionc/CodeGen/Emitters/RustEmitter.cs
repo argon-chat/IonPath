@@ -1,4 +1,4 @@
-namespace ion.compiler.CodeGen.Emitters;
+﻿namespace ion.compiler.CodeGen.Emitters;
 
 using System.Text;
 
@@ -54,22 +54,50 @@ public sealed class RustEmitter : ICodeEmitter
             sb.AppendLine($"{indent}{AttributeEmission.RustDeprecated(deprecation)}");
     }
 
+    /// <summary>
+    /// Emits an Ion <c>enum</c> as <b>one</b> <c>ion_rustcore::ion_open_enum!</c> invocation.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Open, not closed.</b> Adding a member to an enum is a safe schema change only if an
+    /// older reader survives the new value, and a plain Rust <c>enum</c> cannot hold one: the
+    /// generated <c>TryFrom</c> rejected anything outside the declared set, so a v1 peer
+    /// hard-failed the moment a v2 peer sent <c>Trial = 2</c>. The macro expands to
+    /// <c>#[non_exhaustive] enum … { …, Unknown(repr) }</c> with
+    /// <see href="https://docs.rs/ion-rustcore">IonOpenEnum</see> and <c>IonFormat</c> impls, so
+    /// an undeclared value is carried verbatim and re-encodes byte-identically.
+    /// </para>
+    /// <para>
+    /// <b>Why one macro call rather than the expansion spelled out here.</b> The type, the
+    /// catch-all variant and the two impls have to agree about the member list; emitting them from
+    /// four separate string templates is four places for them to drift. The macro is the single
+    /// definition, and it lives next to the trait it implements.
+    /// </para>
+    /// <para>
+    /// <c>#[repr(…)]</c>, the explicit discriminants and the old <c>TryFrom&lt;repr&gt;</c> with
+    /// its <c>unsafe { std::mem::transmute(x) }</c> are all gone: a data-carrying variant cannot
+    /// be <c>as</c>-cast to an integer, so the mapping is spelled out in
+    /// <c>to_ion_repr</c> instead. The base type survives as the trait's associated
+    /// <c>Repr</c> — which is what the wire actually cares about. Doc comments and
+    /// <c>#[deprecated]</c> pass through the macro onto the enum and onto individual members.
+    /// </para>
+    /// </remarks>
     public string EnumDeclaration(string name, IEnumerable<EnumMember> members, EnumOptions? options = null,
         string? doc = null, IonDeprecation? deprecated = null)
     {
         var baseType = options?.BaseType ?? "i32";
         var sb = new StringBuilder();
-        sb.Append(DocComment(doc));
-        AppendDeprecated(sb, deprecated);
-        sb.AppendLine($"#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]");
-        sb.AppendLine($"#[repr({baseType})]");
-        sb.AppendLine($"pub enum {name} {{");
+        sb.AppendLine("ion_rustcore::ion_open_enum! {");
+        sb.Append(DocComment(doc, Indent(1)));
+        AppendDeprecated(sb, deprecated, Indent(1));
+        sb.AppendLine($"    pub enum {name}: {baseType} {{");
         foreach (var m in members)
         {
-            sb.Append(DocComment(m.Doc, Indent(1)));
-            AppendDeprecated(sb, m.Deprecated, Indent(1));
-            sb.AppendLine($"    {m.Name} = {m.Value},");
+            sb.Append(DocComment(m.Doc, Indent(2)));
+            AppendDeprecated(sb, m.Deprecated, Indent(2));
+            sb.AppendLine($"        {MemberIdentifier(m.Name)} = {m.Value},");
         }
+        sb.AppendLine("    }");
         sb.AppendLine("}");
         return sb.ToString();
     }
@@ -88,7 +116,7 @@ public sealed class RustEmitter : ICodeEmitter
         {
             sb.Append(DocComment(m.Doc, Indent(1)));
             AppendDeprecated(sb, m.Deprecated, Indent(1));
-            sb.AppendLine($"    pub const {m.Name}: Self = Self({m.Value});");
+            sb.AppendLine($"    pub const {MemberIdentifier(m.Name)}: Self = Self({m.Value});");
         }
         sb.AppendLine("}");
         return sb.ToString();
@@ -241,21 +269,22 @@ public sealed class RustEmitter : ICodeEmitter
             }
             sb.Append(char.ToLowerInvariant(c));
         }
-        var result = sb.ToString();
-        // Escape Rust keywords
-        return result switch
-        {
-            "as" or "break" or "const" or "continue" or "crate" or "do" or "else" or
-            "enum" or "extern" or "false" or "fn" or "for" or "if" or "impl" or "in" or
-            "let" or "loop" or "match" or "mod" or "move" or "mut" or "pub" or "ref" or
-            "return" or "self" or "static" or "struct" or "super" or "trait" or "true" or
-            "type" or "unsafe" or "use" or "where" or "while" or "async" or "await" or
-            "dyn" or "abstract" or "become" or "box" or "final" or "macro" or "override" or
-            "priv" or "typeof" or "unsized" or "virtual" or "yield" or "try"
-                => $"r#{result}",
-            _ => result
-        };
+
+        // snake_casing is what turns an Ion `Type`/`Move` into a Rust keyword in the first place,
+        // so the escape has to come after it. The word list lives in ReservedWords.
+        return ReservedWords.EscapeRust(sb.ToString());
     }
+
+    /// <summary>
+    /// An enum or flags member name as a Rust item identifier.
+    /// </summary>
+    /// <remarks>
+    /// Members are <b>not</b> snake_cased — a Rust variant and an associated const both keep the
+    /// Ion spelling — so this is the escape alone. A variant name never reaches the wire (the
+    /// discriminant does), and <c>ion_open_enum!</c> takes members as <c>$member:ident</c>, which a
+    /// raw identifier satisfies.
+    /// </remarks>
+    private static string MemberIdentifier(string name) => ReservedWords.EscapeRust(name);
 
     public string FormatEnumValue(string value, int? bits = null) => value;
 

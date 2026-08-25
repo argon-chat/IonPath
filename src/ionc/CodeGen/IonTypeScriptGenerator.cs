@@ -119,7 +119,9 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
     /// </summary>
     private static string MethodDoc(IonMethod method, string indent, Func<IonArgument, string>? nameOf = null)
     {
-        nameOf ??= a => a.name.Identifier;
+        // The default is the emitted parameter name, which for a reserved word is the renamed one:
+        // TypeScript has no lexical escape, so `@param class` would document nothing.
+        nameOf ??= TsBind;
         var parameters = method.arguments.Select(a => new DocParam(nameOf(a), a.Doc)).ToList();
         return Doc(method.Doc, indent, parameters, method.attributes);
     }
@@ -186,6 +188,27 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         return constantValue;
     }
 
+    /// <summary>
+    /// Emits an Ion <c>enum</c> as a TypeScript numeric <c>enum</c>, plus the helpers that tell a
+    /// declared member from an undeclared one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Ion enums are open</b>, and TypeScript needs no new type to hold that: a numeric
+    /// <c>enum</c> is a <c>number</c> at run time and its member list is not enforced there, so a
+    /// value a newer peer declares and this build does not is already a value of the enum type. It
+    /// survives a decode and re-encodes byte-identically without any wrapper. What TypeScript was
+    /// missing is the <i>question</i>, which the reader used to answer by throwing:
+    /// <c>Tier[num] !== undefined</c> decided whether to accept, and if not,
+    /// <c>throw new Error('invalid enum type')</c>. That test now lives here as
+    /// <c>isKnown</c>, for the caller to ask when it matters.
+    /// </para>
+    /// <para>
+    /// The helpers are a separate <c>const</c> rather than a <c>namespace</c> merged into the enum:
+    /// merging would add <c>isKnown</c> and <c>unknownValue</c> as run-time properties of the enum
+    /// object itself, and <c>Object.keys(Tier)</c> is something callers iterate.
+    /// </para>
+    /// </remarks>
     private static string GenerateEnum(IonEnum e)
     {
         var sb = new StringBuilder();
@@ -199,7 +222,48 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
                 $"{new string(' ', 2)}{m.name.Identifier} = {AppendPostfixForEnumType(m.type, m.constantValue)},");
         }
         sb.AppendLine("}");
+        sb.AppendLine();
+        sb.Append(GenerateOpenEnumHelpers(e));
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// The <c>isKnown</c> / <c>unknownValue</c> pair for an open enum — the TypeScript
+    /// counterparts of C#'s <c>IsKnown()</c>/<c>UnknownValue()</c> extensions and Rust's
+    /// <c>IonOpenEnum::is_known</c>/<c>ion_unknown_value</c>.
+    /// </summary>
+    private static string GenerateOpenEnumHelpers(IonEnum e)
+    {
+        var name = e.name.Identifier;
+        var baseTypeName = e.baseType.name.Identifier;
+        var members = string.Join(", ", e.members.Select(m => $"{name}.{m.name.Identifier}"));
+
+        return $$"""
+            const declared{{name}}: ReadonlySet<unknown> = new Set<unknown>([{{members}}]);
+
+            /**
+             * Open-enum helpers for {@link {{name}}}.
+             *
+             * Adding a member to an Ion enum is a safe schema change, so a value this revision does
+             * not declare is decoded, carried and re-encoded verbatim rather than rejected. These
+             * say whether that happened — a `switch` over the enum cannot, because an undeclared
+             * value simply matches no case.
+             */
+            export const Ion_{{name}}_OpenEnum = {
+              /** Whether `value` is a member this schema revision declares. */
+              isKnown(value: {{name}}): boolean {
+                return declared{{name}}.has(value);
+              },
+              /**
+               * The raw `{{baseTypeName}}` the peer sent when `value` names no declared member, or
+               * `undefined` when it does. This is the exact value that will be written back out.
+               */
+              unknownValue(value: {{name}}): {{baseTypeName}} | undefined {
+                return declared{{name}}.has(value) ? undefined : (value as unknown as {{baseTypeName}});
+              },
+            } as const;
+
+            """;
     }
 
     private static string GenerateFlags(IonFlags f)
@@ -303,11 +367,16 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 
     private static string GenerateField(IonField field) => $"{field.name.Identifier}: {UnwrapType(field.type)}";
 
+    /// <summary>
+    /// One parameter of a generated service-interface method. A parameter is a binding position —
+    /// <c>class</c> is <c>TS1390</c> here even though <c>class</c> as a property name above is
+    /// fine — so the name is escaped, unlike <see cref="GenerateField"/>.
+    /// </summary>
     private static string GenerateArgument(IonArgument field)
     {
         if (field.mod is IonArgumentModifiers.Stream)
-            return $"{field.name.Identifier}: AsyncIterable<{UnwrapType(field.type)}>";
-        return $"{field.name.Identifier}: {UnwrapType(field.type)}";
+            return $"{TsBind(field)}: AsyncIterable<{UnwrapType(field.type)}>";
+        return $"{TsBind(field)}: {UnwrapType(field.type)}";
     }
 
     private static string UnwrapType(IonType type) => (type, UseMaybeWrapper) switch
@@ -417,7 +486,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         """
         IonFormatterStorage.register("{ionType}", {
           read(reader: CborReader): {ionType} {
-            const arraySize = reader.readStartArray() ?? (() => { throw new Error("undefined len array not allowed") })();
+            const arraySize = IonFormatterStorage.readStartMessage(reader, {fieldsCount}, "{ionType}");
             {fieldReadExpression}
             reader.readEndArrayAndSkip(arraySize - {fieldsCount});
             return { {ctorFields} };
@@ -434,7 +503,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         """
         IonFormatterStorage.register("{ionType}", {
           read(reader: CborReader): {ionType} {
-            const arraySize = reader.readStartArray() ?? (() => { throw new Error("undefined len array not allowed") })();
+            const arraySize = IonFormatterStorage.readStartMessage(reader, {fieldsCount}, "{ionType}");
             {fieldReadExpression}
             reader.readEndArrayAndSkip(arraySize - {fieldsCount});
             return new {ionType}({ctorFields});
@@ -763,12 +832,33 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         }
     }
 
+    /// <summary>
+    /// An Ion <c>enum</c>'s codec — <b>open</b>: a value that fits the base type but names no
+    /// declared member is carried through, not rejected.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This used to be
+    /// <c>{ionType}[num] !== undefined ? num as {ionType} : throw new Error('invalid enum type')</c>,
+    /// which made adding a member to an enum a breaking change in TypeScript alone: a v1 client
+    /// threw the moment a v2 peer sent the new value, while C# carried it through happily and
+    /// Rust returned a typed error. The reverse-mapping lookup that decided it is now the
+    /// <c>isKnown</c> helper emitted beside the enum declaration, where a caller can ask the
+    /// question instead of having the answer thrown at them.
+    /// </para>
+    /// <para>
+    /// A TypeScript numeric <c>enum</c> is a <c>number</c> at run time, so an undeclared value
+    /// needs no new representation and re-encodes byte-identically through the unchanged write
+    /// path. A value that does <b>not</b> fit the base type — 256 or -1 into a <c>u1</c> — is a
+    /// different thing and still fails: that is <c>IonIntegerRangeError</c> out of the base type's
+    /// own formatter, which <c>readOpenEnum</c> delegates to.
+    /// </para>
+    /// </remarks>
     private static string GenerateFormatterForEnum(IonEnum @enum) =>
         """
             IonFormatterStorage.register("{ionType}", {
               read(reader: CborReader): {ionType} {
-                const num = ({readEnumValue}.read(reader))
-                return {ionType}[num] !== undefined ? num as {ionType} : (() => {throw new Error('invalid enum type')})();
+                return IonFormatterStorage.readOpenEnum<{ionType}>(reader, '{baseLookup}');
               },
               write(writer: CborWriter, value: {ionType}): void {
                 const casted: {baseTypeName} = value;
@@ -778,7 +868,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
             """
             .Replace("{ionType}", @enum.name.Identifier)
             .Replace("{baseTypeName}", @enum.baseType.name.Identifier)
-            .Replace("{readEnumValue}", FormatterTemplateRef(@enum.baseType))
+            .Replace("{baseLookup}", UnwrapTypeForLookup(@enum.baseType))
             .Replace("{writeEnumValue}", $"{FormatterTemplateRef(@enum.baseType)}.write(writer, casted);");
 
     private static string GenerateFormatterForFlags(IonFlags @enum) =>
@@ -809,21 +899,62 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 
         var name = type.name.Identifier;
 
+        // A union case is constructed positionally (`new X(a, b)`), a plain message is an object
+        // literal (`{ a, b }`) — so a renamed local is spelled out as `name: __name` in the second
+        // and simply passed along in the first.
         var template = (type.IsUnionCase ? FormatterTemplateForUnion : FormatterTemplate)
             .Replace("{ionType}", name)
             .Replace("{fieldReadExpression}", GenerateReadField(type))
-            .Replace("{ctorFields}", GenerateCaptureField(type))
+            .Replace("{ctorFields}",
+                type.IsUnionCase ? GenerateCaptureField(type) : GenerateObjectLiteralFields(type))
             .Replace("{fieldWriteExpression}", GenerateWriteField(type))
             .Replace("{fieldsCount}", type.fields.Count.ToString());
 
         return template;
     }
 
+    /// <summary>
+    /// An Ion name as a TypeScript <em>binding</em> identifier — a <c>const</c> the formatter
+    /// declares, or a generated method parameter.
+    /// </summary>
+    /// <remarks>
+    /// Unlike C#'s <c>@</c> and Rust's <c>r#</c> this is a real rename, so it may only be used
+    /// where the name is a binding. Property names, object-literal keys, member accesses and the
+    /// <c>Partial&lt;T&gt;</c> field descriptors keep the Ion spelling — see
+    /// <see cref="ReservedWords.EscapeTypeScriptBinding"/>.
+    /// </remarks>
+    private static string TsBind(ITypeWithName named)
+        => ReservedWords.EscapeTypeScriptBinding(named.Name.Identifier);
+
+    private static string TsBind(IonField field)
+        => ReservedWords.EscapeTypeScriptBinding(field.name.Identifier);
+
+    private static string TsBind(IonArgument argument)
+        => ReservedWords.EscapeTypeScriptBinding(argument.name.Identifier);
+
+    /// <summary>
+    /// The <c>{ … }</c> body a message formatter returns — object-literal properties keyed by the
+    /// Ion field name.
+    /// </summary>
+    /// <remarks>
+    /// Shorthand (<c>{ n, f }</c>) needs the key and the local to be the same word, and a shorthand
+    /// property is an <c>IdentifierReference</c>, so <c>{ class }</c> does not parse even though
+    /// <c>{ class: v }</c> does. A renamed local is therefore written out longhand — and the key
+    /// stays the Ion name, because it is the interface's property name.
+    /// </remarks>
+    private static string GenerateObjectLiteralFields(IonType type)
+        => string.Join(", ", type.fields.Select(x =>
+        {
+            var name = x.name.Identifier;
+            var binding = ReservedWords.EscapeTypeScriptBinding(name);
+            return binding == name ? name : $"{name}: {binding}";
+        }));
+
     private static string GenerateCaptureField(IonType type)
-        => string.Join(", ", type.fields.Select(x => $"{x.name.Identifier}"));
+        => string.Join(", ", type.fields.Select(TsBind));
 
     private static string GenerateCaptureField(IonMethod method)
-        => string.Join(", ", method.arguments.Select(x => $"{x.name.Identifier}"));
+        => string.Join(", ", method.arguments.Select(TsBind));
 
     private static string GenerateReadField(IonType type) =>
         string.Join($"\n{new string(' ', 4)}", type.fields.Select(GenerateReadField));
@@ -834,7 +965,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
             { type: { IsArray: true } } => GenerateReadArrayField(field),
             { type: { IsMaybe: true } } => GenerateReadMaybeField(field),
             { type: { IsPartial: true } } => GenerateReadPartialField(field),
-            _ => $"const {field.name.Identifier} = {FormatterTemplateRef(field.type)}.read(reader);"
+            _ => $"const {TsBind(field)} = {FormatterTemplateRef(field.type)}.read(reader);"
         };
 
     private static string GenerateReadArgument(IonArgument argument) =>
@@ -844,7 +975,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
             { type: { IsMaybe: true } } => GenerateReadMaybeField(argument),
             { type: { IsPartial: true } } => GenerateReadPartialField(argument),
             _ =>
-                $"const {argument.name.Identifier} = {FormatterTemplateRef(argument.type)}.read(reader);"
+                $"const {TsBind(argument)} = {FormatterTemplateRef(argument.type)}.read(reader);"
         };
 
 
@@ -855,7 +986,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
             { type: { IsMaybe: true } } => GenerateWriteMaybeField(argument),
             { type: { IsPartial: true } } => GenerateWritePartialField(argument),
             _ =>
-                $"{FormatterTemplateRef(argument.type)}.write(writer, {argument.name.Identifier});"
+                $"{FormatterTemplateRef(argument.type)}.write(writer, {TsBind(argument)});"
         };
 
     // ═══════════════════════════════════════════════════════════════════
@@ -872,10 +1003,10 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
     // are array/maybe shapes whose element type is Partial<Data>.
 
     private static string GenerateReadPartialField(ITypeWithName field)
-        => $"const {field.Name.Identifier} = {FormatterTemplateRef(field.Type)}.read(reader);";
+        => $"const {TsBind(field)} = {FormatterTemplateRef(field.Type)}.read(reader);";
 
     private static string GenerateWritePartialField(ITypeWithName field)
-        => $"{FormatterTemplateRef(field.Type)}.write(writer, {field.Name.Identifier});";
+        => $"{FormatterTemplateRef(field.Type)}.write(writer, {TsBind(field)});";
 
     /// <summary>
     /// <c>Fixed</c> for a <c>T[N]</c>, <c>""</c> for an unsized <c>T[]</c> — the infix that selects
@@ -893,7 +1024,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
             throw new InvalidOperationException();
         var element = arrayType.TypeArguments[0];
         return
-            $"const {field.Name.Identifier} = IonFormatterStorage.read{FixedInfix(arrayType)}Array<{ResolveTypeName(element)}>(reader, '{UnwrapTypeForLookup(element)}'{FixedLengthArg(arrayType)});";
+            $"const {TsBind(field)} = IonFormatterStorage.read{FixedInfix(arrayType)}Array<{ResolveTypeName(element)}>(reader, '{UnwrapTypeForLookup(element)}'{FixedLengthArg(arrayType)});";
     }
 
     private static string GenerateReadMaybeField(ITypeWithName field)
@@ -904,10 +1035,10 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         {
             var element = innerArray.TypeArguments[0];
             return
-                $"const {field.Name.Identifier} = IonFormatterStorage.readNullable{FixedInfix(innerArray)}Array<{ResolveTypeName(element)}>(reader, '{UnwrapTypeForLookup(element)}'{FixedLengthArg(innerArray)});";
+                $"const {TsBind(field)} = IonFormatterStorage.readNullable{FixedInfix(innerArray)}Array<{ResolveTypeName(element)}>(reader, '{UnwrapTypeForLookup(element)}'{FixedLengthArg(innerArray)});";
         }
         return
-            $"const {field.Name.Identifier} = IonFormatterStorage.{(UseMaybeWrapper ? "readMaybe" : "readNullable")}<{ResolveTypeName(maybeType.TypeArguments[0])}>(reader, '{UnwrapTypeForLookup(maybeType.TypeArguments[0])}');";
+            $"const {TsBind(field)} = IonFormatterStorage.{(UseMaybeWrapper ? "readMaybe" : "readNullable")}<{ResolveTypeName(maybeType.TypeArguments[0])}>(reader, '{UnwrapTypeForLookup(maybeType.TypeArguments[0])}');";
     }
 
 
@@ -917,7 +1048,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
             throw new InvalidOperationException();
         var element = arrayType.TypeArguments[0];
         return
-            $"IonFormatterStorage.write{FixedInfix(arrayType)}Array<{ResolveTypeName(element)}>(writer, {field.Name.Identifier}, '{UnwrapTypeForLookup(element)}'{FixedLengthArg(arrayType)});";
+            $"IonFormatterStorage.write{FixedInfix(arrayType)}Array<{ResolveTypeName(element)}>(writer, {TsBind(field)}, '{UnwrapTypeForLookup(element)}'{FixedLengthArg(arrayType)});";
     }
 
     private static string GenerateWriteMaybeField(ITypeWithName field)
@@ -928,10 +1059,10 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         {
             var element = innerArray.TypeArguments[0];
             return
-                $"IonFormatterStorage.writeNullable{FixedInfix(innerArray)}Array<{ResolveTypeName(element)}>(writer, {field.Name.Identifier}, '{UnwrapTypeForLookup(element)}'{FixedLengthArg(innerArray)});";
+                $"IonFormatterStorage.writeNullable{FixedInfix(innerArray)}Array<{ResolveTypeName(element)}>(writer, {TsBind(field)}, '{UnwrapTypeForLookup(element)}'{FixedLengthArg(innerArray)});";
         }
         return
-            $"IonFormatterStorage.{(UseMaybeWrapper ? "writeMaybe" : "writeNullable")}<{ResolveTypeName(maybeType.TypeArguments[0])}>(writer, {field.Name.Identifier}, '{UnwrapTypeForLookup(maybeType.TypeArguments[0])}');";
+            $"IonFormatterStorage.{(UseMaybeWrapper ? "writeMaybe" : "writeNullable")}<{ResolveTypeName(maybeType.TypeArguments[0])}>(writer, {TsBind(field)}, '{UnwrapTypeForLookup(maybeType.TypeArguments[0])}');";
     }
 
     private static string GenerateWriteReturnValue(IonType returnType) =>
@@ -1292,16 +1423,17 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         {
             if (field.mod is IonArgumentModifiers.Stream)
                 return $"inputStream: AsyncIterable<{UnwrapType(field.type)}>";
-            return $"{field.name.Identifier}: {UnwrapType(field.type)}";
+            return $"{TsBind(field)}: {UnwrapType(field.type)}";
         }
     }
 
     /// <summary>
-    /// The generated client executor renames the streaming argument to <c>inputStream</c>;
-    /// <c>@param</c> names must match the emitted signature.
+    /// The generated client executor renames the streaming argument to <c>inputStream</c>, and a
+    /// reserved-word argument to <c>__name</c>; <c>@param</c> names must match the emitted
+    /// signature, so they follow both renames.
     /// </summary>
     private static string ClientArgumentDocName(IonArgument arg)
-        => arg.mod is IonArgumentModifiers.Stream ? "inputStream" : arg.name.Identifier;
+        => arg.mod is IonArgumentModifiers.Stream ? "inputStream" : TsBind(arg);
 
     private string UnwrapUnionName(IonUnion union, IonType caseType)
     {
@@ -1377,12 +1509,15 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 
             unionTypesRequiredFormatters.Add(type);
 
-            var fields = string.Join(", ", type.fields.Select(f => $"public {GenerateField(f)}"));
+            var fields = string.Join(", ", type.fields.Select(UnionCaseConstructorParameter));
+
             builder.AppendLine();
             builder.AppendLine(Union_CaseBody
                 .Replace("{caseDoc}",
                     Doc(type.Doc, "", type.fields.Select(f => new DocParam(f.name.Identifier, f.Doc)).ToList(), type.attributes))
-                .Replace("{fields}", fields.ToString())
+                .Replace("{fields}", fields)
+                .Replace("{renamedFieldDecls}", UnionCaseRenamedFieldDeclarations(type))
+                .Replace("{renamedFieldAssignments}", UnionCaseRenamedFieldAssignments(type))
                 .Replace("{caseTypeName}", type.name.Identifier)
                 .Replace("{unionName}", union.name.Identifier)
                 .Replace("{caseIndex}", index.ToString())
@@ -1407,16 +1542,51 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         }
         """;
 
+    /// <summary>
+    /// A union case as a class whose constructor declares the case's fields.
+    /// </summary>
+    /// <remarks>
+    /// <c>{renamedFieldDecls}</c> and <c>{renamedFieldAssignments}</c> are empty for every field
+    /// whose name is not a reserved word, which is the overwhelming majority — a parameter property
+    /// (<c>constructor(public n: number)</c>) declares and assigns the field in one place, and that
+    /// stays the emitted shape. A parameter property cannot be spelled for a reserved word, though
+    /// (<c>public class: string</c> is <c>TS1359</c>), so those fields are declared on the class,
+    /// taken as a renamed plain parameter and assigned in the body.
+    /// </remarks>
     private static readonly string Union_CaseBody =
         """
         {caseDoc}export class {caseTypeName} extends I{unionName}
         {
-          constructor({fields}) { super(); }
+          {renamedFieldDecls}constructor({fields}) { super();{renamedFieldAssignments} }
 
           UnionKey: string = "{caseTypeName}";
           UnionIndex: number = {caseIndex};
         }
         """;
+
+    /// <summary>
+    /// A union case constructor parameter: a parameter property when the field name is a legal
+    /// binding identifier, a renamed plain parameter when it is not.
+    /// </summary>
+    private static string UnionCaseConstructorParameter(IonField field)
+    {
+        var name = field.name.Identifier;
+        return ReservedWords.IsTypeScriptReserved(name)
+            ? $"{TsBind(field)}: {UnwrapType(field.type)}"
+            : $"public {GenerateField(field)}";
+    }
+
+    /// <summary>The class-body declarations for the fields a parameter property cannot carry.</summary>
+    private static string UnionCaseRenamedFieldDeclarations(IonType type)
+        => string.Concat(type.fields
+            .Where(f => ReservedWords.IsTypeScriptReserved(f.name.Identifier))
+            .Select(f => $"{f.name.Identifier}: {UnwrapType(f.type)};\n  "));
+
+    /// <summary>The constructor-body assignments that go with them.</summary>
+    private static string UnionCaseRenamedFieldAssignments(IonType type)
+        => string.Concat(type.fields
+            .Where(f => ReservedWords.IsTypeScriptReserved(f.name.Identifier))
+            .Select(f => $" this.{f.name.Identifier} = {TsBind(f)};"));
 
     private static readonly string Union_InterfaceCheck =
         """
@@ -1452,6 +1622,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         builder.AppendLine();
         builder.AppendLine(Union_InterfaceFormatter
             .Replace("{unionInterface}", union.name.Identifier)
+            .Replace("{caseCount}", union.types.Count.ToString())
             .Replace("{readCheks}", readChecks.ToString())
             .Replace("{writeChecks}", writeChecks.ToString())
         );
@@ -1464,16 +1635,15 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         """
         IonFormatterStorage.register("I{unionInterface}", {
           read(reader: CborReader): I{unionInterface} {
-            reader.readStartArray();
+            const unionIndex = IonFormatterStorage.readStartUnion(reader, "I{unionInterface}", {caseCount});
             let value: I{unionInterface} = null as any;
-            const unionIndex = reader.readUInt32();
-            
+
             if (false)
             {}
             {readCheks}
-            else throw new Error();
-          
-            reader.readEndArray();
+            else IonFormatterStorage.invalidUnionIndex("I{unionInterface}", unionIndex, {caseCount});
+
+            IonFormatterStorage.readEndUnion(reader);
             return value!;
           },
           write(writer: CborWriter, value: I{unionInterface}): void {
@@ -1482,7 +1652,7 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
             if (false)
             {}
             {writeChecks}  
-            else throw new Error();
+            else throw new Error(`Ion union 'I{unionInterface}' has no case ${value.UnionIndex}; this revision declares {caseCount} case(s)`);
             writer.writeEndArray();
           }
         });

@@ -404,6 +404,246 @@ public static class IonAnalyticCodes
     public static readonly IonAnalyticCode ION0029_LockFieldAddedNonNullable
         = new("ION0029", "Field '{0}' added to '{1}' is not nullable. Older readers will fail to deserialize. Consider using '{0}: {2}?'.");
 
+    // ── Schema lock, second pass: union case payloads, enum members, base types ──
+    //
+    // Everything below reuses a code from the ION0020–ION0029 band because the *kind* of failure is
+    // one the band already names, and the band is full. The mapping, and the reasoning behind each:
+    //
+    //   ION0020  something older payloads still fill was removed
+    //   ION0021  a wire position moved
+    //   ION0022  the wire identity of a slot changed
+    //   ION0023  a named thing in the contract is gone
+    //   ION0025  the wire is intact; generated code and live callers are what break  → warning
+    //   ION0029  an addition older readers are not prepared for                      → warning
+    //
+    // A union case's payload is a positional array nested inside the union's own, so every field
+    // rule that applies to a `msg` applies to it unchanged — same code, same severity, only the
+    // owner is written `Union.Case` instead of `Msg`. That symmetry is deliberate: there is no
+    // wire-level reason for `A(x: i4)` → `A(x: i4, y: i4)` to be judged differently from
+    // `msg M { a: i4; }` → `msg M { a: i4; b: i4; }`, so both are ION0029.
+    //
+    // What is genuinely new is ION0070: a closed value space (an enum's members, a union's cases)
+    // gaining a member. Nothing in the band covers it — ION0029 is the nearest, but it is a warning
+    // about a *field*, and this is an error about a *discriminant*. See its own remarks.
+
+    /// <remarks>
+    /// A union case payload field that vanished. <c>{0}</c> field, <c>{1}</c> its wire index,
+    /// <c>{2}</c> the owning union, <c>{3}</c> the case.
+    /// </remarks>
+    public static readonly IonAnalyticCode ION0020_LockUnionCaseFieldRemoved
+        = new("ION0020",
+            "Breaking change: field '{0}' (index {1}) was removed from case '{3}' of union '{2}'. " +
+            "A case payload is a positional array — every field after it shifts down. " +
+            "Use '--update-lock' to acknowledge.");
+
+    /// <remarks>
+    /// <c>{0}</c> field, <c>{1}</c> union, <c>{2}</c> case, <c>{3}</c> locked index, <c>{4}</c> current index.
+    /// </remarks>
+    public static readonly IonAnalyticCode ION0021_LockUnionCaseFieldReordered
+        = new("ION0021",
+            "Breaking change: field '{0}' in case '{2}' of union '{1}' changed index from {3} to {4}. " +
+            "A case payload is a positional array, so a reader decodes index {4} into the field it " +
+            "knows as index {3} and reports nothing.");
+
+    /// <remarks>
+    /// <c>{0}</c> field, <c>{1}</c> union, <c>{2}</c> case, <c>{3}</c> locked type, <c>{4}</c> current type.
+    /// </remarks>
+    public static readonly IonAnalyticCode ION0022_LockUnionCaseFieldTypeChanged
+        = new("ION0022",
+            "Breaking change: field '{0}' in case '{2}' of union '{1}' changed type from '{3}' to '{4}'.");
+
+    /// <summary>
+    /// A union case that swapped its payload for a different one — a <c>case Foo</c> now naming a
+    /// different type, or a flip between an inline payload and a type reference.
+    /// </summary>
+    /// <remarks>
+    /// The same kind as a field retype: the discriminator still selects this arm, and what the arm
+    /// decodes to underneath it is now a different shape. <c>{0}</c> union, <c>{1}</c> case,
+    /// <c>{2}</c> locked payload, <c>{3}</c> current payload.
+    /// </remarks>
+    public static readonly IonAnalyticCode ION0022_LockUnionCasePayloadChanged
+        = new("ION0022",
+            "Breaking change: case '{1}' of union '{0}' changed payload from {2} to {3}. " +
+            "The case index is unchanged, so an older payload still selects this arm and is then " +
+            "decoded as the wrong shape.");
+
+    /// <summary>
+    /// An <c>enum</c> / <c>flags</c> base type change — <c>u1</c> to <c>u4</c>.
+    /// </summary>
+    /// <remarks>
+    /// A field retype in all but name: the base type <em>is</em> the encoding of every value of this
+    /// type, and every field typed by it silently changes width. It is reported here rather than
+    /// once per use site because the edit is one edit, and because a value used only inside a union
+    /// case or a service argument would otherwise slip through.
+    /// <para><c>{0}</c> declaration kind, <c>{1}</c> its name, <c>{2}</c> locked base, <c>{3}</c> current base.</para>
+    /// </remarks>
+    public static readonly IonAnalyticCode ION0022_LockEnumBaseTypeChanged
+        = new("ION0022",
+            "Breaking change: {0} '{1}' changed base type from '{2}' to '{3}'. The base type is the " +
+            "wire width of every value of '{1}', so every field, argument and case payload that " +
+            "mentions it re-encodes.");
+
+    /// <summary>
+    /// An <c>enum</c> / <c>flags</c> member that is gone.
+    /// </summary>
+    /// <remarks>
+    /// The union-case precedent: a member is a named part of the contract, so its disappearance is
+    /// ION0023 with the qualified name, exactly as <c>U.A</c> is. It is an error, not a warning,
+    /// because the value it named does not disappear from payloads already written — a reader built
+    /// from the new schema meets it and has no case for it.
+    /// <para><c>{0}</c> qualified member name, <c>{1}</c> declaration kind, <c>{2}</c> the value it held.</para>
+    /// </remarks>
+    public static readonly IonAnalyticCode ION0023_LockEnumMemberRemoved
+        = new("ION0023",
+            "Breaking change: {1} member '{0}' (value {2}) was removed. Payloads written against the " +
+            "previous schema still carry {2}, and nothing in the encoding distinguishes it from a " +
+            "value that was never valid.");
+
+    /// <summary>
+    /// An <c>enum</c> / <c>flags</c> member renamed in place, keeping its value.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately <b>not</b> ION0023 + ION0070 (removed, then added), and deliberately a warning.
+    /// The wire carries the member's integer, never its name, so every payload ever written still
+    /// decodes to exactly the same value and no reader can tell the edit happened. What does break
+    /// is source: generated code names the member, so anything written against the old name stops
+    /// compiling. ION0025 is the band's slot for "the wire survives, callers do not".
+    /// <para><c>{0}</c> declaration kind, <c>{1}</c> its name, <c>{2}</c> old member name,
+    /// <c>{3}</c> new member name, <c>{4}</c> the shared value.</para>
+    /// </remarks>
+    public static readonly IonAnalyticCode ION0025_LockEnumMemberRenamed
+        = new("ION0025",
+            "{0} '{1}' member '{2}' was renamed to '{3}'. Value {4} is unchanged, so this is not a " +
+            "wire break — every existing payload still decodes — but generated code that names " +
+            "'{2}' will no longer compile.");
+
+    /// <summary>
+    /// A service method that kept its signature and changed its name.
+    /// </summary>
+    /// <remarks>
+    /// A rename reaches this stage as a removal plus an unrelated addition, and reporting it that
+    /// way sent the author looking for a method they had not deleted. Pairing them needs no
+    /// guesswork about intent: a method is matched by name only, so a locked name that vanished
+    /// beside a new name with a byte-identical signature is the rename, and the pairing changes
+    /// nothing but the wording.
+    /// <para><c>{0}</c> service, <c>{1}</c> old method name, <c>{2}</c> new method name.</para>
+    /// </remarks>
+    public static readonly IonAnalyticCode ION0025_LockMethodRenamed
+        = new("ION0025",
+            "Service '{0}' renamed method '{1}' to '{2}'. The signature is unchanged, but a call is " +
+            "routed by method name, so every existing client calling '{1}' fails with an " +
+            "unknown-method error until it is regenerated.");
+
+    /// <remarks>
+    /// <c>{0}</c> field, <c>{1}</c> union, <c>{2}</c> case, <c>{3}</c> the field's type.
+    /// </remarks>
+    public static readonly IonAnalyticCode ION0029_LockUnionCaseFieldAddedNonNullable
+        = new("ION0029",
+            "Field '{0}' added to case '{2}' of union '{1}' is not nullable. Older readers will fail " +
+            "to deserialize. Consider using '{0}: {3}?'.");
+
+    // ── Lock document integrity (ION0069) and closed value spaces (ION0070) ──
+    //
+    // The first two numbers past the ION0060–ION0068 language-feature run. Neither belongs in the
+    // ION0020–ION0029 band even though both are lock diagnostics: ION0069 is not about a schema edit
+    // at all — it is about the lock file itself being unusable — and ION0070 needs a code of its own
+    // so a project that deliberately treats its enums as open can acknowledge exactly that axis
+    // without also silencing ION0029's field-append warning.
+
+    /// <summary>
+    /// A lock file written by an older toolchain, in a document shape that cannot express everything
+    /// this validator checks.
+    /// </summary>
+    /// <remarks>
+    /// Reported instead of validating what the old shape does cover, because a partial check reads
+    /// as a full one: a v1 document records a union case as <c>{index, name}</c>, so every edit
+    /// inside a case payload would pass silently and the run would still print "Check passed". The
+    /// build stops and the author re-baselines deliberately with <c>ionc lock update</c>.
+    /// <para>
+    /// The rest of the validation still runs and is still reported alongside this, so a genuine
+    /// break in the same commit is visible <em>before</em> the re-baseline rather than buried by it.
+    /// </para>
+    /// <para><c>{0}</c> the file's version, <c>{1}</c> the version this toolchain writes,
+    /// <c>{2}</c> what the newer shape added.</para>
+    /// </remarks>
+    public static readonly IonAnalyticCode ION0069_LockFileVersionOutdated
+        = new("ION0069",
+            "ion.lock.json is version {0}; this toolchain validates against version {1}. {2} " +
+            "Checking against the older document would silently pass that class of edit, so it is " +
+            "refused. Review the report below, then run 'ionc lock update' to re-baseline.");
+
+    /// <summary>
+    /// A lock file written by a <em>newer</em> toolchain than the one reading it.
+    /// </summary>
+    /// <remarks>
+    /// Nothing is validated in this case. A newer document may pin things this build has no concept
+    /// of, so "everything I understand still matches" is not evidence of compatibility, and
+    /// re-baselining would throw the newer pins away.
+    /// </remarks>
+    public static readonly IonAnalyticCode ION0069_LockFileVersionUnsupported
+        = new("ION0069",
+            "ion.lock.json is version {0}, newer than the version {1} this toolchain understands. " +
+            "It may pin parts of the wire contract this build cannot check, so no check was run — " +
+            "upgrade ionc rather than re-baselining, which would discard those pins.");
+
+    /// <summary>
+    /// A lock file that exists but could not be read.
+    /// </summary>
+    /// <remarks>
+    /// A diagnostic rather than the <see cref="System.Text.Json.JsonException"/> it used to be:
+    /// ion.lock.json is a file in the repository that a bad merge can mangle, and the compiler must
+    /// not crash on it. Equally it must not be treated as absent — that would re-baseline the whole
+    /// contract from whatever the schema says today. <c>{0}</c> is the underlying reason.
+    /// </remarks>
+    public static readonly IonAnalyticCode ION0069_LockFileUnreadable
+        = new("ION0069",
+            "ion.lock.json could not be read: {0}. It is not being treated as absent — that would " +
+            "silently re-baseline the whole wire contract. Restore the file, or delete it and run " +
+            "'ionc lock init' if you accept a new baseline.");
+
+    /// <summary>
+    /// A closed value space gained a member: a new <c>enum</c> / <c>flags</c> member, or a new
+    /// <c>union</c> case.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// An error, and the sharpest of the lock diagnostics, because the compatibility suite measured
+    /// what actually happens: an enum value the reader has never heard of is a hard decode failure
+    /// on Rust and on TypeScript and a silent wrong value on C#, and an unknown union case index
+    /// fails to decode on all three. It is not the reader's fault and no reader can be fixed to
+    /// tolerate it — a positional array carries no room for "a member I do not know".
+    /// </para>
+    /// <para>
+    /// Appending is the one evolution a positional layout normally survives, which is why ION0029 is
+    /// only a warning for a new field. That does not carry over here: a new field lands past the end
+    /// of what an old reader reads, whereas a new member lands in the middle of a value it is
+    /// already required to interpret.
+    /// </para>
+    /// <para>
+    /// The honest workaround is a schema that has a place for the unknown from day one — an
+    /// <c>Unknown = 0</c> member, or a reserved final case — not a lock that lets the member through.
+    /// Acknowledge with <c>--update-lock</c> once every reader is known to have been regenerated.
+    /// </para>
+    /// <para><c>{0}</c> declaration kind, <c>{1}</c> its name, <c>{2}</c> the new member,
+    /// <c>{3}</c> the value or index it takes.</para>
+    /// </remarks>
+    public static readonly IonAnalyticCode ION0070_LockEnumMemberAdded
+        = new("ION0070",
+            "Breaking change: {0} '{1}' gained member '{2}' (value {3}). A reader generated from the " +
+            "previous schema cannot decode {3} — it fails outright on Rust and TypeScript and yields " +
+            "a wrong value on C#. Acknowledge with '--update-lock' once every reader is regenerated.");
+
+    /// <remarks>
+    /// The union half of <see cref="ION0070_LockEnumMemberAdded"/>. <c>{0}</c> union, <c>{1}</c> the
+    /// new case, <c>{2}</c> its index.
+    /// </remarks>
+    public static readonly IonAnalyticCode ION0070_LockUnionCaseAdded
+        = new("ION0070",
+            "Breaking change: union '{0}' gained case '{1}' (index {2}). The index is the wire " +
+            "discriminator, and a reader generated from the previous schema has no arm for {2} — " +
+            "decoding fails on every target. Acknowledge with '--update-lock' once every reader is " +
+            "regenerated.");
+
     // ── Language feature codes (ION0060–ION0068) ──
     //
     // A new band, and deliberately not a reuse of a hole. The audit that preceded it:
@@ -420,7 +660,9 @@ public static class IonAnalyticCodes
     //   ION0062          fixed-size arrays
     //   ION0063–ION0066  mixins
     //   ION0067–ION0068  inline anonymous types
-    // ION0069 is left free so the run has somewhere to grow.
+    // ION0069 was left free for this run to grow into. It did not need to: the schema-lock second
+    // pass took ION0069 (lock document integrity) and ION0070 (closed value spaces) instead, since
+    // ION0020–ION0029 is full and neither is a language feature. ION0071 is the next free number.
 
     /// <summary>
     /// A generic used with the wrong number of type arguments — <c>Maybe&lt;A, B&gt;</c>,

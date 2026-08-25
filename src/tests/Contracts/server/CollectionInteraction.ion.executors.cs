@@ -37,7 +37,7 @@ public sealed class Ion_CollectionInteraction_ServiceExecutor(AsyncServiceScope 
     
         const int argumentSize = 1;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "CollectionInteraction.CountByTag");
     
         var __tags = IonFormatterStorage<Dictionary<string, i4>>.Read(reader);
     
@@ -57,7 +57,7 @@ public sealed class Ion_CollectionInteraction_ServiceExecutor(AsyncServiceScope 
     
         const int argumentSize = 1;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "CollectionInteraction.Dedup");
     
         var __ids = IonFormatterStorage<HashSet<i4>>.Read(reader);
     
@@ -77,7 +77,7 @@ public sealed class Ion_CollectionInteraction_ServiceExecutor(AsyncServiceScope 
     
         const int argumentSize = 1;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "CollectionInteraction.Rotate");
     
         var __coords = IonFormatterStorage<f4>.ReadFixedArray(reader, 16);
     
@@ -97,7 +97,7 @@ public sealed class Ion_CollectionInteraction_ServiceExecutor(AsyncServiceScope 
     
         const int argumentSize = 1;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "CollectionInteraction.RotateMaybe");
     
         var __coords = IonFormatterStorage<f4>.ReadNullableFixedArray(reader, 16);
     
@@ -117,7 +117,7 @@ public sealed class Ion_CollectionInteraction_ServiceExecutor(AsyncServiceScope 
     
         const int argumentSize = 1;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "CollectionInteraction.Lookup");
     
         var __members = reader.ReadNullable<Dictionary<string, Member>>();
     
@@ -137,7 +137,7 @@ public sealed class Ion_CollectionInteraction_ServiceExecutor(AsyncServiceScope 
     
         const int argumentSize = 1;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "CollectionInteraction.Regroup");
     
         var __groups = IonFormatterStorage<HashSet<i4>>.ReadArray(reader);
     
@@ -157,7 +157,7 @@ public sealed class Ion_CollectionInteraction_ServiceExecutor(AsyncServiceScope 
     
         const int argumentSize = 1;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "CollectionInteraction.Patch");
     
         var __patches = IonFormatterStorage<Dictionary<string, IonPartial<Doc>>>.Read(reader);
     
@@ -177,7 +177,7 @@ public sealed class Ion_CollectionInteraction_ServiceExecutor(AsyncServiceScope 
     
         const int argumentSize = 1;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "CollectionInteraction.Roster");
     
         var __rosters = IonFormatterStorage<Dictionary<string, IonArray<Member>>>.Read(reader);
     
@@ -199,7 +199,7 @@ public sealed class Ion_CollectionInteraction_ServiceExecutor(AsyncServiceScope 
     
         const int argumentSize = 2;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "CollectionInteraction.Merge");
     
         var __baseline = IonFormatterStorage<Dictionary<string, i4>>.Read(reader);
         var __weight = IonFormatterStorage<i4>.Read(reader);
@@ -220,7 +220,7 @@ public sealed class Ion_CollectionInteraction_ServiceExecutor(AsyncServiceScope 
     
         const int argumentSize = 1;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "CollectionInteraction.Echo");
     
         var __shapes = IonFormatterStorage<ContainerShapes>.Read(reader);
     
@@ -240,7 +240,7 @@ public sealed class Ion_CollectionInteraction_ServiceExecutor(AsyncServiceScope 
     
         const int argumentSize = 1;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "CollectionInteraction.EchoKeys");
     
         var __keys = IonFormatterStorage<KeyMatrix>.Read(reader);
     

@@ -49,6 +49,11 @@ internal static class IonProjectFormatterStorageModuleInit
       IonFormatterStorage<KeyMatrix>.Value = new Ion_KeyMatrix_Formatter();
       IonFormatterStorage<ContainerShapes>.Value = new Ion_ContainerShapes_Formatter();
       IonFormatterStorage<Tier>.Value = new Ion_Tier_Formatter();
+      IonFormatterStorage<KeywordFields>.Value = new Ion_KeywordFields_Formatter();
+      IonFormatterStorage<KeywordPatchTarget>.Value = new Ion_KeywordPatchTarget_Formatter();
+      IonFormatterStorage<KeywordTier>.Value = new Ion_KeywordTier_Formatter();
+      IonFormatterStorage<KeywordAccess>.Value = new Ion_KeywordAccess_Formatter();
+      IonFormatterStorage<IKeywordUnion>.Value = new Ion_IKeywordUnion_Formatter();
       IonFormatterStorage<LedgerEntry>.Value = new Ion_LedgerEntry_Formatter();
       IonFormatterStorage<LedgerPatch>.Value = new Ion_LedgerPatch_Formatter();
       IonFormatterStorage<PatchTarget>.Value = new Ion_PatchTarget_Formatter();
@@ -56,10 +61,13 @@ internal static class IonProjectFormatterStorageModuleInit
       IonFormatterStorage<Vector>.Value = new Ion_Vector_Formatter();
       IonFormatterStorage<VectorOfVector>.Value = new Ion_VectorOfVector_Formatter();
       IonFormatterStorage<VectorOfVectorOfVector>.Value = new Ion_VectorOfVectorOfVector_Formatter();
+      IonFormatterStorage<Kept>.Value = new Ion_Kept_Formatter();
+      IonFormatterStorage<Dropped>.Value = new Ion_Dropped_Formatter();
       IonExecutorMetadataStorage.AddExecutor<Ion_LegacyCacheInteraction_ServiceExecutor>("ILegacyCacheInteraction");
       IonExecutorMetadataStorage.AddExecutor<Ion_CacheInteraction_ServiceExecutor>("ICacheInteraction");
       IonExecutorMetadataStorage.AddExecutor<Ion_CollectionInteraction_ServiceExecutor>("ICollectionInteraction");
       IonExecutorMetadataStorage.AddExecutor<Ion_TestBlobs_ServiceExecutor>("ITestBlobs");
+      IonExecutorMetadataStorage.AddExecutor<Ion_KeywordInteraction_ServiceExecutor>("IKeywordInteraction");
       IonExecutorMetadataStorage.AddExecutor<Ion_LedgerInteraction_ServiceExecutor>("ILedgerInteraction");
       IonExecutorMetadataStorage.AddExecutor<Ion_MathInteraction_ServiceExecutor>("IMathInteraction");
       IonExecutorMetadataStorage.AddExecutor<Ion_RandomStreamInteraction_ServiceExecutor>("IRandomStreamInteraction");
@@ -69,6 +77,7 @@ internal static class IonProjectFormatterStorageModuleInit
       IonExecutorMetadataStorage.AddClient<Ion_CacheInteraction_ClientImpl>("ICacheInteraction");
       IonExecutorMetadataStorage.AddClient<Ion_CollectionInteraction_ClientImpl>("ICollectionInteraction");
       IonExecutorMetadataStorage.AddClient<Ion_TestBlobs_ClientImpl>("ITestBlobs");
+      IonExecutorMetadataStorage.AddClient<Ion_KeywordInteraction_ClientImpl>("IKeywordInteraction");
       IonExecutorMetadataStorage.AddClient<Ion_LedgerInteraction_ClientImpl>("ILedgerInteraction");
       IonExecutorMetadataStorage.AddClient<Ion_MathInteraction_ClientImpl>("IMathInteraction");
       IonExecutorMetadataStorage.AddClient<Ion_RandomStreamInteraction_ClientImpl>("IRandomStreamInteraction");
@@ -84,6 +93,12 @@ internal static class IonProjectFormatterStorageModuleInit
           IonPartialSchema<PatchTarget>.Field<string>("s"),
           IonPartialSchema<PatchTarget>.Array<i4>("items"),
           IonPartialSchema<PatchTarget>.NullableRef<string>("note"));
+      IonPartialSchema<KeywordPatchTarget>.Register(
+          IonPartialSchema<KeywordPatchTarget>.Field<i4>("fixed"),
+          IonPartialSchema<KeywordPatchTarget>.Field<string>("class"),
+          IonPartialSchema<KeywordPatchTarget>.Field<bool>("default"),
+          IonPartialSchema<KeywordPatchTarget>.Array<i4>("lock"),
+          IonPartialSchema<KeywordPatchTarget>.NullableRef<string>("event"));
       IonPartialSchema<LedgerPatch>.Register(
           IonPartialSchema<LedgerPatch>.Field<datetime>("bookedAt"),
           IonPartialSchema<LedgerPatch>.Field<decimal>("amount"),

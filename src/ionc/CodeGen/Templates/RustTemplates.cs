@@ -9,11 +9,29 @@ public sealed class RustTemplateProvider : ITemplateProvider
     // FORMATTER TEMPLATES
     // ═══════════════════════════════════════════════════════════════════
 
+    /// <summary>
+    /// A message's <c>IonFormat</c> impl.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The field array is opened with <c>read_message_header</c> rather than a bare
+    /// <c>d.array()?</c>, and its <c>DepthGuard</c> is bound as <c>_depth</c> for the whole body.
+    /// <b>The guard is the point.</b> The collection helpers count the containers they open, but a
+    /// message opens its own field array directly, so without this Rust counts <i>collections
+    /// only</i> while C#'s <c>CborReader.CurrentDepth</c> and TypeScript's frame stack count every
+    /// container — and the shared limit of 128 then means about 64 levels of a recursive message
+    /// there and about 128 here.
+    /// </para>
+    /// <para>
+    /// It is bound as <c>_depth</c> and not <c>_</c>: <c>DepthGuard</c> is <c>#[must_use]</c> and
+    /// releases on drop, so <c>let _ =</c> would drop it immediately and count nothing.
+    /// </para>
+    /// </remarks>
     public string FormatterTemplate =>
         """
         impl IonFormat for {typeName} {
             fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-                let len = d.array()?.ok_or(IonError::IndefiniteArray)?;
+                let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "{typeName}")?;
                 {readFields}
                 ion_rustcore::formatter::skip_remaining(d, len, {fieldsCount})?;
                 Ok(Self { {ctorArgs} })
@@ -27,11 +45,15 @@ public sealed class RustTemplateProvider : ITemplateProvider
         }
         """;
 
+    /// <summary>
+    /// A union case's <c>IonFormat</c> impl — a message like any other, including its
+    /// <c>read_message_header</c> depth guard.
+    /// </summary>
     public string FormatterUnionCaseTemplate =>
         """
         impl IonFormat for {typeName} {
             fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-                let len = d.array()?.ok_or(IonError::IndefiniteArray)?;
+                let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "{typeName}")?;
                 {readFields}
                 ion_rustcore::formatter::skip_remaining(d, len, {fieldsCount})?;
                 Ok(Self { {ctorArgs} })
@@ -45,27 +67,19 @@ public sealed class RustTemplateProvider : ITemplateProvider
         }
         """;
 
-    public string FormatterEnumTemplate =>
-        """
-        impl IonFormat for {typeName} {
-            fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-                let raw = {readExpr};
-                Self::try_from(raw).map_err(|_| IonError::InvalidEnum(raw as i64))
-            }
-
-            fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
-                (*self as {baseTypeName}).ion_write(e)
-            }
-        }
-
-        impl TryFrom<{baseTypeName}> for {typeName} {
-            type Error = ();
-            fn try_from(value: {baseTypeName}) -> Result<Self, Self::Error> {
-                // Safety: check all valid discriminants
-                {enumVariantCheck}
-            }
-        }
-        """;
+    /// <summary>
+    /// Unused on the Rust target: <c>ion_rustcore::ion_open_enum!</c> emits the <c>IonFormat</c>
+    /// impl along with the type, so <see cref="RustCodeGenerator.GenerateEnumFormatter"/> emits
+    /// nothing here.
+    /// </summary>
+    /// <remarks>
+    /// What used to stand here was a closed reader — <c>Self::try_from(raw)</c> over a
+    /// <c>TryFrom</c> impl that matched the declared discriminants and reached the variant with
+    /// <c>Ok(unsafe { std::mem::transmute(x) })</c>. It made adding an enum member a breaking
+    /// change on the wire (<c>IonError::InvalidEnum</c> for a value a newer peer declares), and it
+    /// spelled a safe operation with <c>unsafe</c>. Both are gone with the open enum.
+    /// </remarks>
+    public string FormatterEnumTemplate => "";
 
     public string FormatterFlagsTemplate =>
         """
@@ -81,12 +95,35 @@ public sealed class RustTemplateProvider : ITemplateProvider
         }
         """;
 
+    /// <summary>
+    /// A union's <c>IonFormat</c> impl.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A union envelope is exactly <c>[index, payload]</c> — two items, in every revision of
+    /// every union.</b> Growth happens inside the case payload, which is a message and skips its
+    /// own tail. The old <c>d.array()?; let union_index = d.u32()?;</c> discarded the declared
+    /// length, so a three-item envelope left its stray item in the stream and the <i>next field of
+    /// the enclosing message</i> read it as its own value — <c>[[0, [1,"b"], 9], 5]</c> decoded
+    /// with <c>n = 9</c>, silently. <c>read_union_envelope</c> rejects any length other than two
+    /// with <c>IonError::UnionEnvelope</c>, before the index is read.
+    /// </para>
+    /// <para>
+    /// The returned <c>DepthGuard</c> is bound as <c>_depth</c> for the whole body, for the reason
+    /// given on <see cref="FormatterTemplate"/>: it is <c>#[must_use]</c>, and <c>let _ =</c>
+    /// would drop it immediately and leave the envelope uncounted.
+    /// </para>
+    /// <para>
+    /// The write side goes through <c>write_union_envelope</c>, which emits the same
+    /// <c>array(2)</c> + <c>u32(index)</c> bytes it always did — encode is untouched.
+    /// </para>
+    /// </remarks>
     public string FormatterUnionTemplate =>
         """
         impl IonFormat for {unionName} {
             fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-                d.array()?;
-                let union_index = d.u32()?;
+                let (union_index, _depth) =
+                    ion_rustcore::formatter::read_union_envelope(d, "{unionName}")?;
                 let value = match union_index {
                     {readCases}
                     _ => return Err(IonError::InvalidUnionIndex(union_index)),
@@ -95,8 +132,7 @@ public sealed class RustTemplateProvider : ITemplateProvider
             }
 
             fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
-                e.array(2)?;
-                e.u32(self.union_index())?;
+                ion_rustcore::formatter::write_union_envelope(e, self.union_index())?;
                 match self {
                     {writeCases}
                 }

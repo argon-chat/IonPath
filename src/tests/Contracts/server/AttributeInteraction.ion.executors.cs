@@ -30,7 +30,7 @@ public sealed class Ion_LegacyCacheInteraction_ServiceExecutor(AsyncServiceScope
     
         const int argumentSize = 0;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "LegacyCacheInteraction.Ping");
     
         
     
@@ -77,7 +77,7 @@ public sealed class Ion_CacheInteraction_ServiceExecutor(AsyncServiceScope scope
     
         const int argumentSize = 1;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "CacheInteraction.Legacy");
     
         var __id = IonFormatterStorage<i4>.Read(reader);
     
@@ -98,7 +98,7 @@ public sealed class Ion_CacheInteraction_ServiceExecutor(AsyncServiceScope scope
     
         const int argumentSize = 1;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "CacheInteraction.Renamed");
     
         var __id = IonFormatterStorage<i4>.Read(reader);
     
@@ -118,7 +118,7 @@ public sealed class Ion_CacheInteraction_ServiceExecutor(AsyncServiceScope scope
     
         const int argumentSize = 1;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "CacheInteraction.Bare");
     
         var __id = IonFormatterStorage<i4>.Read(reader);
     
@@ -140,7 +140,7 @@ public sealed class Ion_CacheInteraction_ServiceExecutor(AsyncServiceScope scope
     
         const int argumentSize = 1;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "CacheInteraction.Current");
     
         var __id = IonFormatterStorage<i4>.Read(reader);
     
@@ -160,7 +160,7 @@ public sealed class Ion_CacheInteraction_ServiceExecutor(AsyncServiceScope scope
     
         const int argumentSize = 0;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "CacheInteraction.Ping");
     
         
     

@@ -35,7 +35,7 @@ public sealed class Ion_LedgerInteraction_ServiceExecutor(AsyncServiceScope scop
     
         const int argumentSize = 2;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "LedgerInteraction.Echo");
     
         var __openedat = IonFormatterStorage<datetime>.Read(reader);
         var __at = IonFormatterStorage<datetime>.Read(reader);
@@ -56,7 +56,7 @@ public sealed class Ion_LedgerInteraction_ServiceExecutor(AsyncServiceScope scop
     
         const int argumentSize = 2;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "LedgerInteraction.EchoAmount");
     
         var __openedat = IonFormatterStorage<datetime>.Read(reader);
         var __amount = IonFormatterStorage<decimal>.Read(reader);
@@ -77,7 +77,7 @@ public sealed class Ion_LedgerInteraction_ServiceExecutor(AsyncServiceScope scop
     
         const int argumentSize = 2;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "LedgerInteraction.Roundtrip");
     
         var __openedat = IonFormatterStorage<datetime>.Read(reader);
         var __entry = IonFormatterStorage<LedgerEntry>.Read(reader);
@@ -99,7 +99,7 @@ public sealed class Ion_LedgerInteraction_ServiceExecutor(AsyncServiceScope scop
     
         const int argumentSize = 3;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "LedgerInteraction.EchoMaybe");
     
         var __openedat = IonFormatterStorage<datetime>.Read(reader);
         var __at = reader.ReadNullable<datetime>();
@@ -121,7 +121,7 @@ public sealed class Ion_LedgerInteraction_ServiceExecutor(AsyncServiceScope scop
     
         const int argumentSize = 3;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "LedgerInteraction.EchoMany");
     
         var __openedat = IonFormatterStorage<datetime>.Read(reader);
         var __instants = IonFormatterStorage<datetime>.ReadArray(reader);
@@ -143,7 +143,7 @@ public sealed class Ion_LedgerInteraction_ServiceExecutor(AsyncServiceScope scop
     
         const int argumentSize = 2;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "LedgerInteraction.Patch");
     
         var __openedat = IonFormatterStorage<datetime>.Read(reader);
         var __patch = IonFormatterStorage<IonPartial<LedgerPatch>>.Read(reader);

@@ -1,0 +1,122 @@
+//! Backward/forward compatibility probe schemas.
+//!
+//! Every "v1"/"v2" pair below is the SAME logical message at two schema revisions, spelled
+//! with distinct names so that both revisions can be generated into one module and linked
+//! into one test binary. The wire shape is what matters: a message is a positional CBOR
+//! array, so a field's identity is its declaration order.
+
+// ── appended at the end ─────────────────────────────────────────────────────
+msg AppendedV1 { a: i4; b: string; }
+msg AppendedV2 { a: i4; b: string; c: i4; }
+
+// ── inserted in the middle ──────────────────────────────────────────────────
+msg InsertedV1 { a: i4; c: bool; }
+msg InsertedV2 { a: i4; b: string; c: bool; }
+
+// ── removed ─────────────────────────────────────────────────────────────────
+msg RemovedV1 { a: i4; b: string; c: bool; }
+msg RemovedV2 { a: i4; c: bool; }
+
+// ── reordered ───────────────────────────────────────────────────────────────
+msg ReorderedV1 { a: i4; b: string; }
+msg ReorderedV2 { b: string; a: i4; }
+
+// ── type changed ────────────────────────────────────────────────────────────
+msg RetypedV1 { a: i4; b: string; }
+msg RetypedV2 { a: i4; b: i4; }
+
+// ── numeric widening ────────────────────────────────────────────────────────
+msg WidenedV1 { a: i4; }
+msg WidenedV2 { a: i8; }
+
+// ── optional added / made non-optional ──────────────────────────────────────
+msg OptAddedV1 { a: i4; }
+msg OptAddedV2 { a: i4; b: string?; }
+msg OptTightenedV1 { a: i4; b: string?; }
+msg OptTightenedV2 { a: i4; b: string; }
+
+// ── T[] <-> T[N] ────────────────────────────────────────────────────────────
+msg VarToFixedV1 { xs: i4[]; }
+msg VarToFixedV2 { xs: i4[3]; }
+
+// ── enum value added ────────────────────────────────────────────────────────
+enum TierV1 : u1 { Free = 0, Paid = 1 }
+enum TierV2 : u1 { Free = 0, Paid = 1, Trial = 2 }
+msg EnumHolderV1 { t: TierV1; n: i4; }
+msg EnumHolderV2 { t: TierV2; n: i4; }
+
+// ── union case added ────────────────────────────────────────────────────────
+union ShapeV1 { CircleV1(r: i4), SquareV1(s: i4) }
+union ShapeV2 { CircleV2(r: i4), SquareV2(s: i4), TriangleV2(t: i4) }
+msg UnionHolderV1 { s: ShapeV1; n: i4; }
+msg UnionHolderV2 { s: ShapeV2; n: i4; }
+
+// ── the evolved message in every position it can occupy ─────────────────────
+msg NestV1 {
+    bare:   AppendedV1;
+    list:   AppendedV1[];
+    slots:  AppendedV1[2];
+    byName: Map<string, AppendedV1>;
+    opt:    AppendedV1?;
+    tier:   TierV1;
+    tiers:  Set<TierV1>;
+    shape:  ShapeV1;
+    tail:   i4;
+}
+msg NestV2 {
+    bare:   AppendedV2;
+    list:   AppendedV2[];
+    slots:  AppendedV2[2];
+    byName: Map<string, AppendedV2>;
+    opt:    AppendedV2?;
+    tier:   TierV2;
+    tiers:  Set<TierV2>;
+    shape:  ShapeV2;
+    tail:   i4;
+}
+
+// ── same-type insert / remove: the silent-corruption case ───────────────────
+//
+// `InsertedV1`/`InsertedV2` above change a field's *type* as a side effect of the
+// insertion, so the shift is caught by a type mismatch. These two do not: every field is
+// `i4`, so an inserted field slides every later field along with nothing to notice it.
+msg ShiftedV1 { a: i4; c: i4; }
+msg ShiftedV2 { a: i4; b: i4; c: i4; }
+
+// ── same-type reorder ───────────────────────────────────────────────────────
+msg SwapV1 { x: i4; y: i4; }
+msg SwapV2 { y: i4; x: i4; }
+
+// ── a field appended inside a union case payload ────────────────────────────
+union GrowV1 { GrowCaseV1(a: i4, b: string) }
+union GrowV2 { GrowCaseV2(a: i4, b: string, c: i4) }
+msg GrowHolderV1 { g: GrowV1; n: i4; }
+msg GrowHolderV2 { g: GrowV2; n: i4; }
+
+// ── the Set position, with a sentinel field behind it ───────────────────────
+//
+// `Set<T>` where T is a `msg` compiles, and generates working C# and TypeScript, but the
+// Rust it generates does not build: the message struct derives only `PartialEq`, and
+// `HashSet<T>` needs `Eq + Hash`. So the only message-bearing container positions that are
+// portable today are `T[]`, `T[N]` and `Map<K,V>` — the Set position is reachable for a
+// scalar or an enum only. See Compat/README.md.
+msg SetHolderV1 { s: Set<TierV1>; n: i4; }
+msg SetHolderV2 { s: Set<TierV2>; n: i4; }
+
+// ── recursion-depth probe ───────────────────────────────────────────────────
+//
+// Recursion goes through `T[]`, not through `T?`. A directly self-referential
+// `msg DeepV1 { v: i4; child: DeepV1?; }` is accepted by the compiler and generates
+// C# and TypeScript that build, but Rust `pub child: Option<DeepV1>` without a Box —
+// E0072 "recursive type has infinite size". See Compat/README.md.
+msg TreeV1 { v: i4; kids: TreeV1[]; }
+
+// ── method argument / return position ───────────────────────────────────────
+service CompatSvcV1() {
+    Echo(v: AppendedV1): AppendedV1;
+    EchoNest(v: NestV1, tail: i4): NestV1;
+}
+service CompatSvcV2() {
+    Echo(v: AppendedV2): AppendedV2;
+    EchoNest(v: NestV2, tail: i4): NestV2;
+}

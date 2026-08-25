@@ -823,22 +823,126 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     private static bool IsTypedefDeclaration(IonType type)
         => type is { isTypedef: true, fields.Count: > 0 } and not IonArray and not IonUnresolvedType;
 
+    /// <summary>
+    /// The eight Ion integral base types that are also legal C# <c>enum</c> underlying types.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The names are the <c>global using</c> aliases from <c>globals.cs</c> (<c>u1</c> is
+    /// <c>System.Byte</c>), and an alias is accepted in the <c>enum_base</c> position, so the
+    /// declared Ion type can be written through verbatim.
+    /// </para>
+    /// <para>
+    /// <c>i16</c>/<c>u16</c> are absent because they map to <c>Int128</c>/<c>UInt128</c>, which
+    /// the CLR does not allow as an enum's underlying type at all. Such an enum keeps the old
+    /// implicit <c>int</c> and gets no open-enum helpers.
+    /// </para>
+    /// </remarks>
+    private static readonly HashSet<string> ClrEnumBaseTypes =
+        new(["i1", "i2", "i4", "i8", "u1", "u2", "u4", "u8"], StringComparer.Ordinal);
+
+    /// <summary>
+    /// Emits an Ion <c>enum</c> as a C# <c>enum</c> <b>whose underlying type is the declared Ion
+    /// base type</b>, plus the extension methods that tell a declared member from an undeclared
+    /// one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Ion enums are open.</b> Adding a member is a safe schema change, so a reader on an older
+    /// revision has to carry a value it does not declare, preserve it, and write it back
+    /// byte-identically. C# needs no new type for that — the cast in the generated formatter is
+    /// an <i>enum conversion</i>, which is total and never throws, so the number already survives.
+    /// What it needs is for the enum to be <b>as wide as the wire type</b>: the declaration used
+    /// to be a bare <c>public enum Tier</c>, i.e. <c>int</c>, and an enum based on <c>u8</c> then
+    /// truncated any undeclared value above <c>int.MaxValue</c> on the way in and wrote a
+    /// different number back out. With the underlying type equal to the base type the mapping is a
+    /// bijection and the round trip is byte-identical by construction.
+    /// </para>
+    /// <para>
+    /// The other half of the contract is that a caller can <i>ask</i>. A <c>switch</c> over an
+    /// open enum falls through every arm for an unknown value, which is exactly the silent flow-on
+    /// the compat suite recorded, so <c>IsKnown()</c> and <c>UnknownValue()</c> are generated next
+    /// to the type — the counterparts of Rust's <c>IonOpenEnum::is_known</c> /
+    /// <c>ion_unknown_value</c> and TypeScript's <c>Tier.isKnown</c>. They are written out from
+    /// the member list rather than calling <see cref="Enum.IsDefined{TEnum}(TEnum)"/> so that the
+    /// check costs a handful of comparisons and no metadata lookup.
+    /// </para>
+    /// <para>
+    /// A value that does <b>not</b> fit the base type — 256 or -1 into a <c>u1</c>-based enum — is
+    /// a different thing entirely and is <i>not</i> carried: it is an
+    /// <c>IonIntegerRangeException</c> from the base type's own formatter, because no revision of
+    /// this enum could have written it. See <c>IonInteger.ReadUnsigned</c>.
+    /// </para>
+    /// </remarks>
     private string GenerateEnum(IonEnum e)
     {
+        var baseTypeName = e.baseType.name.Identifier;
+        var isClrBase = ClrEnumBaseTypes.Contains(baseTypeName);
+
         var sb = new StringBuilder();
         sb.Append(Doc(e.Doc));
         sb.Append(Attributes(e.attributes));
         sb.AppendLine("{compileGeneratedAttributes}");
-        sb.AppendLine($"public enum {e.name.Identifier}");
+        sb.AppendLine($"public enum {e.name.Identifier}{(isClrBase ? $" : {baseTypeName}" : "")}");
         sb.AppendLine("{");
         foreach (var m in e.members)
         {
             sb.Append(Doc(m.Doc, "    "));
             sb.Append(Attributes(m.attributes, "    "));
-            sb.AppendLine($"    {m.name.Identifier} = {m.constantValue},");
+            sb.AppendLine($"    {ReservedWords.EscapeCSharp(m.name.Identifier)} = {m.constantValue},");
         }
         sb.AppendLine("}");
+
+        if (isClrBase)
+        {
+            sb.AppendLine();
+            sb.Append(GenerateOpenEnumHelpers(e, baseTypeName));
+        }
+
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// The <c>IsKnown()</c> / <c>UnknownValue()</c> extension pair for an open enum.
+    /// </summary>
+    /// <remarks>
+    /// <c>||</c> rather than an <c>is A or B</c> pattern: two members of an Ion enum may share a
+    /// constant, and a repeated constant inside an <c>or</c> pattern is a compile-time
+    /// "unreachable pattern", whereas a repeated equality test is merely redundant.
+    /// </remarks>
+    private static string GenerateOpenEnumHelpers(IonEnum e, string baseTypeName)
+    {
+        var name = e.name.Identifier;
+        var known = e.members.Count == 0
+            ? "false"
+            : string.Join(" || ",
+                e.members.Select(m => $"value == {name}.{ReservedWords.EscapeCSharp(m.name.Identifier)}"));
+
+        return $$"""
+            /// <summary>Open-enum helpers for <see cref="{{name}}"/>.</summary>
+            /// <remarks>
+            /// A value the peer's schema declares and this one does not is carried through decoding
+            /// rather than rejected, so that adding a member stays a safe schema change. These say
+            /// whether that happened — a <c>switch</c> over the enum cannot, because an undeclared
+            /// value simply matches no arm.
+            /// </remarks>
+            {compileGeneratedAttributes}
+            public static class Ion_{{name}}_OpenEnum
+            {
+                /// <summary>Whether <paramref name="value"/> is a member this schema revision declares.</summary>
+                public static bool IsKnown(this {{name}} value)
+                    => {{known}};
+
+                /// <summary>
+                /// The raw <c>{{baseTypeName}}</c> the peer sent when <paramref name="value"/> names no
+                /// declared member, or <see langword="null"/> when it does.
+                /// </summary>
+                /// <remarks>This is the exact number that will be written back out.</remarks>
+                public static {{baseTypeName}}? UnknownValue(this {{name}} value)
+                    => value.IsKnown() ? null : ({{baseTypeName}})value;
+            }
+
+            """;
     }
 
     private string GenerateFlags(IonFlags f)
@@ -854,7 +958,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         {
             sb.Append(Doc(m.Doc, "    "));
             sb.Append(Attributes(m.attributes, "    "));
-            sb.AppendLine($"    {m.name.Identifier} = {m.constantValue},");
+            sb.AppendLine($"    {ReservedWords.EscapeCSharp(m.name.Identifier)} = {m.constantValue},");
         }
         sb.AppendLine("}");
         return sb.ToString();
@@ -890,21 +994,28 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
             var args = string.Join(", ",
                 method.arguments.Select(GenerateArgument).Concat(["CancellationToken ct = default"]));
-            sb.AppendLine($"    {GenerateReturnType(method)} {method.name.Identifier}({args});");
+            sb.AppendLine(
+                $"    {GenerateReturnType(method)} {ReservedWords.EscapeCSharp(method.name.Identifier)}({args});");
         }
 
         sb.AppendLine("}");
         return sb.ToString();
     }
 
+    /// <summary>
+    /// One positional parameter of a generated record — which is also the property the field is
+    /// read back through, so the <c>@</c> here is what makes <c>value.@fixed</c> below resolve.
+    /// </summary>
     private string GenerateField(IonField field)
-        => $"{RecordParameterAttributes(field.attributes)}{UnwrapType(field.type)} {field.name.Identifier}";
+        => $"{RecordParameterAttributes(field.attributes)}{UnwrapType(field.type)} "
+           + ReservedWords.EscapeCSharp(field.name.Identifier);
 
     private static string GenerateArgument(IonArgument arg)
     {
+        var name = ReservedWords.EscapeCSharp(arg.name.Identifier);
         if (arg.mod is IonArgumentModifiers.Stream)
-            return $"IAsyncEnumerable<{UnwrapType(arg.type)}>?  {arg.name.Identifier}";
-        return $"{UnwrapType(arg.type)} {arg.name.Identifier}";
+            return $"IAsyncEnumerable<{UnwrapType(arg.type)}>?  {name}";
+        return $"{UnwrapType(arg.type)} {name}";
     }
 
     private static string UnwrapType(IonType type) =>
@@ -1042,7 +1153,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             {compileGeneratedAttributes}
             public {ionType} Read(CborReader reader)
             {
-                var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");;
+                var arraySize = reader.ReadStartMessage({fieldsCount}, "{ionType}");
                 {fieldReadExpression}
                 reader.ReadEndArrayAndSkip(arraySize - {fieldsCount});
                 return new({ctorFields});
@@ -1249,8 +1360,16 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     private static string GenerateReadPartialField(IonField field)
         => $"var __{field.name.Identifier.ToLowerInvariant()} = {FormatterTemplateRef(field.type)}.Read(reader);";
 
+    /// <summary>
+    /// <c>value.Foo</c> — the record property a field was generated as. Escaped for the same reason
+    /// the positional parameter is: the property declared from <c>fixed:</c> is reached as
+    /// <c>value.@fixed</c>.
+    /// </summary>
+    private static string FieldAccess(IonField field)
+        => $"value.{ReservedWords.EscapeCSharp(field.name.Identifier)}";
+
     private static string GenerateWritePartialField(IonField field)
-        => $"{FormatterTemplateRef(field.type)}.Write(writer, value.{field.name.Identifier});";
+        => $"{FormatterTemplateRef(field.type)}.Write(writer, {FieldAccess(field)});";
 
     private static string GenerateWriteArgument(IonArgument argument) =>
         argument switch
@@ -1354,7 +1473,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             // Same expression the default arm produced before this arm existed — the message
             // field *write* path was never broken. Spelled out only to mirror GenerateReadField.
             { type: { IsPartial: true } } => GenerateWritePartialField(field),
-            _ => $"{FormatterTemplateRef(field.type)}.Write(writer, value.{field.name.Identifier});"
+            _ => $"{FormatterTemplateRef(field.type)}.Write(writer, {FieldAccess(field)});"
         };
     }
 
@@ -1370,7 +1489,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         if (field.type is not IonGenericType { IsArray: true } arrayType)
             throw new InvalidOperationException();
         return
-            $"IonFormatterStorage<{ResolveTypeName(arrayType.TypeArguments[0])}>.Write{FixedInfix(arrayType)}Array(writer, value.{field.name.Identifier}{FixedLengthArg(arrayType)});";
+            $"IonFormatterStorage<{ResolveTypeName(arrayType.TypeArguments[0])}>.Write{FixedInfix(arrayType)}Array(writer, {FieldAccess(field)}{FixedLengthArg(arrayType)});";
     }
 
     private static string GenerateWriteMaybeField(IonField field)
@@ -1379,9 +1498,9 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             throw new InvalidOperationException();
         if (maybeType.TypeArguments[0] is IonGenericType { IsArray: true } innerArray)
             return
-                $"IonFormatterStorage<{ResolveTypeName(innerArray.TypeArguments[0])}>.WriteNullable{FixedInfix(innerArray)}Array(writer, value.{field.name.Identifier}{FixedLengthArg(innerArray)});";
+                $"IonFormatterStorage<{ResolveTypeName(innerArray.TypeArguments[0])}>.WriteNullable{FixedInfix(innerArray)}Array(writer, {FieldAccess(field)}{FixedLengthArg(innerArray)});";
         return
-            $"IonFormatterStorage<{ResolveTypeName(maybeType.TypeArguments[0])}>.{(UseMaybeWrapper ? "WriteMaybe" : "WriteNullable")}(writer, value.{field.name.Identifier});";
+            $"IonFormatterStorage<{ResolveTypeName(maybeType.TypeArguments[0])}>.{(UseMaybeWrapper ? "WriteMaybe" : "WriteNullable")}(writer, {FieldAccess(field)});";
     }
 
     private static readonly string ServiceExecutorTemplate =
@@ -1439,7 +1558,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string ServiceStreamExecutorMethodTemplate =
         """
-        {methodDoc}    public async IAsyncEnumerable<Memory<byte>> {methodName}_Execute(CborReader reader, IAsyncEnumerable<ReadOnlyMemory<byte>>? inputStream, CancellationToken ct = default)
+        {methodDoc}    public async IAsyncEnumerable<Memory<byte>> {methodNameRaw}_Execute(CborReader reader, IAsyncEnumerable<ReadOnlyMemory<byte>>? inputStream, CancellationToken ct = default)
             {
                 var service = scope.ServiceProvider.GetRequiredService<I{serviceTypename}>();
 
@@ -1447,7 +1566,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
                 
                 {inputCastedStream}
 
-                var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+                var arraySize = reader.ReadStartMessage(argumentSize, "{serviceTypename}.{methodNameRaw}");
                     
                 {fieldReadExpression}
 
@@ -1473,13 +1592,13 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     private static readonly string ServiceExecutorMethodNoReturnTemplate =
         """
         {methodDoc}    {compileGeneratedAttributes}
-            public async Task {methodName}_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
+            public async Task {methodNameRaw}_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
             {
                 var service = scope.ServiceProvider.GetRequiredService<I{serviceTypename}>();
             
                 const int argumentSize = {argSize};
             
-                var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+                var arraySize = reader.ReadStartMessage(argumentSize, "{serviceTypename}.{methodNameRaw}");
             
                 {fieldReadExpression}
             
@@ -1492,13 +1611,13 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     private static readonly string ServiceExecutorMethodWithReturnTemplate =
         """
         {methodDoc}    {compileGeneratedAttributes}
-            public async Task {methodName}_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
+            public async Task {methodNameRaw}_Execute(CborReader reader, CborWriter writer, CancellationToken ct = default)
             {
                 var service = scope.ServiceProvider.GetRequiredService<I{serviceTypename}>();
             
                 const int argumentSize = {argSize};
             
-                var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+                var arraySize = reader.ReadStartMessage(argumentSize, "{serviceTypename}.{methodNameRaw}");
             
                 {fieldReadExpression}
             
@@ -1512,14 +1631,14 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string ServiceBranchExecute =
         """
-                if (methodName.Equals("{methodName}", StringComparison.InvariantCultureIgnoreCase))
-                    return {methodName}_Execute(reader, writer, ct);
+                if (methodName.Equals("{methodNameRaw}", StringComparison.InvariantCultureIgnoreCase))
+                    return {methodNameRaw}_Execute(reader, writer, ct);
         """;
 
     private static readonly string ServiceStreamBranchExecute =
         """
-                if (methodName.Equals("{methodName}", StringComparison.InvariantCultureIgnoreCase))
-                    return {methodName}_Execute(reader, inputStream, ct);
+                if (methodName.Equals("{methodNameRaw}", StringComparison.InvariantCultureIgnoreCase))
+                    return {methodNameRaw}_Execute(reader, inputStream, ct);
         """;
 
     private string GenerateServiceExecutor(IonService service)
@@ -1601,7 +1720,8 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             template
                 .Replace("{methodDoc}", Doc(method.Doc, "    "))
                 .Replace("{serviceTypename}", serviceTypename)
-                .Replace("{methodName}", methodName)
+                .Replace("{methodNameRaw}", methodName)
+                .Replace("{methodName}", ReservedWords.EscapeCSharp(methodName))
                 .Replace("{argSize}", argSize.ToString())
                 .Replace("{fieldReadExpression}", readArgsExpression)
                 .Replace("{fieldReadArgs}", captureArgsExpression)
@@ -1611,7 +1731,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
 
         var branch = ServiceStreamBranchExecute
-            .Replace("{methodName}", methodName);
+            .Replace("{methodNameRaw}", methodName);
 
         branchBuilder.AppendLine(branch);
     }
@@ -1634,7 +1754,8 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             template
                 .Replace("{methodDoc}", Doc(method.Doc, "    "))
                 .Replace("{serviceTypename}", serviceTypename)
-                .Replace("{methodName}", methodName)
+                .Replace("{methodNameRaw}", methodName)
+                .Replace("{methodName}", ReservedWords.EscapeCSharp(methodName))
                 .Replace("{argSize}", argSize.ToString())
                 .Replace("{fieldReadExpression}", readArgsExpression)
                 .Replace("{fieldReadArgs}", captureArgsExpression);
@@ -1647,7 +1768,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
 
         var branch = ServiceBranchExecute
-            .Replace("{methodName}", methodName);
+            .Replace("{methodNameRaw}", methodName);
 
         branchBuilder.AppendLine(branch);
     }
@@ -1666,7 +1787,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string ServiceClientMethodInfoDecl =
         """
-            private static readonly Lazy<MethodInfo> {methodName}_Ref = new(() =>
+            private static readonly Lazy<MethodInfo> {methodNameRaw}_Ref = new(() =>
                 typeof(I{serviceTypename}).GetMethod(nameof({methodName}), BindingFlags.Public | BindingFlags.Instance)!);
         """;
 
@@ -1675,7 +1796,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         {methodDoc}    {compileGeneratedAttributes}
             public async Task<{methodReturnType}> {methodName}({args})
             {
-                var req = new IonRequest(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
+                var req = new IonRequest(context, typeof(I{serviceTypename}), {methodNameRaw}_Ref.Value);
             
                 var writer = new CborWriter();
                 
@@ -1696,7 +1817,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         {methodDoc}    {compileGeneratedAttributes}
             public async Task<{methodReturnType}> {methodName}({args})
             {
-                var req = new IonRequest(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
+                var req = new IonRequest(context, typeof(I{serviceTypename}), {methodNameRaw}_Ref.Value);
             
                 var writer = new CborWriter();
                 
@@ -1737,7 +1858,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         {methodDoc}    {compileGeneratedAttributes}
             public async Task<{methodReturnType}> {methodName}({args})
             {
-                var req = new IonRequest(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
+                var req = new IonRequest(context, typeof(I{serviceTypename}), {methodNameRaw}_Ref.Value);
 
                 var writer = new CborWriter();
 
@@ -1762,7 +1883,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         {methodDoc}    {compileGeneratedAttributes}
             public async Task<{methodReturnType}> {methodName}({args})
             {
-                var req = new IonRequest(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
+                var req = new IonRequest(context, typeof(I{serviceTypename}), {methodNameRaw}_Ref.Value);
 
                 var writer = new CborWriter();
 
@@ -1786,7 +1907,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         {methodDoc}    {compileGeneratedAttributes}
             public async Task<{methodReturnType}> {methodName}({args})
             {
-                var req = new IonRequest(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
+                var req = new IonRequest(context, typeof(I{serviceTypename}), {methodNameRaw}_Ref.Value);
             
                 var writer = new CborWriter();
                 
@@ -1816,7 +1937,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         {methodDoc}    {compileGeneratedAttributes}
             public async Task<{methodReturnType}> {methodName}({args})
             {
-                var req = new IonRequest(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
+                var req = new IonRequest(context, typeof(I{serviceTypename}), {methodNameRaw}_Ref.Value);
 
                 var writer = new CborWriter();
 
@@ -1837,7 +1958,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         {methodDoc}    {compileGeneratedAttributes}
             public async Task {methodName}({args})
             {
-                var req = new IonRequest(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
+                var req = new IonRequest(context, typeof(I{serviceTypename}), {methodNameRaw}_Ref.Value);
 
                 var writer = new CborWriter();
                 
@@ -1857,7 +1978,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         """
         {methodDoc}    public IAsyncEnumerable<{methodReturnType}> {methodName}({args})
             {
-                var ws = new IonWsClient(context, typeof(I{serviceTypename}), {methodName}_Ref.Value);
+                var ws = new IonWsClient(context, typeof(I{serviceTypename}), {methodNameRaw}_Ref.Value);
             
                 var writer = new CborWriter();
 
@@ -1939,7 +2060,8 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
                     template
                         .Replace("{methodDoc}", MethodDoc(method, "    ", ClientArgumentDocName))
                         .Replace("{serviceTypename}", serviceTypename)
-                        .Replace("{methodName}", methodName)
+                        .Replace("{methodNameRaw}", methodName)
+                        .Replace("{methodName}", ReservedWords.EscapeCSharp(methodName))
                         .Replace("{argSize}", argSize.ToString())
                         .Replace("{argsWrite}", writeArgsExpression)
                         .Replace("{args}", methodArgs);
@@ -1970,7 +2092,8 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
             var methodInfoDeclaration =
                 methodInfoTemplate
-                    .Replace("{methodName}", methodName)
+                    .Replace("{methodNameRaw}", methodName)
+                    .Replace("{methodName}", ReservedWords.EscapeCSharp(methodName))
                     .Replace("{serviceTypename}", serviceTypename);
 
 
@@ -2031,7 +2154,8 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             accessValues.Append(Doc(argument.Doc, "    "));
             accessValues.AppendLine(
                 $"    public {AttributeEmission.CSharpParameterType(argument.type)} " +
-                $"{argument.Name.Identifier.Capitalize()} => {argument.Name.Identifier};");
+                $"{ReservedWords.EscapeCSharp(argument.Name.Identifier.Capitalize())} => " +
+                $"{ReservedWords.EscapeCSharp(argument.Name.Identifier)};");
         }
 
         var ctorParams = type.arguments
@@ -2044,7 +2168,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         // "no argument given that corresponds to the required parameter 'note'". ION0039 guarantees
         // Ion optionals are trailing, which is also C#'s rule for defaulted parameters.
         var args = string.Join(", ", type.arguments.Select(a =>
-            $"{AttributeEmission.CSharpParameterType(a.type)} {a.name.Identifier}"
+            $"{AttributeEmission.CSharpParameterType(a.type)} {ReservedWords.EscapeCSharp(a.name.Identifier)}"
             + (AttributeEmission.IsOptionalParameter(a.type) ? " = null" : string.Empty)));
 
         return AttributeTemplate
@@ -2195,6 +2319,8 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         builder.AppendLine();
         builder.AppendLine(Union_InterfaceFormatter
             .Replace("{unionInterface}", union.name.Identifier)
+            .Replace("{caseCount}", $"{union.types.Count}u")
+            .Replace("{caseCountText}", union.types.Count.ToString())
             .Replace("{readCheks}", readChecks.ToString())
             .Replace("{writeChecks}", writeChecks.ToString())
         );
@@ -2210,14 +2336,13 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         {
             public I{unionInterface} Read(CborReader reader)
             {
-                var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
-                var unionIndex = reader.ReadUInt32();
+                var unionIndex = reader.ReadStartUnion("I{unionInterface}", {caseCount});
                 I{unionInterface} result;
                 if (false) {}
                 {readCheks}
                 else
-                    throw new InvalidOperationException();
-                reader.ReadEndArray();
+                    throw new IonInvalidUnionIndexException("I{unionInterface}", unionIndex, {caseCount});
+                reader.ReadEndUnion();
                 return result;
             }
 
@@ -2229,7 +2354,8 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
                 if (false) {}
                 {writeChecks}    
                 else
-                    throw new InvalidOperationException();
+                    throw new InvalidOperationException(
+                        $"Ion union 'I{unionInterface}' has no case {value.UnionIndex}; this revision declares {caseCountText} case(s)");
                 writer.WriteEndArray();    
             }
         }

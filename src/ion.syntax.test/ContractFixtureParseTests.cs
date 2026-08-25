@@ -70,9 +70,10 @@ public class ContractFixtureParseTests
     /// this whole class into a silent no-op.
     /// </summary>
     /// <remarks>
-    /// Seven, not six: <c>CollectionInteraction.ion</c> was added for <c>Map</c> / <c>Set</c> /
-    /// <c>T[N]</c>. Naming them rather than counting them, so the next addition says which file
-    /// arrived instead of only that the number moved.
+    /// Eight, not six: <c>CollectionInteraction.ion</c> was added for <c>Map</c> / <c>Set</c> /
+    /// <c>T[N]</c>, and <c>KeywordInteraction.ion</c> for Ion names that collide with a target
+    /// language's reserved words. Naming them rather than counting them, so the next addition says
+    /// which file arrived instead of only that the number moved.
     /// </remarks>
     [Test]
     public void TheFixturesAreWhereTheyAreExpectedToBe()
@@ -82,6 +83,7 @@ public class ContractFixtureParseTests
             "AttributeInteraction.ion",
             "CollectionInteraction.ion",
             "DataInteraction.ion",
+            "KeywordInteraction.ion",
             "LedgerInteraction.ion",
             "MathInteraction.ion",
             "PartialInteraction.ion",
@@ -95,6 +97,7 @@ public class ContractFixtureParseTests
     /// </summary>
     [TestCase("AttributeInteraction.ion", 2, 2, 0, 0, 0, 1, 2)]
     [TestCase("DataInteraction.ion", 0, 1, 0, 0, 0, 0, 0)]
+    [TestCase("KeywordInteraction.ion", 2, 1, 0, 1, 1, 1, 0)]
     [TestCase("LedgerInteraction.ion", 2, 1, 2, 0, 0, 0, 0)]
     [TestCase("MathInteraction.ion", 0, 2, 0, 0, 0, 0, 0)]
     [TestCase("PartialInteraction.ion", 2, 1, 0, 0, 0, 0, 0)]

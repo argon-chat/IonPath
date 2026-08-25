@@ -18,7 +18,7 @@ using static Pidgin.Parser<char>;
 /// position — is the compiler's; the grammar's whole job is to produce the node.
 /// </para>
 /// <para>
-/// The body is <see cref="IonParser.FieldList"/>, the same production a <c>msg</c> body is, so doc
+/// The body is <see cref="IonParser.FieldList(bool)"/>, the same production a <c>msg</c> body is, so doc
 /// comments and attributes on a mixin's fields behave identically and cannot drift. The
 /// <c>with</c> clause is <see cref="IonParser.WithClause"/>, shared with <c>msg</c>. Neither is
 /// available on a union, service, enum, flags or typedef: none of them has a field list to mix into.
@@ -33,16 +33,18 @@ public partial class IonParser
     /// declaration, so a doc comment or an attribute in front of a <c>mixin</c> attaches to it
     /// instead of turning it into a parse error.
     /// </remarks>
-    private static Parser<char, IonMixinSyntax> MixinCore =>
+    private static Parser<char, IonMixinSyntax> MixinCore(bool recover) =>
         Map(
             (pos, name, mixins, fields, endPos) =>
-                new IonMixinSyntax(name, fields.ToList(), mixins.GetValueOrDefault()).WithPos(pos, endPos),
+                new IonMixinSyntax(name, fields.Members, mixins.GetValueOrDefault())
+                    .WithPos(pos, endPos)
+                    .WithInvalidMembers(fields.Invalid),
             CurrentPos,
             MixinKeyword.Then(Identifier),
             WithClause.Optional(),
-            FieldList,
+            FieldList(recover),
             CurrentPos
         );
 
-    public static Parser<char, IonMixinSyntax> Mixin => WithLeading(MixinCore);
+    public static Parser<char, IonMixinSyntax> Mixin => WithLeading(MixinCore(recover: true));
 }

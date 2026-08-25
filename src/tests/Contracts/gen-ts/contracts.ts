@@ -177,6 +177,30 @@ export enum CacheRegion
   Shared = 3,
 }
 
+const declaredCacheRegion: ReadonlySet<unknown> = new Set<unknown>([CacheRegion.None, CacheRegion.Local, CacheRegion.Session, CacheRegion.Shared]);
+
+/**
+ * Open-enum helpers for {@link CacheRegion}.
+ *
+ * Adding a member to an Ion enum is a safe schema change, so a value this revision does
+ * not declare is decoded, carried and re-encoded verbatim rather than rejected. These
+ * say whether that happened — a `switch` over the enum cannot, because an undeclared
+ * value simply matches no case.
+ */
+export const Ion_CacheRegion_OpenEnum = {
+  /** Whether `value` is a member this schema revision declares. */
+  isKnown(value: CacheRegion): boolean {
+    return declaredCacheRegion.has(value);
+  },
+  /**
+   * The raw `i4` the peer sent when `value` names no declared member, or
+   * `undefined` when it does. This is the exact value that will be written back out.
+   */
+  unknownValue(value: CacheRegion): i4 | undefined {
+    return declaredCacheRegion.has(value) ? undefined : (value as unknown as i4);
+  },
+} as const;
+
 
 /**
  * Plain message used as a `Map` value and a `Set`-adjacent element.
@@ -321,6 +345,209 @@ export enum Tier
   Free = 0,
   Paid = 1,
   Trial = 2,
+}
+
+const declaredTier: ReadonlySet<unknown> = new Set<unknown>([Tier.Free, Tier.Paid, Tier.Trial]);
+
+/**
+ * Open-enum helpers for {@link Tier}.
+ *
+ * Adding a member to an Ion enum is a safe schema change, so a value this revision does
+ * not declare is decoded, carried and re-encoded verbatim rather than rejected. These
+ * say whether that happened — a `switch` over the enum cannot, because an undeclared
+ * value simply matches no case.
+ */
+export const Ion_Tier_OpenEnum = {
+  /** Whether `value` is a member this schema revision declares. */
+  isKnown(value: Tier): boolean {
+    return declaredTier.has(value);
+  },
+  /**
+   * The raw `u1` the peer sent when `value` names no declared member, or
+   * `undefined` when it does. This is the exact value that will be written back out.
+   */
+  unknownValue(value: Tier): u1 | undefined {
+    return declaredTier.has(value) ? undefined : (value as unknown as u1);
+  },
+} as const;
+
+
+/**
+ * Every field is a reserved word somewhere.
+ *
+ * These land as C# positional record parameters (which are also the properties the
+ * formatter reads back through), Rust struct fields, and TypeScript interface
+ * properties — plus one `const` per field inside each generated formatter.
+ */
+export interface KeywordFields {
+  /**
+   * The originally reported break: `IonArray<AppendedV1> fixed` did not compile.
+   */
+  fixed: i4;
+  /**
+   * Reserved in C# and in TypeScript.
+   */
+  class: string;
+  /**
+   * C#.
+   */
+  int: i4;
+  /**
+   * C#.
+   */
+  event: bool;
+  /**
+   * C#. Also a method name below.
+   */
+  lock: i4;
+  /**
+   * Rust. The `r#type` case that must stay off the wire.
+   */
+  type: string;
+  /**
+   * Rust.
+   */
+  move: i4;
+  /**
+   * Rust.
+   */
+  match: i4;
+  /**
+   * Rust.
+   */
+  fn: string;
+  /**
+   * TypeScript.
+   */
+  function: i4;
+  /**
+   * C# and TypeScript.
+   */
+  default: bool;
+  /**
+   * A keyword-named field under each modifier stacking, so the array and optional
+   * read/write paths are covered as well as the plain one.
+   */
+  params: IonArray<i4>;
+  /**
+   * Optional.
+   */
+  base: string | null;
+  /**
+   * The enum and the flags in field position.
+   */
+  tier: KeywordTier;
+  /**
+   * Flags in field position.
+   */
+  access: KeywordAccess;
+};
+
+
+/**
+ * A `Partial<T>` target whose fields are keywords — deliberately in C# and TypeScript
+ * only.
+ *
+ * `ion_rustcore::ion_partial!` derives its CBOR map keys from the field idents with
+ * `stringify!`, which keeps the `r#`, so a *Rust* keyword here is ION0051 (refused, not
+ * escaped) rather than something the generator may quietly rename. None of the names
+ * below is a Rust keyword, so the patch struct is emitted — and the three runtimes'
+ * keys stay `"fixed"`, `"class"`, `"default"`, `"lock"` and `"event"`.
+ */
+export interface KeywordPatchTarget {
+  /**
+   * C#.
+   */
+  fixed: i4;
+  /**
+   * C# and TypeScript.
+   */
+  class: string;
+  /**
+   * C# and TypeScript.
+   */
+  default: bool;
+  /**
+   * Array field, so the `Array<>` descriptor carries a keyword key too.
+   */
+  lock: IonArray<i4>;
+  /**
+   * Optional field.
+   */
+  event: string | null;
+};
+
+
+/**
+ * An enum whose members are keywords in each of the three targets.
+ *
+ * A member name is a declaration in all three (`@default`, `r#move`, and a TypeScript
+ * enum member, which needs nothing) and never a wire value: the discriminant is.
+ */
+export enum KeywordTier
+{
+  /**
+   * C# and TypeScript.
+   */
+  default = 0,
+  /**
+   * C# only — `fixed` is not reserved in Rust or TypeScript.
+   */
+  fixed = 1,
+  /**
+   * Rust only.
+   */
+  type = 2,
+  /**
+   * Rust only.
+   */
+  move = 3,
+}
+
+const declaredKeywordTier: ReadonlySet<unknown> = new Set<unknown>([KeywordTier.default, KeywordTier.fixed, KeywordTier.type, KeywordTier.move]);
+
+/**
+ * Open-enum helpers for {@link KeywordTier}.
+ *
+ * Adding a member to an Ion enum is a safe schema change, so a value this revision does
+ * not declare is decoded, carried and re-encoded verbatim rather than rejected. These
+ * say whether that happened — a `switch` over the enum cannot, because an undeclared
+ * value simply matches no case.
+ */
+export const Ion_KeywordTier_OpenEnum = {
+  /** Whether `value` is a member this schema revision declares. */
+  isKnown(value: KeywordTier): boolean {
+    return declaredKeywordTier.has(value);
+  },
+  /**
+   * The raw `u1` the peer sent when `value` names no declared member, or
+   * `undefined` when it does. This is the exact value that will be written back out.
+   */
+  unknownValue(value: KeywordTier): u1 | undefined {
+    return declaredKeywordTier.has(value) ? undefined : (value as unknown as u1);
+  },
+} as const;
+
+
+/**
+ * A flags set whose members are keywords.
+ *
+ * Emitted as C# enum members, Rust associated `const`s and TypeScript enum members.
+ */
+export enum KeywordAccess
+{
+  /**
+   * C# only.
+   */
+  lock = 1,
+  /**
+   * C# and Rust.
+   */
+  static = 2,
+  /**
+   * Rust only.
+   */
+  match = 4,
 }
 
 
@@ -483,9 +710,126 @@ export interface VectorOfVectorOfVector {
 
 
 
+/**
+ * A union whose cases carry keyword-named fields.
+ *
+ * The C# case is a positional record, the Rust case a struct, and the TypeScript case a
+ * class whose constructor cannot use a parameter property for a reserved word.
+ */
+export abstract class IKeywordUnion implements IIonUnion<IKeywordUnion>
+{
+  abstract UnionKey: string;
+  abstract UnionIndex: number;
+  
+  
+  
+  
+  public isKept(): this is Kept {
+    return this.UnionKey === "Kept";
+  }
+  public isDropped(): this is Dropped {
+    return this.UnionKey === "Dropped";
+  }
+
+}
+
+
+/**
+ * Mixes a reserved field with an ordinary one, so the TypeScript constructor emits a
+ * renamed plain parameter beside a parameter property.
+ */
+export class Kept extends IKeywordUnion
+{
+  class: string;
+  constructor(__class: string, public type: i4) { super(); this.class = __class; }
+
+  UnionKey: string = "Kept";
+  UnionIndex: number = 0;
+}
+
+/**
+ * A single reserved field.
+ */
+export class Dropped extends IKeywordUnion
+{
+  constructor(public fn: bool) { super(); }
+
+  UnionKey: string = "Dropped";
+  UnionIndex: number = 1;
+}
+
+
+
+IonFormatterStorage.register("IKeywordUnion", {
+  read(reader: CborReader): IKeywordUnion {
+    const unionIndex = IonFormatterStorage.readStartUnion(reader, "IKeywordUnion", 2);
+    let value: IKeywordUnion = null as any;
+
+    if (false)
+    {}
+        else if (unionIndex == 0)
+      value = IonFormatterStorage.get<Kept>("Kept").read(reader);
+    else if (unionIndex == 1)
+      value = IonFormatterStorage.get<Dropped>("Dropped").read(reader);
+
+    else IonFormatterStorage.invalidUnionIndex("IKeywordUnion", unionIndex, 2);
+
+    IonFormatterStorage.readEndUnion(reader);
+    return value!;
+  },
+  write(writer: CborWriter, value: IKeywordUnion): void {
+    writer.writeStartArray(2);
+    writer.writeUInt32(value.UnionIndex);
+    if (false)
+    {}
+        else if (value.UnionIndex == 0) {
+        IonFormatterStorage.get<Kept>("Kept").write(writer, value as Kept);
+    }
+    else if (value.UnionIndex == 1) {
+        IonFormatterStorage.get<Dropped>("Dropped").write(writer, value as Dropped);
+    }
+  
+    else throw new Error(`Ion union 'IKeywordUnion' has no case ${value.UnionIndex}; this revision declares 2 case(s)`);
+    writer.writeEndArray();
+  }
+});
+
+
+IonFormatterStorage.register("Kept", {
+  read(reader: CborReader): Kept {
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 2, "Kept");
+    const __class = IonFormatterStorage.get<string>('string').read(reader);
+    const type = IonFormatterStorage.get<i4>('i4').read(reader);
+    reader.readEndArrayAndSkip(arraySize - 2);
+    return new Kept(__class, type);
+  },
+  write(writer: CborWriter, value: Kept): void {
+    writer.writeStartArray(2);
+    IonFormatterStorage.get<string>('string').write(writer, value.class);
+    IonFormatterStorage.get<i4>('i4').write(writer, value.type);
+    writer.writeEndArray();
+  }
+});
+
+IonFormatterStorage.register("Dropped", {
+  read(reader: CborReader): Dropped {
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 1, "Dropped");
+    const fn = IonFormatterStorage.get<bool>('bool').read(reader);
+    reader.readEndArrayAndSkip(arraySize - 1);
+    return new Dropped(fn);
+  },
+  write(writer: CborWriter, value: Dropped): void {
+    writer.writeStartArray(1);
+    IonFormatterStorage.get<bool>('bool').write(writer, value.fn);
+    writer.writeEndArray();
+  }
+});
+
+
+
 IonFormatterStorage.register("LegacyRequest", {
   read(reader: CborReader): LegacyRequest {
-    const arraySize = reader.readStartArray() ?? (() => { throw new Error("undefined len array not allowed") })();
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 2, "LegacyRequest");
     const oldId = IonFormatterStorage.get<i4>('i4').read(reader);
     const name = IonFormatterStorage.get<string>('string').read(reader);
     reader.readEndArrayAndSkip(arraySize - 2);
@@ -501,7 +845,7 @@ IonFormatterStorage.register("LegacyRequest", {
 
 IonFormatterStorage.register("CacheProbe", {
   read(reader: CborReader): CacheProbe {
-    const arraySize = reader.readStartArray() ?? (() => { throw new Error("undefined len array not allowed") })();
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 3, "CacheProbe");
     const hits = IonFormatterStorage.get<i4>('i4').read(reader);
     const misses = IonFormatterStorage.get<i4>('i4').read(reader);
     const total = IonFormatterStorage.get<i4>('i4').read(reader);
@@ -519,8 +863,7 @@ IonFormatterStorage.register("CacheProbe", {
 
 IonFormatterStorage.register("CacheRegion", {
   read(reader: CborReader): CacheRegion {
-    const num = (IonFormatterStorage.get<i4>('i4').read(reader))
-    return CacheRegion[num] !== undefined ? num as CacheRegion : (() => {throw new Error('invalid enum type')})();
+    return IonFormatterStorage.readOpenEnum<CacheRegion>(reader, 'i4');
   },
   write(writer: CborWriter, value: CacheRegion): void {
     const casted: i4 = value;
@@ -530,7 +873,7 @@ IonFormatterStorage.register("CacheRegion", {
 
 IonFormatterStorage.register("Member", {
   read(reader: CborReader): Member {
-    const arraySize = reader.readStartArray() ?? (() => { throw new Error("undefined len array not allowed") })();
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 2, "Member");
     const id = IonFormatterStorage.get<guid>('guid').read(reader);
     const name = IonFormatterStorage.get<string>('string').read(reader);
     reader.readEndArrayAndSkip(arraySize - 2);
@@ -546,7 +889,7 @@ IonFormatterStorage.register("Member", {
 
 IonFormatterStorage.register("Doc", {
   read(reader: CborReader): Doc {
-    const arraySize = reader.readStartArray() ?? (() => { throw new Error("undefined len array not allowed") })();
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 2, "Doc");
     const title = IonFormatterStorage.get<string>('string').read(reader);
     const revision = IonFormatterStorage.get<i4>('i4').read(reader);
     reader.readEndArrayAndSkip(arraySize - 2);
@@ -562,7 +905,7 @@ IonFormatterStorage.register("Doc", {
 
 IonFormatterStorage.register("KeyMatrix", {
   read(reader: CborReader): KeyMatrix {
-    const arraySize = reader.readStartArray() ?? (() => { throw new Error("undefined len array not allowed") })();
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 14, "KeyMatrix");
     const byI1 = IonFormatterStorage.get<Map<i1, i4>>('Map<i1, i4>').read(reader);
     const byI2 = IonFormatterStorage.get<Map<i2, i4>>('Map<i2, i4>').read(reader);
     const byI4 = IonFormatterStorage.get<Map<i4, i4>>('Map<i4, i4>').read(reader);
@@ -602,7 +945,7 @@ IonFormatterStorage.register("KeyMatrix", {
 
 IonFormatterStorage.register("ContainerShapes", {
   read(reader: CborReader): ContainerShapes {
-    const arraySize = reader.readStartArray() ?? (() => { throw new Error("undefined len array not allowed") })();
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 10, "ContainerShapes");
     const tags = IonFormatterStorage.get<Map<string, i4>>('Map<string, i4>').read(reader);
     const ids = IonFormatterStorage.get<Set<i4>>('Set<i4>').read(reader);
     const coords = IonFormatterStorage.readFixedArray<f4>(reader, 'f4', 16);
@@ -634,8 +977,7 @@ IonFormatterStorage.register("ContainerShapes", {
 
 IonFormatterStorage.register("Tier", {
   read(reader: CborReader): Tier {
-    const num = (IonFormatterStorage.get<u1>('u1').read(reader))
-    return Tier[num] !== undefined ? num as Tier : (() => {throw new Error('invalid enum type')})();
+    return IonFormatterStorage.readOpenEnum<Tier>(reader, 'u1');
   },
   write(writer: CborWriter, value: Tier): void {
     const casted: u1 = value;
@@ -643,9 +985,94 @@ IonFormatterStorage.register("Tier", {
   }
 });
 
+IonFormatterStorage.register("KeywordTier", {
+  read(reader: CborReader): KeywordTier {
+    return IonFormatterStorage.readOpenEnum<KeywordTier>(reader, 'u1');
+  },
+  write(writer: CborWriter, value: KeywordTier): void {
+    const casted: u1 = value;
+    IonFormatterStorage.get<u1>('u1').write(writer, casted);
+  }
+});
+
+IonFormatterStorage.register("KeywordAccess", {
+  read(reader: CborReader): KeywordAccess {
+    const num = (IonFormatterStorage.get<u4>('u4').read(reader))
+    return num as any;
+  },
+  write(writer: CborWriter, value: KeywordAccess): void {
+    const casted: u4 = value as any;
+    IonFormatterStorage.get<u4>('u4').write(writer, casted);
+  }
+});
+
+IonFormatterStorage.register("KeywordFields", {
+  read(reader: CborReader): KeywordFields {
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 15, "KeywordFields");
+    const fixed = IonFormatterStorage.get<i4>('i4').read(reader);
+    const __class = IonFormatterStorage.get<string>('string').read(reader);
+    const int = IonFormatterStorage.get<i4>('i4').read(reader);
+    const event = IonFormatterStorage.get<bool>('bool').read(reader);
+    const lock = IonFormatterStorage.get<i4>('i4').read(reader);
+    const type = IonFormatterStorage.get<string>('string').read(reader);
+    const move = IonFormatterStorage.get<i4>('i4').read(reader);
+    const match = IonFormatterStorage.get<i4>('i4').read(reader);
+    const fn = IonFormatterStorage.get<string>('string').read(reader);
+    const __function = IonFormatterStorage.get<i4>('i4').read(reader);
+    const __default = IonFormatterStorage.get<bool>('bool').read(reader);
+    const params = IonFormatterStorage.readArray<i4>(reader, 'i4');
+    const base = IonFormatterStorage.readNullable<string>(reader, 'string');
+    const tier = IonFormatterStorage.get<KeywordTier>('KeywordTier').read(reader);
+    const access = IonFormatterStorage.get<KeywordAccess>('KeywordAccess').read(reader);
+    reader.readEndArrayAndSkip(arraySize - 15);
+    return { fixed, class: __class, int, event, lock, type, move, match, fn, function: __function, default: __default, params, base, tier, access };
+  },
+  write(writer: CborWriter, value: KeywordFields): void {
+    writer.writeStartArray(15);
+    IonFormatterStorage.get<i4>('i4').write(writer, value.fixed);
+    IonFormatterStorage.get<string>('string').write(writer, value.class);
+    IonFormatterStorage.get<i4>('i4').write(writer, value.int);
+    IonFormatterStorage.get<bool>('bool').write(writer, value.event);
+    IonFormatterStorage.get<i4>('i4').write(writer, value.lock);
+    IonFormatterStorage.get<string>('string').write(writer, value.type);
+    IonFormatterStorage.get<i4>('i4').write(writer, value.move);
+    IonFormatterStorage.get<i4>('i4').write(writer, value.match);
+    IonFormatterStorage.get<string>('string').write(writer, value.fn);
+    IonFormatterStorage.get<i4>('i4').write(writer, value.function);
+    IonFormatterStorage.get<bool>('bool').write(writer, value.default);
+    IonFormatterStorage.writeArray<i4>(writer, value.params, 'i4');
+    IonFormatterStorage.writeNullable<string>(writer, value.base, 'string');
+    IonFormatterStorage.get<KeywordTier>('KeywordTier').write(writer, value.tier);
+    IonFormatterStorage.get<KeywordAccess>('KeywordAccess').write(writer, value.access);
+    writer.writeEndArray();
+  }
+});
+
+IonFormatterStorage.register("KeywordPatchTarget", {
+  read(reader: CborReader): KeywordPatchTarget {
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 5, "KeywordPatchTarget");
+    const fixed = IonFormatterStorage.get<i4>('i4').read(reader);
+    const __class = IonFormatterStorage.get<string>('string').read(reader);
+    const __default = IonFormatterStorage.get<bool>('bool').read(reader);
+    const lock = IonFormatterStorage.readArray<i4>(reader, 'i4');
+    const event = IonFormatterStorage.readNullable<string>(reader, 'string');
+    reader.readEndArrayAndSkip(arraySize - 5);
+    return { fixed, class: __class, default: __default, lock, event };
+  },
+  write(writer: CborWriter, value: KeywordPatchTarget): void {
+    writer.writeStartArray(5);
+    IonFormatterStorage.get<i4>('i4').write(writer, value.fixed);
+    IonFormatterStorage.get<string>('string').write(writer, value.class);
+    IonFormatterStorage.get<bool>('bool').write(writer, value.default);
+    IonFormatterStorage.writeArray<i4>(writer, value.lock, 'i4');
+    IonFormatterStorage.writeNullable<string>(writer, value.event, 'string');
+    writer.writeEndArray();
+  }
+});
+
 IonFormatterStorage.register("LedgerEntry", {
   read(reader: CborReader): LedgerEntry {
-    const arraySize = reader.readStartArray() ?? (() => { throw new Error("undefined len array not allowed") })();
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 9, "LedgerEntry");
     const bookedAt = IonFormatterStorage.get<datetime>('datetime').read(reader);
     const amount = IonFormatterStorage.get<decimal>('decimal').read(reader);
     const settledAt = IonFormatterStorage.readNullable<datetime>(reader, 'datetime');
@@ -675,7 +1102,7 @@ IonFormatterStorage.register("LedgerEntry", {
 
 IonFormatterStorage.register("LedgerPatch", {
   read(reader: CborReader): LedgerPatch {
-    const arraySize = reader.readStartArray() ?? (() => { throw new Error("undefined len array not allowed") })();
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 4, "LedgerPatch");
     const bookedAt = IonFormatterStorage.get<datetime>('datetime').read(reader);
     const amount = IonFormatterStorage.get<decimal>('decimal').read(reader);
     const settledAt = IonFormatterStorage.readNullable<datetime>(reader, 'datetime');
@@ -695,7 +1122,7 @@ IonFormatterStorage.register("LedgerPatch", {
 
 IonFormatterStorage.register("PatchTarget", {
   read(reader: CborReader): PatchTarget {
-    const arraySize = reader.readStartArray() ?? (() => { throw new Error("undefined len array not allowed") })();
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 5, "PatchTarget");
     const n = IonFormatterStorage.get<i4>('i4').read(reader);
     const f = IonFormatterStorage.get<f4>('f4').read(reader);
     const s = IonFormatterStorage.get<string>('string').read(reader);
@@ -717,7 +1144,7 @@ IonFormatterStorage.register("PatchTarget", {
 
 IonFormatterStorage.register("PatchEnvelope", {
   read(reader: CborReader): PatchEnvelope {
-    const arraySize = reader.readStartArray() ?? (() => { throw new Error("undefined len array not allowed") })();
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 4, "PatchEnvelope");
     const one = IonFormatterStorage.get<IonPartial<PatchTarget>>('IonPartial<PatchTarget>').read(reader);
     const many = IonFormatterStorage.readArray<IonPartial<PatchTarget>>(reader, 'IonPartial<PatchTarget>');
     const maybe = IonFormatterStorage.readNullable<IonPartial<PatchTarget>>(reader, 'IonPartial<PatchTarget>');
@@ -737,7 +1164,7 @@ IonFormatterStorage.register("PatchEnvelope", {
 
 IonFormatterStorage.register("Vector", {
   read(reader: CborReader): Vector {
-    const arraySize = reader.readStartArray() ?? (() => { throw new Error("undefined len array not allowed") })();
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 3, "Vector");
     const x = IonFormatterStorage.get<f4>('f4').read(reader);
     const y = IonFormatterStorage.get<f4>('f4').read(reader);
     const z = IonFormatterStorage.get<f4>('f4').read(reader);
@@ -755,7 +1182,7 @@ IonFormatterStorage.register("Vector", {
 
 IonFormatterStorage.register("VectorOfVector", {
   read(reader: CborReader): VectorOfVector {
-    const arraySize = reader.readStartArray() ?? (() => { throw new Error("undefined len array not allowed") })();
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 3, "VectorOfVector");
     const x = IonFormatterStorage.get<Vector>('Vector').read(reader);
     const y = IonFormatterStorage.get<Vector>('Vector').read(reader);
     const z = IonFormatterStorage.get<Vector>('Vector').read(reader);
@@ -773,7 +1200,7 @@ IonFormatterStorage.register("VectorOfVector", {
 
 IonFormatterStorage.register("VectorOfVectorOfVector", {
   read(reader: CborReader): VectorOfVectorOfVector {
-    const arraySize = reader.readStartArray() ?? (() => { throw new Error("undefined len array not allowed") })();
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 2, "VectorOfVectorOfVector");
     const z = IonFormatterStorage.get<VectorOfVector>('VectorOfVector').read(reader);
     const w = IonFormatterStorage.get<VectorOfVector>('VectorOfVector').read(reader);
     reader.readEndArrayAndSkip(arraySize - 2);
@@ -824,6 +1251,14 @@ IonFormatterStorage.registerPartial<PatchTarget>("IonPartial<PatchTarget>", [
   { name: "s", type: "string" },
   { name: "items", type: "i4", kind: "array" },
   { name: "note", type: "string", kind: "nullable" },
+]);
+
+IonFormatterStorage.registerPartial<KeywordPatchTarget>("IonPartial<KeywordPatchTarget>", [
+  { name: "fixed", type: "i4" },
+  { name: "class", type: "string" },
+  { name: "default", type: "bool" },
+  { name: "lock", type: "i4", kind: "array" },
+  { name: "event", type: "string", kind: "nullable" },
 ]);
 
 IonFormatterStorage.registerPartial<LedgerPatch>("IonPartial<LedgerPatch>", [
@@ -1023,6 +1458,59 @@ export interface ITestBlobs extends IIonService
    * Third echo overload. See DoIt2.
    */
   DoIt3(data: bytes): Promise<bytes>;
+}
+
+
+
+
+/**
+ * Ion names that collide with a target language's reserved words.
+ *
+ * An Ion identifier is constrained by Ion's grammar and by nothing else, so a field
+ * spelled `fixed:`, `type:` or `class:` is legal here and used to emit C#, Rust and
+ * TypeScript that did not parse. Every declaration position a generator writes an Ion
+ * name into is represented below, with names drawn from all three keyword sets at once:
+ *
+ * * C# escapes with `@` — `@fixed`, `@class`, `@int`, `@event`, `@lock`, `@default`.
+ * * Rust escapes with `r#` — `r#type`, `r#move`, `r#match`, `r#fn`, `r#static`.
+ * * TypeScript has no escape, so a *binding* position (a parameter, a `const`, an
+ *   object-literal shorthand) is renamed to `__class` / `__function` / `__default`,
+ *   while property names, enum members and member accesses keep the Ion spelling —
+ *   `interface M { class: string }` is valid TypeScript, `function f(class)` is not.
+ *
+ * **None of it may reach the wire.** A message is encoded positionally, so a field name
+ * is a declaration and nothing else; a `Partial<T>` is keyed *by field name*, and
+ * `ion.lock.json` records the Ion spelling. Both must read back exactly as written here.
+ */
+/**
+ * Keyword names in method and argument position.
+ */
+export interface IKeywordInteraction extends IIonService
+{
+  /**
+   * Reserved words as method *parameters*: a C# parameter, a Rust `async fn` argument
+   * and — the one that actually fails without a rename — a TypeScript parameter.
+   */
+  Echo(__class: string, type: i4, __default: bool): Promise<string>;
+  /**
+   * A reserved word as the *method* name. The router still dispatches on the Ion
+   * spelling: the generated `methodName.Equals("lock", …)` is a string, not an
+   * identifier, and `nameof(@lock)` is `"lock"`.
+   */
+  lock(value: i4): Promise<i4>;
+  /**
+   * The whole message over a real signature.
+   */
+  Roundtrip(fields: KeywordFields): Promise<KeywordFields>;
+  /**
+   * A patch in argument and return position, so the field-name keys are exercised
+   * end to end.
+   */
+  Patch(patch: IonPartial<KeywordPatchTarget>): Promise<IonPartial<KeywordPatchTarget>>;
+  /**
+   * The union in both positions.
+   */
+  Pick(choice: IKeywordUnion): Promise<IKeywordUnion>;
 }
 
 
@@ -1455,6 +1943,59 @@ export interface ITestBlobs extends IIonService
    * Third echo overload. See DoIt2.
    */
   DoIt3(data: bytes): Promise<bytes>;
+}
+
+
+
+
+/**
+ * Ion names that collide with a target language's reserved words.
+ *
+ * An Ion identifier is constrained by Ion's grammar and by nothing else, so a field
+ * spelled `fixed:`, `type:` or `class:` is legal here and used to emit C#, Rust and
+ * TypeScript that did not parse. Every declaration position a generator writes an Ion
+ * name into is represented below, with names drawn from all three keyword sets at once:
+ *
+ * * C# escapes with `@` — `@fixed`, `@class`, `@int`, `@event`, `@lock`, `@default`.
+ * * Rust escapes with `r#` — `r#type`, `r#move`, `r#match`, `r#fn`, `r#static`.
+ * * TypeScript has no escape, so a *binding* position (a parameter, a `const`, an
+ *   object-literal shorthand) is renamed to `__class` / `__function` / `__default`,
+ *   while property names, enum members and member accesses keep the Ion spelling —
+ *   `interface M { class: string }` is valid TypeScript, `function f(class)` is not.
+ *
+ * **None of it may reach the wire.** A message is encoded positionally, so a field name
+ * is a declaration and nothing else; a `Partial<T>` is keyed *by field name*, and
+ * `ion.lock.json` records the Ion spelling. Both must read back exactly as written here.
+ */
+/**
+ * Keyword names in method and argument position.
+ */
+export interface IKeywordInteraction extends IIonService
+{
+  /**
+   * Reserved words as method *parameters*: a C# parameter, a Rust `async fn` argument
+   * and — the one that actually fails without a rename — a TypeScript parameter.
+   */
+  Echo(__class: string, type: i4, __default: bool): Promise<string>;
+  /**
+   * A reserved word as the *method* name. The router still dispatches on the Ion
+   * spelling: the generated `methodName.Equals("lock", …)` is a string, not an
+   * identifier, and `nameof(@lock)` is `"lock"`.
+   */
+  lock(value: i4): Promise<i4>;
+  /**
+   * The whole message over a real signature.
+   */
+  Roundtrip(fields: KeywordFields): Promise<KeywordFields>;
+  /**
+   * A patch in argument and return position, so the field-name keys are exercised
+   * end to end.
+   */
+  Patch(patch: IonPartial<KeywordPatchTarget>): Promise<IonPartial<KeywordPatchTarget>>;
+  /**
+   * The union in both positions.
+   */
+  Pick(choice: IKeywordUnion): Promise<IKeywordUnion>;
 }
 
 
@@ -2126,6 +2667,106 @@ export class TestBlobs_Executor extends ServiceExecutor<ITestBlobs> implements I
 IonFormatterStorage.registerClientExecutor<ITestBlobs>('TestBlobs', TestBlobs_Executor);
 
 /**
+ * Keyword names in method and argument position.
+ */
+export class KeywordInteraction_Executor extends ServiceExecutor<IKeywordInteraction> implements IKeywordInteraction {
+  constructor(public ctx: IonClientContext, private signal: AbortSignal) {
+      super();
+  }
+
+  
+  /**
+   * Reserved words as method *parameters*: a C# parameter, a Rust `async fn` argument
+   * and — the one that actually fails without a rename — a TypeScript parameter.
+   */
+  async Echo(__class: string, type: i4, __default: bool): Promise<string> {
+    const req = new IonRequest(this.ctx, "IKeywordInteraction", "Echo");
+          
+    const writer = new CborWriter();
+      
+    writer.writeStartArray(3);
+          
+    IonFormatterStorage.get<string>('string').write(writer, __class);
+    IonFormatterStorage.get<i4>('i4').write(writer, type);
+    IonFormatterStorage.get<bool>('bool').write(writer, __default);
+      
+    writer.writeEndArray();
+          
+    return await req.callAsyncT<string>("string", writer.data, this.signal);
+  }
+  /**
+   * A reserved word as the *method* name. The router still dispatches on the Ion
+   * spelling: the generated `methodName.Equals("lock", …)` is a string, not an
+   * identifier, and `nameof(@lock)` is `"lock"`.
+   */
+  async lock(value: i4): Promise<i4> {
+    const req = new IonRequest(this.ctx, "IKeywordInteraction", "lock");
+          
+    const writer = new CborWriter();
+      
+    writer.writeStartArray(1);
+          
+    IonFormatterStorage.get<i4>('i4').write(writer, value);
+      
+    writer.writeEndArray();
+          
+    return await req.callAsyncT<i4>("i4", writer.data, this.signal);
+  }
+  /**
+   * The whole message over a real signature.
+   */
+  async Roundtrip(fields: KeywordFields): Promise<KeywordFields> {
+    const req = new IonRequest(this.ctx, "IKeywordInteraction", "Roundtrip");
+          
+    const writer = new CborWriter();
+      
+    writer.writeStartArray(1);
+          
+    IonFormatterStorage.get<KeywordFields>('KeywordFields').write(writer, fields);
+      
+    writer.writeEndArray();
+          
+    return await req.callAsyncT<KeywordFields>("KeywordFields", writer.data, this.signal);
+  }
+  /**
+   * A patch in argument and return position, so the field-name keys are exercised
+   * end to end.
+   */
+  async Patch(patch: IonPartial<KeywordPatchTarget>): Promise<IonPartial<KeywordPatchTarget>> {
+    const req = new IonRequest(this.ctx, "IKeywordInteraction", "Patch");
+          
+    const writer = new CborWriter();
+      
+    writer.writeStartArray(1);
+          
+    IonFormatterStorage.get<IonPartial<KeywordPatchTarget>>('IonPartial<KeywordPatchTarget>').write(writer, patch);
+      
+    writer.writeEndArray();
+          
+    return await req.callAsyncT<IonPartial<KeywordPatchTarget>>("IonPartial<KeywordPatchTarget>", writer.data, this.signal);
+  }
+  /**
+   * The union in both positions.
+   */
+  async Pick(choice: IKeywordUnion): Promise<IKeywordUnion> {
+    const req = new IonRequest(this.ctx, "IKeywordInteraction", "Pick");
+          
+    const writer = new CborWriter();
+      
+    writer.writeStartArray(1);
+          
+    IonFormatterStorage.get<IKeywordUnion>('IKeywordUnion').write(writer, choice);
+      
+    writer.writeEndArray();
+          
+    return await req.callAsyncT<IKeywordUnion>("IKeywordUnion", writer.data, this.signal);
+  }
+
+}
+
+IonFormatterStorage.registerClientExecutor<IKeywordInteraction>('KeywordInteraction', KeywordInteraction_Executor);
+
+/**
  * Round-trip surface for `datetime` and `decimal`.
  *
  * The service level operand is itself a `datetime`, so every generated method signature
@@ -2767,6 +3408,7 @@ export function createClient(endpoint: string, interceptors: IonInterceptor[]) {
         if (propKey === "CacheInteraction") return IonFormatterStorage.createExecutor("CacheInteraction", ctx, controller.signal);
         if (propKey === "CollectionInteraction") return IonFormatterStorage.createExecutor("CollectionInteraction", ctx, controller.signal);
         if (propKey === "TestBlobs") return IonFormatterStorage.createExecutor("TestBlobs", ctx, controller.signal);
+        if (propKey === "KeywordInteraction") return IonFormatterStorage.createExecutor("KeywordInteraction", ctx, controller.signal);
         if (propKey === "LedgerInteraction") return IonFormatterStorage.createExecutor("LedgerInteraction", ctx, controller.signal);
         if (propKey === "MathInteraction") return IonFormatterStorage.createExecutor("MathInteraction", ctx, controller.signal);
         if (propKey === "RandomStreamInteraction") return IonFormatterStorage.createExecutor("RandomStreamInteraction", ctx, controller.signal);
@@ -2782,6 +3424,7 @@ export function createClient(endpoint: string, interceptors: IonInterceptor[]) {
     CacheInteraction: ICacheInteraction;
     CollectionInteraction: ICollectionInteraction;
     TestBlobs: ITestBlobs;
+    KeywordInteraction: IKeywordInteraction;
     LedgerInteraction: ILedgerInteraction;
     MathInteraction: IMathInteraction;
     RandomStreamInteraction: IRandomStreamInteraction;

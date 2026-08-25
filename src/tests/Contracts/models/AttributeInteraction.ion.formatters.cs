@@ -19,7 +19,7 @@ public sealed class Ion_LegacyRequest_Formatter : IonFormatter<LegacyRequest>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public LegacyRequest Read(CborReader reader)
     {
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");;
+        var arraySize = reader.ReadStartMessage(2, "LegacyRequest");
         var __oldid = IonFormatterStorage<i4>.Read(reader);
         var __name = IonFormatterStorage<string>.Read(reader);
         reader.ReadEndArrayAndSkip(arraySize - 2);
@@ -42,7 +42,7 @@ public sealed class Ion_CacheProbe_Formatter : IonFormatter<CacheProbe>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public CacheProbe Read(CborReader reader)
     {
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");;
+        var arraySize = reader.ReadStartMessage(3, "CacheProbe");
         var __hits = IonFormatterStorage<i4>.Read(reader);
         var __misses = IonFormatterStorage<i4>.Read(reader);
         var __total = IonFormatterStorage<i4>.Read(reader);

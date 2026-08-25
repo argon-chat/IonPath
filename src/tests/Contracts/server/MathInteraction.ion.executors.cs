@@ -33,7 +33,7 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
     
         const int argumentSize = 2;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "MathInteraction.Add");
     
         var __leftoperand = IonFormatterStorage<i4>.Read(reader);
         var __rightoperand = IonFormatterStorage<i4>.Read(reader);
@@ -54,7 +54,7 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
     
         const int argumentSize = 2;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "MathInteraction.Mul");
     
         var __leftoperand = IonFormatterStorage<i4>.Read(reader);
         var __rightoperand = IonFormatterStorage<i4>.Read(reader);
@@ -75,7 +75,7 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
     
         const int argumentSize = 2;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "MathInteraction.Sub");
     
         var __leftoperand = IonFormatterStorage<i4>.Read(reader);
         var __rightoperand = IonFormatterStorage<i4>.Read(reader);
@@ -98,7 +98,7 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
     
         const int argumentSize = 2;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "MathInteraction.Div");
     
         var __leftoperand = IonFormatterStorage<i4>.Read(reader);
         var __rightoperand = IonFormatterStorage<i4>.Read(reader);
@@ -119,7 +119,7 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
     
         const int argumentSize = 2;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "MathInteraction.Pow");
     
         var __leftoperand = IonFormatterStorage<i4>.Read(reader);
         var __rightoperand = IonFormatterStorage<i4>.Read(reader);
@@ -142,7 +142,7 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
     
         const int argumentSize = 2;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "MathInteraction.PowArray");
     
         var __leftoperand = IonFormatterStorage<i4>.Read(reader);
         var __rightoperand = IonFormatterStorage<i4>.ReadArray(reader);
@@ -163,7 +163,7 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
     
         const int argumentSize = 2;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "MathInteraction.ToPositive");
     
         var __leftoperand = IonFormatterStorage<i4>.Read(reader);
         var __rightoperand = reader.ReadNullable<i4>();
@@ -190,7 +190,7 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
     
         const int argumentSize = 2;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "MathInteraction.PowArrayMaybe");
     
         var __leftoperand = IonFormatterStorage<i4>.Read(reader);
         var __rightoperand = IonFormatterStorage<i4>.ReadNullableArray(reader);
@@ -212,7 +212,7 @@ public sealed class Ion_MathInteraction_ServiceExecutor(AsyncServiceScope scope)
     
         const int argumentSize = 2;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "MathInteraction.Spell");
     
         var __leftoperand = IonFormatterStorage<i4>.Read(reader);
         var __rightoperand = IonFormatterStorage<i4>.ReadNullableArray(reader);
@@ -277,7 +277,7 @@ public sealed class Ion_RandomStreamInteraction_ServiceExecutor(AsyncServiceScop
         
         
 
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "RandomStreamInteraction.Integer");
             
         var __seed = IonFormatterStorage<i4>.Read(reader);
         var __i = IonFormatterStorage<i4>.Read(reader);
@@ -321,7 +321,7 @@ public sealed class Ion_RandomStreamInteraction_ServiceExecutor(AsyncServiceScop
     return result;
 });
 
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "RandomStreamInteraction.Floats");
             
         var __seed = IonFormatterStorage<i4>.Read(reader);
 

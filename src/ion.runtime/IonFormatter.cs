@@ -38,11 +38,179 @@ public static class IonBinarySerializer
 
 public static class CborExtensions
 {
+    /// <summary>
+    /// Opens a message's positional array and checks it against the declared field count.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The counterpart of <see cref="ReadEndArrayAndSkip"/>: this is the <i>front</i> of the
+    /// trailing-skip mechanism, and the point at which a payload that is too short can still be
+    /// reported honestly. A positional array with fewer items than the schema declares is a
+    /// <see cref="IonFieldCountException"/> naming both counts — never a read that walks past the
+    /// array into whatever follows it.
+    /// </para>
+    /// <para>
+    /// Emitted by <c>ionc</c> in place of the older
+    /// <c>reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed")</c>,
+    /// which produced an untyped failure and left the short case to be discovered — or not — by
+    /// the field reads themselves.
+    /// </para>
+    /// </remarks>
+    /// <param name="reader">The reader, positioned on the message array.</param>
+    /// <param name="expectedFields">How many positional fields this schema revision reads.</param>
+    /// <param name="context">The message name, for the failure message.</param>
+    /// <returns>The declared item count, to be passed to <see cref="ReadEndArrayAndSkip"/>.</returns>
+    public static int ReadStartMessage(this CborReader reader, int expectedFields, string context)
+    {
+        IonDecodeGuard.EnsureDepth(reader);
+
+        // Through IonDecodeGuard, so that an empty or exhausted buffer is reported as the
+        // truncation it is rather than as whatever PeekState throws. Same order as
+        // `IonFormatterStorage.readStartMessage` in TypeScript.
+        var state = IonDecodeGuard.PeekState(reader, context);
+        if (state != CborReaderState.StartArray)
+            throw new IonUnexpectedCborTypeException(context, "an array", state.ToString());
+
+        var declared = reader.ReadStartArray() ?? throw new IonIndefiniteLengthException(context);
+
+        if (declared < expectedFields)
+            throw new IonFieldCountException(context, expectedFields, declared);
+
+        return declared;
+    }
+
+    /// <summary>
+    /// Opens a <c>union</c> envelope and reads its case index.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A union envelope is exactly <c>[index, payload]</c> — two items, in every revision of
+    /// every union.</b> Growth happens inside the case payload, which is a message and skips its
+    /// own tail; the envelope itself never grows. A third item is therefore not a newer peer but a
+    /// malformed frame, and the generated reader used to walk straight past it: it read the index
+    /// and the payload and stopped, leaving the stray item in the stream for the <i>next field of
+    /// the enclosing message</i> to read as its own value. In the compat suite that turned
+    /// <c>n: 5</c> into <c>n: 9</c> with no error anywhere.
+    /// </para>
+    /// <para>
+    /// Rejecting rather than skipping is deliberate: it is what
+    /// <see cref="System.Formats.Cbor.CborReader"/> already enforced for this runtime, so it is the
+    /// answer all three runtimes can converge on without changing what any of them accepts today.
+    /// </para>
+    /// </remarks>
+    /// <param name="reader">The reader, positioned on the envelope array.</param>
+    /// <param name="unionType">The union's name, for the failure message.</param>
+    /// <param name="declaredCases">How many cases this schema revision declares.</param>
+    /// <returns>The case index, already known to be one this revision declares.</returns>
+    public static uint ReadStartUnion(this CborReader reader, string unionType, uint declaredCases)
+    {
+        IonDecodeGuard.EnsureDepth(reader);
+
+        var state = IonDecodeGuard.PeekState(reader, unionType);
+        if (state != CborReaderState.StartArray)
+            throw new IonUnexpectedCborTypeException(unionType, "a [index, payload] array", state.ToString());
+
+        var declared = reader.ReadStartArray() ?? throw new IonIndefiniteLengthException(unionType);
+        if (declared != 2)
+            throw new IonUnionEnvelopeException(unionType, declared);
+
+        var index = IonInteger.ReadUnsigned(reader, uint.MaxValue, $"{unionType} case index");
+        if (index >= declaredCases)
+            throw new IonInvalidUnionIndexException(unionType, (uint)index, declaredCases);
+
+        return (uint)index;
+    }
+
+    /// <summary>Closes a <c>union</c> envelope opened by <see cref="ReadStartUnion"/>.</summary>
+    public static void ReadEndUnion(this CborReader reader) => reader.ReadEndArray();
+
+    /// <summary>
+    /// Skips a message's trailing items and closes its array.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <paramref name="skipCount"/> is <c>declaredLength - fieldsRead</c>. A <b>negative</b> value
+    /// means the payload was shorter than the schema — which is a decode failure, not a distance.
+    /// It used to be run through <see cref="Math.Abs(int)"/>, which turned "one field missing" into
+    /// "skip one more item", i.e. into a read past the end of the array and into the next frame.
+    /// </para>
+    /// <para>
+    /// The skip itself is depth-bounded (<see cref="SkipValueBounded"/>): a field the reader never
+    /// looks at is still attacker-controlled nesting.
+    /// </para>
+    /// </remarks>
     public static void ReadEndArrayAndSkip(this CborReader reader, int skipCount)
     {
-        for (var i = 0; i < Math.Abs(skipCount); i++)
-            reader.SkipValue();
+        if (skipCount < 0)
+            throw new IonFieldCountException("<message>", -skipCount, 0);
+
+        for (var i = 0; i < skipCount; i++)
+            reader.SkipValueBounded();
         reader.ReadEndArray();
+    }
+
+    /// <summary>
+    /// Skips exactly one data item, refusing to descend past
+    /// <see cref="IonDecodeLimits.MaxDepth"/> open containers.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="CborReader.SkipValue"/> on its own is iterative and therefore cheap at any depth
+    /// — which is precisely the problem: 100 KB of <c>0x81</c> bytes is 100 000 levels of nesting
+    /// that this runtime walks without complaint while the TypeScript one dies of a recursive
+    /// <c>skipValue</c>. Skipping is the easiest place for an unauthenticated peer to reach deep
+    /// nesting, because it needs no knowledge of the schema at all, so it gets the same limit as
+    /// everything else.
+    /// </para>
+    /// </remarks>
+    public static void SkipValueBounded(this CborReader reader)
+    {
+        var start = reader.CurrentDepth;
+
+        while (true)
+        {
+            var state = reader.PeekState();
+
+            switch (state)
+            {
+                case CborReaderState.StartArray:
+                    IonDecodeGuard.EnsureDepth(reader);
+                    reader.ReadStartArray();
+                    continue;
+
+                case CborReaderState.StartMap:
+                    IonDecodeGuard.EnsureDepth(reader);
+                    reader.ReadStartMap();
+                    continue;
+
+                case CborReaderState.EndArray:
+                    if (reader.CurrentDepth <= start)
+                        throw new IonContainerExhaustedException("a skipped value");
+                    reader.ReadEndArray();
+                    break;
+
+                case CborReaderState.EndMap:
+                    if (reader.CurrentDepth <= start)
+                        throw new IonContainerExhaustedException("a skipped value");
+                    reader.ReadEndMap();
+                    break;
+
+                case CborReaderState.Tag:
+                    // A tag and the item it wraps are one data item; keep going.
+                    reader.ReadTag();
+                    continue;
+
+                case CborReaderState.Finished:
+                    throw new IonTruncatedPayloadException("a skipped value");
+
+                default:
+                    reader.SkipValue();
+                    break;
+            }
+
+            if (reader.CurrentDepth <= start)
+                return;
+        }
     }
 
     public static void WriteUndefineds(this CborWriter writer, int count)
@@ -65,7 +233,7 @@ public static class IonFormatterEx
         public T? ReadNullable<T>(_StructTag<T> _ = default)
             where T : struct
         {
-            var state = reader.PeekState();
+            var state = IonDecodeGuard.PeekState(reader, typeof(T).Name);
             if (state != CborReaderState.Null)
                 return IonFormatterStorage<T>.Read(reader);
 
@@ -76,7 +244,7 @@ public static class IonFormatterEx
         public T ReadNullable<T>(_ClassTag<T> _ = default)
             where T : class
         {
-            var state = reader.PeekState();
+            var state = IonDecodeGuard.PeekState(reader, typeof(T).Name);
             if (state != CborReaderState.Null)
                 return IonFormatterStorage<T>.Read(reader);
 
@@ -153,11 +321,45 @@ public static class IonFormatterStorage<T>
         set => IonFormatterStorage.SetFormatter(value);
     }
 
+    /// <summary>
+    /// Reads one value of <typeparamref name="T"/>, enforcing the nesting limit and translating
+    /// anything the underlying <see cref="CborReader"/> throws into an
+    /// <see cref="IonDecodeException"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>This is the choke point.</b> Every Ion read — a message field, an array element, a map
+    /// value, a union payload, a method argument — goes through here, so this is the one place
+    /// that can guarantee a caller never sees a decode failure spelled
+    /// <see cref="InvalidOperationException"/>, <see cref="CborContentException"/> or
+    /// <see cref="OverflowException"/>. Generated formatters and
+    /// <see cref="System.Formats.Cbor"/> cannot be taught the Ion hierarchy; this can.
+    /// </para>
+    /// <para>
+    /// The <c>try</c>/<c>catch</c> costs nothing on the success path. An
+    /// <see cref="IonDecodeException"/> from further in is rethrown untouched, so the innermost —
+    /// most specific — diagnosis is the one the caller gets.
+    /// </para>
+    /// </remarks>
     public static T Read(CborReader reader)
     {
         if (Value is null)
             throw new InvalidOperationException($"Ion Formatter for type '{typeof(T).FullName}' is not registered");
-        return Value.Read(reader);
+
+        IonDecodeGuard.EnsureDepth(reader);
+
+        try
+        {
+            return Value.Read(reader);
+        }
+        catch (IonDecodeException)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            throw IonDecodeGuard.Translate(reader, e, typeof(T).Name);
+        }
     }
 
     public static void Write(CborWriter writer, T value)
@@ -169,7 +371,7 @@ public static class IonFormatterStorage<T>
 
     public static T? ReadNullable(CborReader reader)
     {
-        var state = reader.PeekState();
+        var state = IonDecodeGuard.PeekState(reader, typeof(T).Name);
         if (state != CborReaderState.Null)
             return Read(reader);
         reader.ReadNull();
@@ -178,7 +380,7 @@ public static class IonFormatterStorage<T>
 
     public static IonMaybe<T> ReadMaybe(CborReader reader)
     {
-        var state = reader.PeekState();
+        var state = IonDecodeGuard.PeekState(reader, typeof(T).Name);
         if (state != CborReaderState.Null)
             return Read(reader);
         reader.ReadNull();
@@ -223,24 +425,74 @@ public static class IonFormatterStorage<T>
     }
 
 
+    /// <summary>
+    /// Reads a <c>T[]</c> field: a definite-length CBOR array of <typeparamref name="T"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The declared length is never trusted for allocation.</b> Every CBOR data item occupies
+    /// at least one byte, so an element count above the number of bytes left in the buffer is
+    /// provably a lie and is rejected — with <see cref="IonLengthOverclaimException"/> — before
+    /// anything is rented. Without that check a nine-byte payload declaring 2^32 elements asks the
+    /// pool for a 2^32-element buffer.
+    /// </para>
+    /// <para>
+    /// An indefinite-length array is refused: <c>T[]</c> is length-prefixed on the wire, and the
+    /// trailing-skip arithmetic of the enclosing message is computed from declared lengths.
+    /// </para>
+    /// </remarks>
     public static IonArray<T> ReadArray(CborReader reader)
     {
-        var size = reader.ReadStartArray();
-        if (size is null) throw new InvalidOperationException();
+        var context = $"{typeof(T).Name}[]";
 
-        using var span = MemoryPool<T>.Shared.Rent(size.Value);
+        IonDecodeGuard.EnsureDepth(reader);
 
-        for (var i = 0; i < size.Value; i++)
+        if (IonDecodeGuard.PeekState(reader, context) != CborReaderState.StartArray)
+            throw new IonUnexpectedCborTypeException(context, "an array",
+                IonDecodeGuard.PeekState(reader, context).ToString());
+
+        int size;
+        try
+        {
+            size = reader.ReadStartArray() ?? throw new IonIndefiniteLengthException(context);
+        }
+        catch (IonDecodeException)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            throw IonDecodeGuard.Translate(reader, e, context);
+        }
+
+        // A definite length is a claim about the input, not a licence to allocate from it.
+        if (size > reader.BytesRemaining)
+            throw new IonLengthOverclaimException(context, size, reader.BytesRemaining);
+
+        using var span = MemoryPool<T>.Shared.Rent(size);
+
+        for (var i = 0; i < size; i++)
             span.Memory.Span[i] = Read(reader);
 
-        reader.ReadEndArray();
+        try
+        {
+            reader.ReadEndArray();
+        }
+        catch (IonDecodeException)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            throw IonDecodeGuard.Translate(reader, e, context);
+        }
 
-        return new IonArray<T>(span.Memory.Span[..size.Value]);
+        return new IonArray<T>(span.Memory.Span[..size]);
     }
 
     public static IonArray<T>? ReadNullableArray(CborReader reader)
     {
-        var state = reader.PeekState();
+        var state = IonDecodeGuard.PeekState(reader, $"{typeof(T).Name}[]");
         if (state != CborReaderState.Null)
             return ReadArray(reader);
         reader.ReadNull();
@@ -278,11 +530,31 @@ public static class IonFormatterStorage<T>
 
     /// <inheritdoc cref="IonFixedArrayFormatter{T}.Read"/>
     public static IonArray<T> ReadFixedArray(CborReader reader, int length)
-        => IonFixedArrayFormatter<T>.Read(reader, length);
+    {
+        try
+        {
+            return IonFixedArrayFormatter<T>.Read(reader, length);
+        }
+        catch (IonDecodeException)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            throw IonDecodeGuard.Translate(reader, e, $"{typeof(T).Name}[{length}]");
+        }
+    }
 
     /// <inheritdoc cref="IonFixedArrayFormatter{T}.ReadNullable"/>
     public static IonArray<T>? ReadNullableFixedArray(CborReader reader, int length)
-        => IonFixedArrayFormatter<T>.ReadNullable(reader, length);
+    {
+        if (IonDecodeGuard.PeekState(reader, $"{typeof(T).Name}[{length}]") == CborReaderState.Null)
+        {
+            reader.ReadNull();
+            return null;
+        }
+        return ReadFixedArray(reader, length);
+    }
 
     /// <inheritdoc cref="IonFixedArrayFormatter{T}.Write"/>
     public static void WriteFixedArray(CborWriter writer, IonArray<T> array, int length)
@@ -296,11 +568,31 @@ public static class IonFormatterStorage<T>
 
     /// <inheritdoc cref="IonSetFormatter{T}.Read"/>
     public static HashSet<T> ReadSet(CborReader reader)
-        => IonSetFormatter<T>.Read(reader);
+    {
+        try
+        {
+            return IonSetFormatter<T>.Read(reader);
+        }
+        catch (IonDecodeException)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            throw IonDecodeGuard.Translate(reader, e, $"Set<{typeof(T).Name}>");
+        }
+    }
 
     /// <inheritdoc cref="IonSetFormatter{T}.ReadNullable"/>
     public static HashSet<T>? ReadNullableSet(CborReader reader)
-        => IonSetFormatter<T>.ReadNullable(reader);
+    {
+        if (IonDecodeGuard.PeekState(reader, $"Set<{typeof(T).Name}>") == CborReaderState.Null)
+        {
+            reader.ReadNull();
+            return null;
+        }
+        return ReadSet(reader);
+    }
 
     /// <inheritdoc cref="IonSetFormatter{T}.Write"/>
     public static void WriteSet(CborWriter writer, IReadOnlyCollection<T> set)
@@ -369,6 +661,17 @@ public sealed class Ion_bool_Formatter : IonFormatter<bool>
         => writer.WriteBoolean(value);
 }
 
+/// <summary>
+/// <c>string</c> — a CBOR text string, definite or indefinite length.
+/// </summary>
+/// <remarks>
+/// <b>Chunked (indefinite-length) text is accepted on read.</b> Maps, sets and fixed-size arrays
+/// already accept an indefinite length in all three runtimes, and <c>partial.golden.json</c>
+/// requires it for the <c>Partial</c> map, so a string is the odd one out if it does not — Rust
+/// used to refuse it while C# and TypeScript accepted it, which is the worst of the three answers.
+/// Leniency costs nothing here: the chunk boundaries carry no meaning and are erased by the
+/// decode. Writers always emit a single definite-length chunk, so encoding is unchanged.
+/// </remarks>
 public sealed class Ion_string_Formatter : IonFormatter<string>
 {
     public string Read(CborReader reader)

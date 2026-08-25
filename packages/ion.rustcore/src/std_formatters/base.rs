@@ -18,12 +18,51 @@ impl IonFormat for bool {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// String
+// String / bytes — definite or chunked
 // ═══════════════════════════════════════════════════════════════════
+
+/// Reads a text string, accepting the **chunked (indefinite-length)** form as well as the
+/// definite one.
+///
+/// Ion always *writes* a definite-length string, so this is leniency on read only and costs
+/// nothing on the encode side. It is also the answer the rest of the format already gives: maps,
+/// sets and fixed-size arrays accept an indefinite length in all three runtimes, and
+/// `partial.golden.json` *requires* it for the `Partial<T>` map. C# and TypeScript accept a
+/// chunked string; Rust rejecting it made the same bytes decodable on two peers and not on the
+/// third.
+///
+/// The chunks are concatenated as they arrive, so nothing is reserved from a declared length.
+pub fn read_text(d: &mut Decoder<'_>) -> Result<String, IonError> {
+    if d.datatype()? != minicbor::data::Type::StringIndef {
+        // The definite case stays a borrow-and-copy of the input slice, and a wrong major type
+        // stays `minicbor`'s own type-mismatch error rather than being re-worded here.
+        return Ok(d.str()?.to_owned());
+    }
+
+    let mut text = String::new();
+    for chunk in d.str_iter()? {
+        text.push_str(chunk?);
+    }
+    Ok(text)
+}
+
+/// Reads a byte string, accepting the chunked (indefinite-length) form as well as the definite
+/// one. The counterpart of [`read_text`], and lenient for the same reason.
+pub fn read_byte_string(d: &mut Decoder<'_>) -> Result<Vec<u8>, IonError> {
+    if d.datatype()? != minicbor::data::Type::BytesIndef {
+        return Ok(d.bytes()?.to_vec());
+    }
+
+    let mut data = Vec::new();
+    for chunk in d.bytes_iter()? {
+        data.extend_from_slice(chunk?);
+    }
+    Ok(data)
+}
 
 impl IonFormat for String {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        Ok(d.str()?.to_owned())
+        read_text(d)
     }
 
     fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
@@ -32,14 +71,9 @@ impl IonFormat for String {
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// IonBytes (bytes)
-// ═══════════════════════════════════════════════════════════════════
-
 impl IonFormat for IonBytes {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let data = d.bytes()?.to_vec();
-        Ok(IonBytes::new(data))
+        Ok(IonBytes::new(read_byte_string(d)?))
     }
 
     fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
@@ -54,14 +88,16 @@ impl IonFormat for IonBytes {
 
 impl IonFormat for uuid::Uuid {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let bytes = d.bytes()?;
+        // Chunked as well as definite, so `guid` is not the one byte-string field in the format
+        // that rejects an encoding the rest of it accepts.
+        let bytes = read_byte_string(d)?;
         if bytes.len() != 16 {
             return Err(IonError::Decode(format!(
                 "Expected 16 bytes for UUID, got {}",
                 bytes.len()
             )));
         }
-        Ok(uuid::Uuid::from_bytes(bytes.try_into().unwrap()))
+        Ok(uuid::Uuid::from_bytes(bytes.as_slice().try_into().unwrap()))
     }
 
     fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {

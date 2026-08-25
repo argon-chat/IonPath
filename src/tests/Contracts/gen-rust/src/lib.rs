@@ -52,6 +52,24 @@
 //! shape the runtime supports: void return, single round-trip, and repeated
 //! round-trips over the same connection.
 //!
+//! Ion names that collide with a target language's reserved words.
+//!
+//! An Ion identifier is constrained by Ion's grammar and by nothing else, so a field
+//! spelled `fixed:`, `type:` or `class:` is legal here and used to emit C#, Rust and
+//! TypeScript that did not parse. Every declaration position a generator writes an Ion
+//! name into is represented below, with names drawn from all three keyword sets at once:
+//!
+//! * C# escapes with `@` — `@fixed`, `@class`, `@int`, `@event`, `@lock`, `@default`.
+//! * Rust escapes with `r#` — `r#type`, `r#move`, `r#match`, `r#fn`, `r#static`.
+//! * TypeScript has no escape, so a *binding* position (a parameter, a `const`, an
+//!   object-literal shorthand) is renamed to `__class` / `__function` / `__default`,
+//!   while property names, enum members and member accesses keep the Ion spelling —
+//!   `interface M { class: string }` is valid TypeScript, `function f(class)` is not.
+//!
+//! **None of it may reach the wire.** A message is encoded positionally, so a field name
+//! is a declaration and nothing else; a `Partial<T>` is keyed *by field name*, and
+//! `ion.lock.json` records the Ion spelling. Both must read back exactly as written here.
+//!
 //! `datetime` and `decimal` contracts.
 //!
 //! Both primitives exist for one reason — not silently rounding a value off — so both are
@@ -145,24 +163,24 @@ pub struct CacheProbe {
 }
 
 
-/// Where a cached entry lives.
-///
-/// `@deprecated` with both arguments, on the enum itself.
-#[deprecated(since = "0.5", note = "regions were replaced by explicit key parts")]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(i32)]
-pub enum CacheRegion {
-    /// Never produced any more. Bare `@deprecated` on an enum member.
-    #[deprecated]
-    None = 0,
-    /// `@deprecated` with only `since`, on an enum member.
-    #[deprecated(since = "0.5")]
-    Local = 1,
-    /// `@deprecated` with both arguments, on an enum member.
-    #[deprecated(since = "0.5", note = "use Shared")]
-    Session = 2,
-    /// The surviving member.
-    Shared = 3,
+ion_rustcore::ion_open_enum! {
+    /// Where a cached entry lives.
+    ///
+    /// `@deprecated` with both arguments, on the enum itself.
+    #[deprecated(since = "0.5", note = "regions were replaced by explicit key parts")]
+    pub enum CacheRegion: i32 {
+        /// Never produced any more. Bare `@deprecated` on an enum member.
+        #[deprecated]
+        None = 0,
+        /// `@deprecated` with only `since`, on an enum member.
+        #[deprecated(since = "0.5")]
+        Local = 1,
+        /// `@deprecated` with both arguments, on an enum member.
+        #[deprecated(since = "0.5", note = "use Shared")]
+        Session = 2,
+        /// The surviving member.
+        Shared = 3,
+    }
 }
 
 
@@ -260,18 +278,116 @@ pub struct ContainerShapes {
 }
 
 
-/// Key type for the enum arm of `KeyMatrix`.
+ion_rustcore::ion_open_enum! {
+    /// Key type for the enum arm of `KeyMatrix`.
+    ///
+    /// An enum is the one non-builtin the compiler admits as a `Map` key (ION0061): an integral
+    /// base type and a closed set of named values, which every target can hash. It is also the
+    /// arm most likely to break on a target-by-target basis — a generated Rust enum has to
+    /// derive `Eq + Hash` for `HashMap<Tier, V>` to compile at all.
+    pub enum Tier: u8 {
+        Free = 0,
+        Paid = 1,
+        Trial = 2,
+    }
+}
+
+
+/// Every field is a reserved word somewhere.
 ///
-/// An enum is the one non-builtin the compiler admits as a `Map` key (ION0061): an integral
-/// base type and a closed set of named values, which every target can hash. It is also the
-/// arm most likely to break on a target-by-target basis — a generated Rust enum has to
-/// derive `Eq + Hash` for `HashMap<Tier, V>` to compile at all.
+/// These land as C# positional record parameters (which are also the properties the
+/// formatter reads back through), Rust struct fields, and TypeScript interface
+/// properties — plus one `const` per field inside each generated formatter.
+#[derive(Debug, Clone, PartialEq)]
+pub struct KeywordFields {
+    /// The originally reported break: `IonArray<AppendedV1> fixed` did not compile.
+    pub fixed: i32,
+    /// Reserved in C# and in TypeScript.
+    pub class: String,
+    /// C#.
+    pub int: i32,
+    /// C#.
+    pub event: bool,
+    /// C#. Also a method name below.
+    pub lock: i32,
+    /// Rust. The `r#type` case that must stay off the wire.
+    pub r#type: String,
+    /// Rust.
+    pub r#move: i32,
+    /// Rust.
+    pub r#match: i32,
+    /// Rust.
+    pub r#fn: String,
+    /// TypeScript.
+    pub function: i32,
+    /// C# and TypeScript.
+    pub default: bool,
+    /// A keyword-named field under each modifier stacking, so the array and optional
+    /// read/write paths are covered as well as the plain one.
+    pub params: Vec<i32>,
+    /// Optional.
+    pub base: Option<String>,
+    /// The enum and the flags in field position.
+    pub tier: KeywordTier,
+    /// Flags in field position.
+    pub access: KeywordAccess,
+}
+
+
+/// A `Partial<T>` target whose fields are keywords — deliberately in C# and TypeScript
+/// only.
+///
+/// `ion_rustcore::ion_partial!` derives its CBOR map keys from the field idents with
+/// `stringify!`, which keeps the `r#`, so a *Rust* keyword here is ION0051 (refused, not
+/// escaped) rather than something the generator may quietly rename. None of the names
+/// below is a Rust keyword, so the patch struct is emitted — and the three runtimes'
+/// keys stay `"fixed"`, `"class"`, `"default"`, `"lock"` and `"event"`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct KeywordPatchTarget {
+    /// C#.
+    pub fixed: i32,
+    /// C# and TypeScript.
+    pub class: String,
+    /// C# and TypeScript.
+    pub default: bool,
+    /// Array field, so the `Array<>` descriptor carries a keyword key too.
+    pub lock: Vec<i32>,
+    /// Optional field.
+    pub event: Option<String>,
+}
+
+
+ion_rustcore::ion_open_enum! {
+    /// An enum whose members are keywords in each of the three targets.
+    ///
+    /// A member name is a declaration in all three (`@default`, `r#move`, and a TypeScript
+    /// enum member, which needs nothing) and never a wire value: the discriminant is.
+    pub enum KeywordTier: u8 {
+        /// C# and TypeScript.
+        default = 0,
+        /// C# only — `fixed` is not reserved in Rust or TypeScript.
+        fixed = 1,
+        /// Rust only.
+        r#type = 2,
+        /// Rust only.
+        r#move = 3,
+    }
+}
+
+
+/// A flags set whose members are keywords.
+///
+/// Emitted as C# enum members, Rust associated `const`s and TypeScript enum members.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(u8)]
-pub enum Tier {
-    Free = 0,
-    Paid = 1,
-    Trial = 2,
+pub struct KeywordAccess(pub u32);
+
+impl KeywordAccess {
+    /// C# only.
+    pub const lock: Self = Self(1);
+    /// C# and Rust.
+    pub const r#static: Self = Self(2);
+    /// Rust only.
+    pub const r#match: Self = Self(4);
 }
 
 
@@ -388,6 +504,95 @@ pub struct VectorOfVectorOfVector {
 }
 
 
+/// A union whose cases carry keyword-named fields.
+///
+/// The C# case is a positional record, the Rust case a struct, and the TypeScript case a
+/// class whose constructor cannot use a parameter property for a reserved word.
+#[derive(Debug, Clone, PartialEq)]
+pub enum KeywordUnion {
+    Kept(Kept),
+    Dropped(Dropped),
+}
+
+impl KeywordUnion {
+    pub fn union_index(&self) -> u32 {
+        match self {
+            Self::Kept(_) => 0,
+            Self::Dropped(_) => 1,
+        }
+    }
+}
+
+
+/// Mixes a reserved field with an ordinary one, so the TypeScript constructor emits a
+/// renamed plain parameter beside a parameter property.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Kept {
+    pub class: String,
+    pub r#type: i32,
+}
+
+
+/// A single reserved field.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Dropped {
+    pub r#fn: bool,
+}
+
+
+impl IonFormat for KeywordUnion {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let (union_index, _depth) =
+            ion_rustcore::formatter::read_union_envelope(d, "KeywordUnion")?;
+        let value = match union_index {
+                        0 => KeywordUnion::Kept(<Kept as IonFormat>::ion_read(d)?),            1 => KeywordUnion::Dropped(<Dropped as IonFormat>::ion_read(d)?),
+            _ => return Err(IonError::InvalidUnionIndex(union_index)),
+        };
+        Ok(value)
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        ion_rustcore::formatter::write_union_envelope(e, self.union_index())?;
+        match self {
+                        Self::Kept(v) => v.ion_write(e)?,            Self::Dropped(v) => v.ion_write(e)?,
+        }
+        Ok(())
+    }
+}
+
+impl IonFormat for Kept {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "Kept")?;
+        let class = <String as IonFormat>::ion_read(d)?;
+        let r#type = <i32 as IonFormat>::ion_read(d)?;
+        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        Ok(Self { class, r#type })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(2)?;
+        self.class.ion_write(e)?;
+        self.r#type.ion_write(e)?;
+        Ok(())
+    }
+}
+
+impl IonFormat for Dropped {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "Dropped")?;
+        let r#fn = <bool as IonFormat>::ion_read(d)?;
+        ion_rustcore::formatter::skip_remaining(d, len, 1)?;
+        Ok(Self { r#fn })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(1)?;
+        self.r#fn.ion_write(e)?;
+        Ok(())
+    }
+}
+
+
 
 // ═══════════════ Partials ═══════════════
 
@@ -413,6 +618,18 @@ ion_rustcore::ion_partial! {
 }
 
 ion_rustcore::ion_partial! {
+    /// Sparse patch over [`KeywordPatchTarget`] (Ion `KeywordPatchTarget~`).
+    #[allow(non_snake_case)]
+    pub struct KeywordPatchTargetPatch for KeywordPatchTarget {
+        fixed: i32,
+        class: String,
+        default: bool,
+        lock: Vec<i32>,
+        event: Option<String>,
+    }
+}
+
+ion_rustcore::ion_partial! {
     /// Sparse patch over [`LedgerPatch`] (Ion `LedgerPatch~`).
     #[allow(non_snake_case)]
     pub struct LedgerPatchPatch for LedgerPatch {
@@ -428,7 +645,7 @@ ion_rustcore::ion_partial! {
 
 impl IonFormat for LegacyRequest {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let len = d.array()?.ok_or(IonError::IndefiniteArray)?;
+        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "LegacyRequest")?;
         let old_id = <i32 as IonFormat>::ion_read(d)?;
         let name = <String as IonFormat>::ion_read(d)?;
         ion_rustcore::formatter::skip_remaining(d, len, 2)?;
@@ -445,7 +662,7 @@ impl IonFormat for LegacyRequest {
 
 impl IonFormat for CacheProbe {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let len = d.array()?.ok_or(IonError::IndefiniteArray)?;
+        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "CacheProbe")?;
         let hits = <i32 as IonFormat>::ion_read(d)?;
         let misses = <i32 as IonFormat>::ion_read(d)?;
         let total = <i32 as IonFormat>::ion_read(d)?;
@@ -462,34 +679,9 @@ impl IonFormat for CacheProbe {
     }
 }
 
-impl IonFormat for CacheRegion {
-    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let raw = i32::ion_read(d)?;
-        Self::try_from(raw).map_err(|_| IonError::InvalidEnum(raw as i64))
-    }
-
-    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
-        (*self as i32).ion_write(e)
-    }
-}
-
-impl TryFrom<i32> for CacheRegion {
-    type Error = ();
-    fn try_from(value: i32) -> Result<Self, Self::Error> {
-        // Safety: check all valid discriminants
-                match value {
-            | x if x == Self::None as i32 => Ok(unsafe { std::mem::transmute(x) }),
-            | x if x == Self::Local as i32 => Ok(unsafe { std::mem::transmute(x) }),
-            | x if x == Self::Session as i32 => Ok(unsafe { std::mem::transmute(x) }),
-            | x if x == Self::Shared as i32 => Ok(unsafe { std::mem::transmute(x) }),
-            _ => Err(()),
-        }
-    }
-}
-
 impl IonFormat for Member {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let len = d.array()?.ok_or(IonError::IndefiniteArray)?;
+        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "Member")?;
         let id = <uuid::Uuid as IonFormat>::ion_read(d)?;
         let name = <String as IonFormat>::ion_read(d)?;
         ion_rustcore::formatter::skip_remaining(d, len, 2)?;
@@ -506,7 +698,7 @@ impl IonFormat for Member {
 
 impl IonFormat for Doc {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let len = d.array()?.ok_or(IonError::IndefiniteArray)?;
+        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "Doc")?;
         let title = <String as IonFormat>::ion_read(d)?;
         let revision = <i32 as IonFormat>::ion_read(d)?;
         ion_rustcore::formatter::skip_remaining(d, len, 2)?;
@@ -523,7 +715,7 @@ impl IonFormat for Doc {
 
 impl IonFormat for KeyMatrix {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let len = d.array()?.ok_or(IonError::IndefiniteArray)?;
+        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "KeyMatrix")?;
         let by_i1 = <std::collections::HashMap<i8, i32> as IonFormat>::ion_read(d)?;
         let by_i2 = <std::collections::HashMap<i16, i32> as IonFormat>::ion_read(d)?;
         let by_i4 = <std::collections::HashMap<i32, i32> as IonFormat>::ion_read(d)?;
@@ -564,7 +756,7 @@ impl IonFormat for KeyMatrix {
 
 impl IonFormat for ContainerShapes {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let len = d.array()?.ok_or(IonError::IndefiniteArray)?;
+        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "ContainerShapes")?;
         let tags = <std::collections::HashMap<String, i32> as IonFormat>::ion_read(d)?;
         let ids = <std::collections::HashSet<i32> as IonFormat>::ion_read(d)?;
         let coords = <[f32; 16] as IonFormat>::ion_read(d)?;
@@ -595,33 +787,86 @@ impl IonFormat for ContainerShapes {
     }
 }
 
-impl IonFormat for Tier {
+impl IonFormat for KeywordAccess {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let raw = u8::ion_read(d)?;
-        Self::try_from(raw).map_err(|_| IonError::InvalidEnum(raw as i64))
+        let raw = u32::ion_read(d)?;
+        Ok(Self(raw))
     }
 
     fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
-        (*self as u8).ion_write(e)
+        self.0.ion_write(e)
     }
 }
 
-impl TryFrom<u8> for Tier {
-    type Error = ();
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        // Safety: check all valid discriminants
-                match value {
-            | x if x == Self::Free as u8 => Ok(unsafe { std::mem::transmute(x) }),
-            | x if x == Self::Paid as u8 => Ok(unsafe { std::mem::transmute(x) }),
-            | x if x == Self::Trial as u8 => Ok(unsafe { std::mem::transmute(x) }),
-            _ => Err(()),
-        }
+impl IonFormat for KeywordFields {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "KeywordFields")?;
+        let fixed = <i32 as IonFormat>::ion_read(d)?;
+        let class = <String as IonFormat>::ion_read(d)?;
+        let int = <i32 as IonFormat>::ion_read(d)?;
+        let event = <bool as IonFormat>::ion_read(d)?;
+        let lock = <i32 as IonFormat>::ion_read(d)?;
+        let r#type = <String as IonFormat>::ion_read(d)?;
+        let r#move = <i32 as IonFormat>::ion_read(d)?;
+        let r#match = <i32 as IonFormat>::ion_read(d)?;
+        let r#fn = <String as IonFormat>::ion_read(d)?;
+        let function = <i32 as IonFormat>::ion_read(d)?;
+        let default = <bool as IonFormat>::ion_read(d)?;
+        let params = ion_rustcore::formatter::read_array::<i32>(d)?;
+        let base = ion_rustcore::formatter::read_maybe::<String>(d)?;
+        let tier = <KeywordTier as IonFormat>::ion_read(d)?;
+        let access = <KeywordAccess as IonFormat>::ion_read(d)?;
+        ion_rustcore::formatter::skip_remaining(d, len, 15)?;
+        Ok(Self { fixed, class, int, event, lock, r#type, r#move, r#match, r#fn, function, default, params, base, tier, access })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(15)?;
+        self.fixed.ion_write(e)?;
+        self.class.ion_write(e)?;
+        self.int.ion_write(e)?;
+        self.event.ion_write(e)?;
+        self.lock.ion_write(e)?;
+        self.r#type.ion_write(e)?;
+        self.r#move.ion_write(e)?;
+        self.r#match.ion_write(e)?;
+        self.r#fn.ion_write(e)?;
+        self.function.ion_write(e)?;
+        self.default.ion_write(e)?;
+        ion_rustcore::formatter::write_array(e, &self.params)?;
+        ion_rustcore::formatter::write_maybe(e, &self.base)?;
+        self.tier.ion_write(e)?;
+        self.access.ion_write(e)?;
+        Ok(())
+    }
+}
+
+impl IonFormat for KeywordPatchTarget {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "KeywordPatchTarget")?;
+        let fixed = <i32 as IonFormat>::ion_read(d)?;
+        let class = <String as IonFormat>::ion_read(d)?;
+        let default = <bool as IonFormat>::ion_read(d)?;
+        let lock = ion_rustcore::formatter::read_array::<i32>(d)?;
+        let event = ion_rustcore::formatter::read_maybe::<String>(d)?;
+        ion_rustcore::formatter::skip_remaining(d, len, 5)?;
+        Ok(Self { fixed, class, default, lock, event })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(5)?;
+        self.fixed.ion_write(e)?;
+        self.class.ion_write(e)?;
+        self.default.ion_write(e)?;
+        ion_rustcore::formatter::write_array(e, &self.lock)?;
+        ion_rustcore::formatter::write_maybe(e, &self.event)?;
+        Ok(())
     }
 }
 
 impl IonFormat for LedgerEntry {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let len = d.array()?.ok_or(IonError::IndefiniteArray)?;
+        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "LedgerEntry")?;
         let booked_at = <chrono::DateTime<chrono::FixedOffset> as IonFormat>::ion_read(d)?;
         let amount = <ion_rustcore::IonDecimal as IonFormat>::ion_read(d)?;
         let settled_at = ion_rustcore::formatter::read_maybe::<chrono::DateTime<chrono::FixedOffset>>(d)?;
@@ -652,7 +897,7 @@ impl IonFormat for LedgerEntry {
 
 impl IonFormat for LedgerPatch {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let len = d.array()?.ok_or(IonError::IndefiniteArray)?;
+        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "LedgerPatch")?;
         let booked_at = <chrono::DateTime<chrono::FixedOffset> as IonFormat>::ion_read(d)?;
         let amount = <ion_rustcore::IonDecimal as IonFormat>::ion_read(d)?;
         let settled_at = ion_rustcore::formatter::read_maybe::<chrono::DateTime<chrono::FixedOffset>>(d)?;
@@ -673,7 +918,7 @@ impl IonFormat for LedgerPatch {
 
 impl IonFormat for PatchTarget {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let len = d.array()?.ok_or(IonError::IndefiniteArray)?;
+        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "PatchTarget")?;
         let n = <i32 as IonFormat>::ion_read(d)?;
         let f = <f32 as IonFormat>::ion_read(d)?;
         let s = <String as IonFormat>::ion_read(d)?;
@@ -696,7 +941,7 @@ impl IonFormat for PatchTarget {
 
 impl IonFormat for PatchEnvelope {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let len = d.array()?.ok_or(IonError::IndefiniteArray)?;
+        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "PatchEnvelope")?;
         let one = <ion_rustcore::IonPartial<PatchTarget> as IonFormat>::ion_read(d)?;
         let many = ion_rustcore::formatter::read_array::<ion_rustcore::IonPartial<PatchTarget>>(d)?;
         let maybe = ion_rustcore::formatter::read_maybe::<ion_rustcore::IonPartial<PatchTarget>>(d)?;
@@ -717,7 +962,7 @@ impl IonFormat for PatchEnvelope {
 
 impl IonFormat for Vector {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let len = d.array()?.ok_or(IonError::IndefiniteArray)?;
+        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "Vector")?;
         let x = <f32 as IonFormat>::ion_read(d)?;
         let y = <f32 as IonFormat>::ion_read(d)?;
         let z = <f32 as IonFormat>::ion_read(d)?;
@@ -736,7 +981,7 @@ impl IonFormat for Vector {
 
 impl IonFormat for VectorOfVector {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let len = d.array()?.ok_or(IonError::IndefiniteArray)?;
+        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "VectorOfVector")?;
         let x = <Vector as IonFormat>::ion_read(d)?;
         let y = <Vector as IonFormat>::ion_read(d)?;
         let z = <Vector as IonFormat>::ion_read(d)?;
@@ -755,7 +1000,7 @@ impl IonFormat for VectorOfVector {
 
 impl IonFormat for VectorOfVectorOfVector {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let len = d.array()?.ok_or(IonError::IndefiniteArray)?;
+        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "VectorOfVectorOfVector")?;
         let z = <VectorOfVector as IonFormat>::ion_read(d)?;
         let w = <VectorOfVector as IonFormat>::ion_read(d)?;
         ion_rustcore::formatter::skip_remaining(d, len, 2)?;
@@ -1039,6 +1284,72 @@ impl TestBlobsClient {
         let buf = e.into_writer();
         let req = ion_rustcore::IonRequest::new(&self.ctx, "ITestBlobs", "DoIt3");
         req.call::<ion_rustcore::IonBytes>(&buf).await
+    }
+
+}
+
+/// Keyword names in method and argument position.
+pub struct KeywordInteractionClient {
+    ctx: ion_rustcore::IonClientContext,
+}
+
+impl ion_rustcore::FromContext for KeywordInteractionClient {
+    fn from_context(ctx: ion_rustcore::IonClientContext) -> Self {
+        Self { ctx }
+    }
+}
+
+impl KeywordInteractionClient {
+        /// Reserved words as method *parameters*: a C# parameter, a Rust `async fn` argument
+    /// and — the one that actually fails without a rename — a TypeScript parameter.
+    pub async fn echo(&self, class: &String, r#type: i32, default: bool) -> Result<String, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(3)?;
+        class.ion_write(&mut e)?;
+        r#type.ion_write(&mut e)?;
+        default.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "IKeywordInteraction", "Echo");
+        req.call::<String>(&buf).await
+    }
+    /// A reserved word as the *method* name. The router still dispatches on the Ion
+    /// spelling: the generated `methodName.Equals("lock", …)` is a string, not an
+    /// identifier, and `nameof(@lock)` is `"lock"`.
+    pub async fn lock(&self, value: i32) -> Result<i32, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        value.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "IKeywordInteraction", "lock");
+        req.call::<i32>(&buf).await
+    }
+    /// The whole message over a real signature.
+    pub async fn roundtrip(&self, fields: &KeywordFields) -> Result<KeywordFields, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        fields.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "IKeywordInteraction", "Roundtrip");
+        req.call::<KeywordFields>(&buf).await
+    }
+    /// A patch in argument and return position, so the field-name keys are exercised
+    /// end to end.
+    pub async fn patch(&self, patch: &ion_rustcore::IonPartial<KeywordPatchTarget>) -> Result<ion_rustcore::IonPartial<KeywordPatchTarget>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        patch.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "IKeywordInteraction", "Patch");
+        req.call::<ion_rustcore::IonPartial<KeywordPatchTarget>>(&buf).await
+    }
+    /// The union in both positions.
+    pub async fn pick(&self, choice: &KeywordUnion) -> Result<KeywordUnion, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        choice.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "IKeywordInteraction", "Pick");
+        req.call::<KeywordUnion>(&buf).await
     }
 
 }

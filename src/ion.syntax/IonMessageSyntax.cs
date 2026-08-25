@@ -13,6 +13,25 @@ public record IonSyntaxMember : IonSyntaxBase
 {
     public string? Comments { get; set; }
     public List<IonAttributeSyntax> Attributes { get; set; } = [];
+
+    /// <summary>
+    /// The spans of this declaration's body that could not be read as members, in source order.
+    /// Empty for everything that parsed cleanly, and for every node the strict grammar produced.
+    /// </summary>
+    /// <remarks>
+    /// Member level recovery keeps the declaration alive so the members around a mistake still
+    /// compile, which would otherwise make the mistake invisible: the declaration parses, so no
+    /// <see cref="InvalidIonBlock"/> is emitted at file level and nothing downstream has anything to
+    /// point at. Recording the span here — and having <c>IonParser.BuildFileSyntax</c> lift it into
+    /// <see cref="IonFileSyntax.allTokens"/> — puts it on the one path <c>ionc</c> and
+    /// <c>IonWorkspace</c> already scan for parse errors, so a bad member is reported as
+    /// <c>ION_PARSE</c> exactly as a bad declaration is, and cannot compile clean.
+    /// <para>
+    /// A body property rather than a constructor parameter, following
+    /// <see cref="Attributes"/>: every existing construction site keeps compiling unchanged.
+    /// </para>
+    /// </remarks>
+    public List<InvalidIonBlock> InvalidMembers { get; set; } = [];
 }
 
 public record InvalidIonBlock(string block) : IonSyntaxMember
@@ -462,6 +481,14 @@ public static class IonSyntaxEx
     public static T WithAttributes<T>(this T t, IEnumerable<IonAttributeSyntax> attributes) where T : IonSyntaxMember
     {
         t.Attributes.AddRange(attributes);
+        return t;
+    }
+
+    /// <summary>Records the body spans member level recovery could not read. See <see cref="IonSyntaxMember.InvalidMembers"/>.</summary>
+    public static T WithInvalidMembers<T>(this T t, List<InvalidIonBlock> invalid) where T : IonSyntaxMember
+    {
+        if (invalid.Count != 0)
+            t.InvalidMembers.AddRange(invalid);
         return t;
     }
 

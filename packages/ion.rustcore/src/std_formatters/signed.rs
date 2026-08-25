@@ -69,7 +69,8 @@ impl IonFormat for i64 {
 impl IonFormat for i128 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
         // i128 is stored as a 16-byte big-endian CBOR byte string
-        let bytes = d.bytes()?;
+        // Chunked as well as definite: a byte string is a byte string wherever it appears.
+        let bytes = crate::std_formatters::base::read_byte_string(d)?;
         if bytes.len() != 16 {
             return Err(IonError::Decode(format!(
                 "Expected 16 bytes for i128, got {}",
@@ -77,7 +78,7 @@ impl IonFormat for i128 {
             )));
         }
         let mut arr = [0u8; 16];
-        arr.copy_from_slice(bytes);
+        arr.copy_from_slice(&bytes);
         Ok(i128::from_be_bytes(arr))
     }
 

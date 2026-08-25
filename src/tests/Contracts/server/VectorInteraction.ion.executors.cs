@@ -24,7 +24,7 @@ public sealed class Ion_VectorMathInteraction_ServiceExecutor(AsyncServiceScope 
     
         const int argumentSize = 1;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "VectorMathInteraction.Abs");
     
         var __leftoperand = IonFormatterStorage<Vector>.Read(reader);
     
@@ -41,7 +41,7 @@ public sealed class Ion_VectorMathInteraction_ServiceExecutor(AsyncServiceScope 
     
         const int argumentSize = 2;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "VectorMathInteraction.Add");
     
         var __leftoperand = IonFormatterStorage<Vector>.Read(reader);
         var __rightoperand = IonFormatterStorage<Vector>.Read(reader);
@@ -59,7 +59,7 @@ public sealed class Ion_VectorMathInteraction_ServiceExecutor(AsyncServiceScope 
     
         const int argumentSize = 2;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "VectorMathInteraction.AndNot");
     
         var __leftoperand = IonFormatterStorage<Vector>.Read(reader);
         var __rightoperand = IonFormatterStorage<Vector>.Read(reader);
@@ -77,7 +77,7 @@ public sealed class Ion_VectorMathInteraction_ServiceExecutor(AsyncServiceScope 
     
         const int argumentSize = 3;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "VectorMathInteraction.Clamp");
     
         var __leftoperand = IonFormatterStorage<Vector>.Read(reader);
         var __min = IonFormatterStorage<Vector>.Read(reader);
@@ -99,7 +99,7 @@ public sealed class Ion_VectorMathInteraction_ServiceExecutor(AsyncServiceScope 
     
         const int argumentSize = 2;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "VectorMathInteraction.Component");
     
         var __leftoperand = IonFormatterStorage<Vector>.Read(reader);
         var __index = IonFormatterStorage<u1>.Read(reader);
@@ -117,7 +117,7 @@ public sealed class Ion_VectorMathInteraction_ServiceExecutor(AsyncServiceScope 
     
         const int argumentSize = 1;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "VectorMathInteraction.Do");
     
         var __leftoperand = IonFormatterStorage<Vector>.Read(reader);
     
@@ -137,7 +137,7 @@ public sealed class Ion_VectorMathInteraction_ServiceExecutor(AsyncServiceScope 
     
         const int argumentSize = 2;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "VectorMathInteraction.Repeat");
     
         var __leftoperand = IonFormatterStorage<Vector>.Read(reader);
         var __count = IonFormatterStorage<u1>.Read(reader);
@@ -162,7 +162,7 @@ public sealed class Ion_VectorMathInteraction_ServiceExecutor(AsyncServiceScope 
     
         const int argumentSize = 2;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "VectorMathInteraction.Spread");
     
         var __leftoperand = IonFormatterStorage<Vector>.Read(reader);
         var __count = IonFormatterStorage<u1>.Read(reader);

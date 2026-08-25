@@ -46,7 +46,11 @@ IonFormatterStorage.register("bytes", {
 IonFormatterStorage.register("guid", {
   read(reader: CborReader): Guid {
     const bytes = reader.readByteString();
-    if (bytes.length !== 16) throw new Error("Expected 16-byte GUID");
+    // The last decode path in this runtime that still raised a bare `Error`. A 15-byte string is
+    // a wire fault like any other, and a caller has to be able to catch it with the single
+    // `instanceof IonDecodeError` it uses for everything else.
+    if (bytes.length !== 16)
+      throw new IonMalformedValueError("guid", `expected a 16-byte string, got ${bytes.length}`);
     const hex = [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
     return (
       hex.substring(0, 8) +

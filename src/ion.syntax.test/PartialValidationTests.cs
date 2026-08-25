@@ -914,7 +914,7 @@ public class PartialValidationTests
 
     [Test]
     public void Lock_VersionIsUnchanged()
-        => Assert.That(IonSchemaLock.CurrentVersion, Is.EqualTo(1),
+        => Assert.That(IonSchemaLock.CurrentVersion, Is.EqualTo(2),
             "partial validation must not change the lock format");
 
     // ═══════════════════════════════════════════════════════════════════

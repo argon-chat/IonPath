@@ -19,7 +19,7 @@ public sealed class Ion_PatchTarget_Formatter : IonFormatter<PatchTarget>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public PatchTarget Read(CborReader reader)
     {
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");;
+        var arraySize = reader.ReadStartMessage(5, "PatchTarget");
         var __n = IonFormatterStorage<i4>.Read(reader);
         var __f = IonFormatterStorage<f4>.Read(reader);
         var __s = IonFormatterStorage<string>.Read(reader);
@@ -48,7 +48,7 @@ public sealed class Ion_PatchEnvelope_Formatter : IonFormatter<PatchEnvelope>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public PatchEnvelope Read(CborReader reader)
     {
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");;
+        var arraySize = reader.ReadStartMessage(4, "PatchEnvelope");
         var __one = IonFormatterStorage<IonPartial<PatchTarget>>.Read(reader);
         var __many = IonFormatterStorage<IonPartial<PatchTarget>>.ReadArray(reader);
         var __maybe = reader.ReadNullable<IonPartial<PatchTarget>>();

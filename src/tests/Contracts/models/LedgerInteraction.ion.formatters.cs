@@ -19,7 +19,7 @@ public sealed class Ion_LedgerEntry_Formatter : IonFormatter<LedgerEntry>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public LedgerEntry Read(CborReader reader)
     {
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");;
+        var arraySize = reader.ReadStartMessage(9, "LedgerEntry");
         var __bookedat = IonFormatterStorage<datetime>.Read(reader);
         var __amount = IonFormatterStorage<decimal>.Read(reader);
         var __settledat = reader.ReadNullable<datetime>();
@@ -56,7 +56,7 @@ public sealed class Ion_LedgerPatch_Formatter : IonFormatter<LedgerPatch>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public LedgerPatch Read(CborReader reader)
     {
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");;
+        var arraySize = reader.ReadStartMessage(4, "LedgerPatch");
         var __bookedat = IonFormatterStorage<datetime>.Read(reader);
         var __amount = IonFormatterStorage<decimal>.Read(reader);
         var __settledat = reader.ReadNullable<datetime>();

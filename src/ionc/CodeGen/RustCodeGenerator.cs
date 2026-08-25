@@ -35,7 +35,7 @@ public sealed class RustCodeGenerator : CodeGeneratorBase
         var crateName = projectName.ToLowerInvariant().Replace(".", "-").Replace(" ", "-");
         var rustcoreDep = rustcorePath != null
             ? $$"""{ path = "{{rustcorePath}}" }"""
-            : "\"0.1\"";
+            : "\"0.2\"";  // must track ion-rustcore's own version: generated code calls its API
         var content = $$"""
             [package]
             name = "{{crateName}}"
@@ -295,30 +295,17 @@ public sealed class RustCodeGenerator : CodeGeneratorBase
     // FORMATTER GENERATION
     // ═══════════════════════════════════════════════════════════════════
 
-    protected override string GenerateEnumFormatter(IonEnum e)
-    {
-        var baseType = _rustResolver.ResolvePrimitive(e.baseType.name.Identifier);
-        var readExpr = $"{baseType}::ion_read(d)?";
-
-        // Generate variant check
-        var variantChecks = new StringBuilder();
-        foreach (var m in e.members)
-            variantChecks.AppendLine($"            | x if x == Self::{m.name.Identifier} as {baseType} => Ok(unsafe {{ std::mem::transmute(x) }}),");
-
-        var enumVariantCheck = $$"""
-                match value {
-        {{variantChecks}}            _ => Err(()),
-                }
-        """;
-
-        var ctx = new TemplateContext()
-            .Set("typeName", e.name.Identifier)
-            .Set("baseTypeName", baseType)
-            .Set("readExpr", readExpr)
-            .Set("enumVariantCheck", enumVariantCheck);
-
-        return ctx.Apply(Templates.FormatterEnumTemplate);
-    }
+    /// <summary>
+    /// Nothing: <c>ion_rustcore::ion_open_enum!</c> already emitted the <c>IonFormat</c> impl next
+    /// to the type — see <see cref="Emitters.RustEmitter.EnumDeclaration"/>.
+    /// </summary>
+    /// <remarks>
+    /// One macro invocation produces the enum, its <c>Unknown(repr)</c> catch-all, its
+    /// <c>IonOpenEnum</c> impl and its <c>IonFormat</c> impl together, so the member list is
+    /// written once and the four cannot drift apart. A second <c>impl IonFormat for T</c> here
+    /// would be a coherence error (E0119), not a duplicate comment.
+    /// </remarks>
+    protected override string GenerateEnumFormatter(IonEnum e) => "";
 
     protected override string GenerateFlagsFormatter(IonFlags f)
     {
@@ -632,7 +619,7 @@ public sealed class RustCodeGenerator : CodeGeneratorBase
         }
     }
 
-    private static bool IsRustKeyword(string identifier) => EscapeRustKeyword(identifier) != identifier;
+    private static bool IsRustKeyword(string identifier) => ReservedWords.IsRustKeyword(identifier);
 
     // ═══════════════════════════════════════════════════════════════════
     // HELPERS
@@ -648,22 +635,10 @@ public sealed class RustCodeGenerator : CodeGeneratorBase
                 sb.Append('_');
             sb.Append(char.ToLowerInvariant(c));
         }
-        var result = sb.ToString();
-        return EscapeRustKeyword(result);
+        // The escape has to follow the snake_casing: it is `Type` → `type` that produces the
+        // keyword. See ReservedWords.EscapeRust — one word list for the whole Rust target.
+        return ReservedWords.EscapeRust(sb.ToString());
     }
-
-    private static string EscapeRustKeyword(string id) => id switch
-    {
-        "as" or "break" or "const" or "continue" or "crate" or "do" or "else" or
-        "enum" or "extern" or "false" or "fn" or "for" or "if" or "impl" or "in" or
-        "let" or "loop" or "match" or "mod" or "move" or "mut" or "pub" or "ref" or
-        "return" or "self" or "static" or "struct" or "super" or "trait" or "true" or
-        "type" or "unsafe" or "use" or "where" or "while" or "async" or "await" or
-        "dyn" or "abstract" or "become" or "box" or "final" or "macro" or "override" or
-        "priv" or "typeof" or "unsized" or "virtual" or "yield" or "try"
-            => $"r#{id}",
-        _ => id
-    };
 
     /// <summary>
     /// Determines if a type should be passed by reference (&amp;) in Rust.

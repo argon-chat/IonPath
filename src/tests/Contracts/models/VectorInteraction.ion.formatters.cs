@@ -19,7 +19,7 @@ public sealed class Ion_Vector_Formatter : IonFormatter<Vector>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public Vector Read(CborReader reader)
     {
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");;
+        var arraySize = reader.ReadStartMessage(3, "Vector");
         var __x = IonFormatterStorage<f4>.Read(reader);
         var __y = IonFormatterStorage<f4>.Read(reader);
         var __z = IonFormatterStorage<f4>.Read(reader);
@@ -44,7 +44,7 @@ public sealed class Ion_VectorOfVector_Formatter : IonFormatter<VectorOfVector>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public VectorOfVector Read(CborReader reader)
     {
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");;
+        var arraySize = reader.ReadStartMessage(3, "VectorOfVector");
         var __x = IonFormatterStorage<Vector>.Read(reader);
         var __y = IonFormatterStorage<Vector>.Read(reader);
         var __z = IonFormatterStorage<Vector>.Read(reader);
@@ -69,7 +69,7 @@ public sealed class Ion_VectorOfVectorOfVector_Formatter : IonFormatter<VectorOf
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public VectorOfVectorOfVector Read(CborReader reader)
     {
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");;
+        var arraySize = reader.ReadStartMessage(2, "VectorOfVectorOfVector");
         var __z = IonFormatterStorage<VectorOfVector>.Read(reader);
         var __w = IonFormatterStorage<VectorOfVector>.Read(reader);
         reader.ReadEndArrayAndSkip(arraySize - 2);

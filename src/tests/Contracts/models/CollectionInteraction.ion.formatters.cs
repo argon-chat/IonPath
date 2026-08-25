@@ -19,7 +19,7 @@ public sealed class Ion_Member_Formatter : IonFormatter<Member>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public Member Read(CborReader reader)
     {
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");;
+        var arraySize = reader.ReadStartMessage(2, "Member");
         var __id = IonFormatterStorage<guid>.Read(reader);
         var __name = IonFormatterStorage<string>.Read(reader);
         reader.ReadEndArrayAndSkip(arraySize - 2);
@@ -42,7 +42,7 @@ public sealed class Ion_Doc_Formatter : IonFormatter<Doc>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public Doc Read(CborReader reader)
     {
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");;
+        var arraySize = reader.ReadStartMessage(2, "Doc");
         var __title = IonFormatterStorage<string>.Read(reader);
         var __revision = IonFormatterStorage<i4>.Read(reader);
         reader.ReadEndArrayAndSkip(arraySize - 2);
@@ -65,7 +65,7 @@ public sealed class Ion_KeyMatrix_Formatter : IonFormatter<KeyMatrix>
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public KeyMatrix Read(CborReader reader)
     {
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");;
+        var arraySize = reader.ReadStartMessage(14, "KeyMatrix");
         var __byi1 = IonFormatterStorage<Dictionary<i1, i4>>.Read(reader);
         var __byi2 = IonFormatterStorage<Dictionary<i2, i4>>.Read(reader);
         var __byi4 = IonFormatterStorage<Dictionary<i4, i4>>.Read(reader);
@@ -112,7 +112,7 @@ public sealed class Ion_ContainerShapes_Formatter : IonFormatter<ContainerShapes
     [GeneratedCodeAttribute("ionc", null), CompilerGeneratedAttribute]
     public ContainerShapes Read(CborReader reader)
     {
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");;
+        var arraySize = reader.ReadStartMessage(10, "ContainerShapes");
         var __tags = IonFormatterStorage<Dictionary<string, i4>>.Read(reader);
         var __ids = IonFormatterStorage<HashSet<i4>>.Read(reader);
         var __coords = IonFormatterStorage<f4>.ReadFixedArray(reader, 16);

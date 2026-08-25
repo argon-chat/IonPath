@@ -30,7 +30,7 @@ public sealed class Ion_PatchInteraction_ServiceExecutor(AsyncServiceScope scope
     
         const int argumentSize = 1;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "PatchInteraction.Apply");
     
         var __patch = IonFormatterStorage<IonPartial<PatchTarget>>.Read(reader);
     
@@ -50,7 +50,7 @@ public sealed class Ion_PatchInteraction_ServiceExecutor(AsyncServiceScope scope
     
         const int argumentSize = 1;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "PatchInteraction.ApplyMany");
     
         var __patches = IonFormatterStorage<IonPartial<PatchTarget>>.ReadArray(reader);
     
@@ -70,7 +70,7 @@ public sealed class Ion_PatchInteraction_ServiceExecutor(AsyncServiceScope scope
     
         const int argumentSize = 1;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "PatchInteraction.ApplyAll");
     
         var __patches = IonFormatterStorage<IonPartial<PatchTarget>>.ReadArray(reader);
     
@@ -91,7 +91,7 @@ public sealed class Ion_PatchInteraction_ServiceExecutor(AsyncServiceScope scope
     
         const int argumentSize = 1;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "PatchInteraction.ApplySome");
     
         var __patches = IonFormatterStorage<IonPartial<PatchTarget>>.ReadArray(reader);
     
@@ -112,7 +112,7 @@ public sealed class Ion_PatchInteraction_ServiceExecutor(AsyncServiceScope scope
     
         const int argumentSize = 2;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "PatchInteraction.ApplyTo");
     
         var __target = IonFormatterStorage<PatchTarget>.Read(reader);
         var __patch = IonFormatterStorage<IonPartial<PatchTarget>>.Read(reader);
@@ -133,7 +133,7 @@ public sealed class Ion_PatchInteraction_ServiceExecutor(AsyncServiceScope scope
     
         const int argumentSize = 1;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "PatchInteraction.Rewrap");
     
         var __envelope = IonFormatterStorage<PatchEnvelope>.Read(reader);
     

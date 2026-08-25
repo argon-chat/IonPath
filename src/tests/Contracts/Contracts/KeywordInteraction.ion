@@ -1,0 +1,162 @@
+//! Ion names that collide with a target language's reserved words.
+//!
+//! An Ion identifier is constrained by Ion's grammar and by nothing else, so a field
+//! spelled `fixed:`, `type:` or `class:` is legal here and used to emit C#, Rust and
+//! TypeScript that did not parse. Every declaration position a generator writes an Ion
+//! name into is represented below, with names drawn from all three keyword sets at once:
+//!
+//! * C# escapes with `@` — `@fixed`, `@class`, `@int`, `@event`, `@lock`, `@default`.
+//! * Rust escapes with `r#` — `r#type`, `r#move`, `r#match`, `r#fn`, `r#static`.
+//! * TypeScript has no escape, so a *binding* position (a parameter, a `const`, an
+//!   object-literal shorthand) is renamed to `__class` / `__function` / `__default`,
+//!   while property names, enum members and member accesses keep the Ion spelling —
+//!   `interface M { class: string }` is valid TypeScript, `function f(class)` is not.
+//!
+//! **None of it may reach the wire.** A message is encoded positionally, so a field name
+//! is a declaration and nothing else; a `Partial<T>` is keyed *by field name*, and
+//! `ion.lock.json` records the Ion spelling. Both must read back exactly as written here.
+
+/// An enum whose members are keywords in each of the three targets.
+///
+/// A member name is a declaration in all three (`@default`, `r#move`, and a TypeScript
+/// enum member, which needs nothing) and never a wire value: the discriminant is.
+enum KeywordTier : u1 {
+    /// C# and TypeScript.
+    default = 0,
+
+    /// C# only — `fixed` is not reserved in Rust or TypeScript.
+    fixed = 1,
+
+    /// Rust only.
+    type = 2,
+
+    /// Rust only.
+    move = 3
+}
+
+/// A flags set whose members are keywords.
+///
+/// Emitted as C# enum members, Rust associated `const`s and TypeScript enum members.
+flags KeywordAccess : u4 {
+    /// C# only.
+    lock = 1,
+
+    /// C# and Rust.
+    static = 2,
+
+    /// Rust only.
+    match = 4
+}
+
+/// Every field is a reserved word somewhere.
+///
+/// These land as C# positional record parameters (which are also the properties the
+/// formatter reads back through), Rust struct fields, and TypeScript interface
+/// properties — plus one `const` per field inside each generated formatter.
+msg KeywordFields {
+    /// The originally reported break: `IonArray<AppendedV1> fixed` did not compile.
+    fixed: i4;
+
+    /// Reserved in C# and in TypeScript.
+    class: string;
+
+    /// C#.
+    int: i4;
+
+    /// C#.
+    event: bool;
+
+    /// C#. Also a method name below.
+    lock: i4;
+
+    /// Rust. The `r#type` case that must stay off the wire.
+    type: string;
+
+    /// Rust.
+    move: i4;
+
+    /// Rust.
+    match: i4;
+
+    /// Rust.
+    fn: string;
+
+    /// TypeScript.
+    function: i4;
+
+    /// C# and TypeScript.
+    default: bool;
+
+    /// A keyword-named field under each modifier stacking, so the array and optional
+    /// read/write paths are covered as well as the plain one.
+    params: i4[];
+
+    /// Optional.
+    base: string?;
+
+    /// The enum and the flags in field position.
+    tier: KeywordTier;
+
+    /// Flags in field position.
+    access: KeywordAccess;
+}
+
+/// A `Partial<T>` target whose fields are keywords — deliberately in C# and TypeScript
+/// only.
+///
+/// `ion_rustcore::ion_partial!` derives its CBOR map keys from the field idents with
+/// `stringify!`, which keeps the `r#`, so a *Rust* keyword here is ION0051 (refused, not
+/// escaped) rather than something the generator may quietly rename. None of the names
+/// below is a Rust keyword, so the patch struct is emitted — and the three runtimes'
+/// keys stay `"fixed"`, `"class"`, `"default"`, `"lock"` and `"event"`.
+msg KeywordPatchTarget {
+    /// C#.
+    fixed: i4;
+
+    /// C# and TypeScript.
+    class: string;
+
+    /// C# and TypeScript.
+    default: bool;
+
+    /// Array field, so the `Array<>` descriptor carries a keyword key too.
+    lock: i4[];
+
+    /// Optional field.
+    event: string?;
+}
+
+/// A union whose cases carry keyword-named fields.
+///
+/// The C# case is a positional record, the Rust case a struct, and the TypeScript case a
+/// class whose constructor cannot use a parameter property for a reserved word.
+union KeywordUnion {
+    /// Mixes a reserved field with an ordinary one, so the TypeScript constructor emits a
+    /// renamed plain parameter beside a parameter property.
+    Kept(class: string, type: i4),
+
+    /// A single reserved field.
+    Dropped(fn: bool)
+}
+
+/// Keyword names in method and argument position.
+service KeywordInteraction() {
+    /// Reserved words as method *parameters*: a C# parameter, a Rust `async fn` argument
+    /// and — the one that actually fails without a rename — a TypeScript parameter.
+    Echo(class: string, type: i4, default: bool): string;
+
+    /// A reserved word as the *method* name. The router still dispatches on the Ion
+    /// spelling: the generated `methodName.Equals("lock", …)` is a string, not an
+    /// identifier, and `nameof(@lock)` is `"lock"`.
+    lock(value: i4): i4;
+
+    /// The whole message over a real signature.
+    Roundtrip(fields: KeywordFields): KeywordFields;
+
+    /// A patch in argument and return position, so the field-name keys are exercised
+    /// end to end.
+    Patch(patch: KeywordPatchTarget~): KeywordPatchTarget~;
+
+    /// The union in both positions.
+    Pick(choice: KeywordUnion): KeywordUnion;
+}

@@ -89,7 +89,7 @@ pub fn read_mantissa(d: &mut Decoder<'_>) -> Result<i128, IonError> {
                 });
             }
 
-            let raw = d.bytes()?;
+            let raw = crate::std_formatters::base::read_byte_string(d)?;
             let magnitude_bytes = {
                 let first = raw.iter().position(|&b| b != 0).unwrap_or(raw.len());
                 &raw[first..]

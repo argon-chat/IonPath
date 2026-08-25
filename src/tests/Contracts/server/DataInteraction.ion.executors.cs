@@ -33,7 +33,7 @@ public sealed class Ion_TestBlobs_ServiceExecutor(AsyncServiceScope scope) : ISe
     
         const int argumentSize = 1;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "TestBlobs.Do");
     
         var __data = IonFormatterStorage<bytes>.Read(reader);
     
@@ -51,7 +51,7 @@ public sealed class Ion_TestBlobs_ServiceExecutor(AsyncServiceScope scope) : ISe
     
         const int argumentSize = 1;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "TestBlobs.DoIt");
     
         var __data = IonFormatterStorage<bytes>.Read(reader);
     
@@ -72,7 +72,7 @@ public sealed class Ion_TestBlobs_ServiceExecutor(AsyncServiceScope scope) : ISe
     
         const int argumentSize = 1;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "TestBlobs.DoIt2");
     
         var __data = IonFormatterStorage<bytes>.Read(reader);
     
@@ -92,7 +92,7 @@ public sealed class Ion_TestBlobs_ServiceExecutor(AsyncServiceScope scope) : ISe
     
         const int argumentSize = 1;
     
-        var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+        var arraySize = reader.ReadStartMessage(argumentSize, "TestBlobs.DoIt3");
     
         var __data = IonFormatterStorage<bytes>.Read(reader);
     

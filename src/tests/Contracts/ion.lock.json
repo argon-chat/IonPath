@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "module": "TestContracts",
   "definitions": {
     "LegacyRequest": {
@@ -462,6 +462,240 @@
             }
           ],
           "returns": "bytes",
+          "modifiers": []
+        }
+      }
+    },
+    "KeywordFields": {
+      "kind": "Msg",
+      "nextIndex": 15,
+      "fields": [
+        {
+          "index": 0,
+          "name": "fixed",
+          "type": "i4"
+        },
+        {
+          "index": 1,
+          "name": "class",
+          "type": "string"
+        },
+        {
+          "index": 2,
+          "name": "int",
+          "type": "i4"
+        },
+        {
+          "index": 3,
+          "name": "event",
+          "type": "bool"
+        },
+        {
+          "index": 4,
+          "name": "lock",
+          "type": "i4"
+        },
+        {
+          "index": 5,
+          "name": "type",
+          "type": "string"
+        },
+        {
+          "index": 6,
+          "name": "move",
+          "type": "i4"
+        },
+        {
+          "index": 7,
+          "name": "match",
+          "type": "i4"
+        },
+        {
+          "index": 8,
+          "name": "fn",
+          "type": "string"
+        },
+        {
+          "index": 9,
+          "name": "function",
+          "type": "i4"
+        },
+        {
+          "index": 10,
+          "name": "default",
+          "type": "bool"
+        },
+        {
+          "index": 11,
+          "name": "params",
+          "type": "Array\u003Ci4\u003E"
+        },
+        {
+          "index": 12,
+          "name": "base",
+          "type": "Maybe\u003Cstring\u003E"
+        },
+        {
+          "index": 13,
+          "name": "tier",
+          "type": "KeywordTier"
+        },
+        {
+          "index": 14,
+          "name": "access",
+          "type": "KeywordAccess"
+        }
+      ]
+    },
+    "KeywordPatchTarget": {
+      "kind": "Msg",
+      "nextIndex": 5,
+      "fields": [
+        {
+          "index": 0,
+          "name": "fixed",
+          "type": "i4"
+        },
+        {
+          "index": 1,
+          "name": "class",
+          "type": "string"
+        },
+        {
+          "index": 2,
+          "name": "default",
+          "type": "bool"
+        },
+        {
+          "index": 3,
+          "name": "lock",
+          "type": "Array\u003Ci4\u003E"
+        },
+        {
+          "index": 4,
+          "name": "event",
+          "type": "Maybe\u003Cstring\u003E"
+        }
+      ]
+    },
+    "KeywordTier": {
+      "kind": "Enum",
+      "members": {
+        "default": "0",
+        "fixed": "1",
+        "type": "2",
+        "move": "3"
+      },
+      "baseType": "u1"
+    },
+    "KeywordAccess": {
+      "kind": "Flags",
+      "members": {
+        "lock": "1",
+        "static": "2",
+        "match": "4"
+      },
+      "baseType": "u4"
+    },
+    "KeywordUnion": {
+      "kind": "Union",
+      "nextIndex": 2,
+      "cases": [
+        {
+          "index": 0,
+          "name": "Kept",
+          "fields": [
+            {
+              "index": 0,
+              "name": "class",
+              "type": "string"
+            },
+            {
+              "index": 1,
+              "name": "type",
+              "type": "i4"
+            }
+          ]
+        },
+        {
+          "index": 1,
+          "name": "Dropped",
+          "fields": [
+            {
+              "index": 0,
+              "name": "fn",
+              "type": "bool"
+            }
+          ]
+        }
+      ]
+    },
+    "KeywordInteraction": {
+      "kind": "Service",
+      "methods": {
+        "Echo": {
+          "args": [
+            {
+              "index": 0,
+              "name": "class",
+              "type": "string"
+            },
+            {
+              "index": 1,
+              "name": "type",
+              "type": "i4"
+            },
+            {
+              "index": 2,
+              "name": "default",
+              "type": "bool"
+            }
+          ],
+          "returns": "string",
+          "modifiers": []
+        },
+        "lock": {
+          "args": [
+            {
+              "index": 0,
+              "name": "value",
+              "type": "i4"
+            }
+          ],
+          "returns": "i4",
+          "modifiers": []
+        },
+        "Roundtrip": {
+          "args": [
+            {
+              "index": 0,
+              "name": "fields",
+              "type": "KeywordFields"
+            }
+          ],
+          "returns": "KeywordFields",
+          "modifiers": []
+        },
+        "Patch": {
+          "args": [
+            {
+              "index": 0,
+              "name": "patch",
+              "type": "Partial\u003CKeywordPatchTarget\u003E"
+            }
+          ],
+          "returns": "Partial\u003CKeywordPatchTarget\u003E",
+          "modifiers": []
+        },
+        "Pick": {
+          "args": [
+            {
+              "index": 0,
+              "name": "choice",
+              "type": "KeywordUnion"
+            }
+          ],
+          "returns": "KeywordUnion",
           "modifiers": []
         }
       }

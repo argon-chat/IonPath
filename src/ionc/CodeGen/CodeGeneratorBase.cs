@@ -119,7 +119,15 @@ public abstract class CodeGeneratorBase : IIonCodeGenerator
 
         foreach (var t in sorted)
         {
-            sb.AppendLine(GenerateFormatter(t));
+            // A target may have nothing to emit for a shape: Rust's `ion_open_enum!` already wrote
+            // the enum's IonFormat impl next to the type, so its formatter pass returns "". The
+            // emptiness check is what keeps that from becoming two blank lines in the output, and
+            // therefore from making a regenerate-twice diff non-empty.
+            var formatter = GenerateFormatter(t);
+            if (string.IsNullOrWhiteSpace(formatter))
+                continue;
+
+            sb.AppendLine(formatter);
             sb.AppendLine();
         }
 

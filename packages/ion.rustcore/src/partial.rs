@@ -244,6 +244,7 @@ pub fn write_partial<P: IonPartialFields>(
 /// indefinite-length maps; unknown keys are skipped.
 pub fn read_partial<P: IonPartialFields>(d: &mut Decoder<'_>) -> Result<P, IonError> {
     let mut patch = P::default();
+    let _depth = crate::formatter::DepthGuard::enter()?;
 
     match d.map()? {
         Some(len) => {
@@ -268,10 +269,13 @@ fn read_partial_entry<P: IonPartialFields>(
     d: &mut Decoder<'_>,
     patch: &mut P,
 ) -> Result<(), IonError> {
-    let key = d.str()?;
+    let key = crate::std_formatters::base::read_text(d)?;
+    let key = key.as_str();
 
     if !P::FIELD_NAMES.contains(&key) {
-        d.skip()?;
+        // Depth-bounded: an unknown key's value is skipped without being looked at, which is the
+        // same free path to the reader's stack that a message's trailing fields are.
+        crate::formatter::skip_value(d)?;
         return Ok(());
     }
 
@@ -383,7 +387,7 @@ macro_rules! ion_partial {
                             Ok(())
                         }
                     )*
-                    _ => { d.skip()?; Ok(()) }
+                    _ => { $crate::formatter::skip_value(d)?; Ok(()) }
                 }
             }
 
