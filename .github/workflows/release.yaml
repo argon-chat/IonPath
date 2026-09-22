@@ -1,3 +1,13 @@
+# Publishes the ionpath.* packages to nuget.org using Trusted Publishing (OIDC).
+#
+# There is no long-lived NuGet API key: NuGet/login exchanges the GitHub OIDC token this job
+# requests for a temporary API key (valid for one hour). That requires two things to line up.
+#
+#   1. `id-token: write` below. Without it there is no OIDC token to exchange.
+#   2. A Trusted Publishing policy on nuget.org owned by `ArgonChat`, pointing at this repository
+#      and at this workflow *by filename*. That is why the file is named `release.yaml` and why
+#      renaming it silently breaks publishing — nuget.org matches the filename, not the workflow name.
+
 name: Publish NuGet Packages
 
 on:
@@ -14,6 +24,11 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write # required — this is what trusted publishing exchanges
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,13 +59,21 @@ jobs:
       - name: Pack ion.compiler (tool and MSBuild SDK)
         run: dotnet pack src/ionc/ionc.csproj -c Release -o ./nupkgs
 
+      - name: NuGet login (OIDC → temporary API key)
+        # Requested after packing, not at the start of the job: the key expires after an hour.
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: ArgonChat
+
       - name: Push packages
+        # No `|| true`: `--skip-duplicate` already covers an unchanged version, so anything else
+        # that fails here — a rejected key, a policy mismatch — must fail the run, not pass green.
         run: |
           for pkg in ./nupkgs/*.nupkg; do
             echo "Publishing $pkg"
             dotnet nuget push "$pkg" \
-              --api-key ${{ secrets.NUGET_API_KEY }} \
+              --api-key ${{ steps.login.outputs.NUGET_API_KEY }} \
               --source https://api.nuget.org/v3/index.json \
-              --skip-duplicate \
-              || true
+              --skip-duplicate
           done
