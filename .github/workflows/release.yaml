@@ -1,12 +1,14 @@
 # Publishes the ionpath.* packages to nuget.org using Trusted Publishing (OIDC).
 #
 # There is no long-lived NuGet API key: NuGet/login exchanges the GitHub OIDC token this job
-# requests for a temporary API key (valid for one hour). That requires two things to line up.
+# requests for a temporary API key (valid for one hour). That requires three things to line up.
 #
 #   1. `id-token: write` below. Without it there is no OIDC token to exchange.
-#   2. A Trusted Publishing policy on nuget.org owned by `ArgonChat`, pointing at this repository
-#      and at this workflow *by filename*. That is why the file is named `release.yaml` and why
-#      renaming it silently breaks publishing — nuget.org matches the filename, not the workflow name.
+#   2. A Trusted Publishing policy on nuget.org pointing at this repository and at this workflow
+#      *by filename*. That is why the file is named `release.yaml` and why renaming it silently
+#      breaks publishing — nuget.org matches the filename, not the workflow name.
+#   3. The `NUGET_USER` secret: the nuget.org username of the account that *created* the policy.
+#      Not the package owner (`ArgonChat`) — the token exchange rejects that with a 401.
 
 name: Publish NuGet Packages
 
@@ -64,7 +66,7 @@ jobs:
         id: login
         uses: NuGet/login@v1
         with:
-          user: ArgonChat
+          user: ${{ secrets.NUGET_USER }}
 
       - name: Push packages
         # No `|| true`: `--skip-duplicate` already covers an unchanged version, so anything else
