@@ -1,10 +1,15 @@
-# Vendored compat schemas
+# Compat schemas
 
-`Compat.ion` is the source of the backward/forward-compatibility probe schemas. The three
-`.cs` files beside it are **`ionc`'s own output**, vendored verbatim so the compat suite
-exercises real generated code rather than a hand-written imitation of it.
+`Compat.ion` is the source of the backward/forward-compatibility probe schemas. Every target
+runs **`ionc`'s own output** against them, so the compat suite exercises real generated code
+rather than a hand-written imitation of it.
 
-Reproduce with:
+**C#** is generated at build time: `ion.config.json` beside `Compat.ion` declares the `IonCompat`
+module, and `IonTestClientServer.csproj` points the build-time generator at this directory
+(`IonProjectDirectory`, see `src/ionc/Sdk`). Nothing is vendored; a codegen change reaches the
+suite on the next build.
+
+**TypeScript and Rust** are vendored. Reproduce with:
 
 ```
 mkdir compat && cd compat
@@ -12,7 +17,6 @@ mkdir Contracts && cp <this dir>/Compat.ion Contracts/
 cat > ion.config.json <<'JSON'
 { "name": "IonCompat", "features": ["std"],
   "generators": {
-    "dotnet":  { "features": ["models"], "outputs": "./" },
     "rust":    { "features": ["client"], "outputs": "./gen-rust",
                  "crateName": "ion-compat", "rustcorePath": "<repo>/packages/ion.rustcore" },
     "browser": { "outputFile": "./gen-ts/compat.ts", "singleFileOutput": true } } }
@@ -24,14 +28,8 @@ Then:
 
 | generated file          | vendored to                                                | edits |
 |-------------------------|------------------------------------------------------------|-------|
-| `models/Compat.ion.cs`             | `Compat/Compat.ion.cs`                          | none |
-| `models/Compat.ion.formatters.cs`  | `Compat/Compat.ion.formatters.cs`               | none |
-| `models/moduleInit.cs`             | `Compat/moduleInit.cs`                          | none |
-| `gen-ts/compat.ts`                 | `packages/ion.webcore.js/test/compat/compat.generated.ts` | import specifier `@argon-chat/ion.webcore` -> `../../src` |
-| `gen-rust/src/lib.rs`              | `packages/ion.rustcore/tests/compat_schemas/mod.rs`       | dropped `pub use futures_util::StreamExt;` (futures-util is not a dev-dependency of ion-rustcore) |
-
-`Compat.GlobalUsings.cs` is hand-written: it supplies the alias subset that `ionc`'s
-per-project `globals.cs` would otherwise provide, so the generated `.cs` files need no edit.
+| `gen-ts/compat.ts`      | `packages/ion.webcore.js/test/compat/compat.generated.ts` | import specifier `@argon-chat/ion.webcore` -> `../../src` |
+| `gen-rust/src/lib.rs`   | `packages/ion.rustcore/tests/compat_schemas/mod.rs`       | dropped `pub use futures_util::StreamExt;` (futures-util is not a dev-dependency of ion-rustcore) |
 
 ## Codegen defect found while producing this
 

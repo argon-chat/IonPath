@@ -644,6 +644,25 @@ public static class IonAnalyticCodes
             "decoding fails on every target. Acknowledge with '--update-lock' once every reader is " +
             "regenerated.");
 
+    /// <summary>
+    /// The schema validated against ion.lock.json, but the lock does not record it: something was
+    /// added (or retired with <c>reserved</c>) and the new baseline was never written down.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Raised only when the lock is deliberately not written — <c>--lock-mode check</c> (an info)
+    /// and <c>--lock-mode frozen</c> (an error). The lock is a ratchet: whatever it records may not
+    /// be removed again. A build that recorded every schema it compiled would ratchet on each local
+    /// experiment, so under build-time generation the baseline only moves when someone records it,
+    /// and <c>frozen</c> is the CI gate that makes sure they did.
+    /// </para>
+    /// <para><c>{0}</c> what is wrong with the file: missing, or behind the schema.</para>
+    /// </remarks>
+    public static readonly IonAnalyticCode ION0071_LockFileOutOfDate
+        = new("ION0071",
+            "ion.lock.json {0}. Record the current schema with 'ionc compile' (or a build with " +
+            "IonLockMode=update) and commit the file.");
+
     // ── Language feature codes (ION0060–ION0068) ──
     //
     // A new band, and deliberately not a reuse of a hole. The audit that preceded it:

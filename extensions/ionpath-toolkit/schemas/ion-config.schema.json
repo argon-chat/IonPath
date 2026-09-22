@@ -42,8 +42,7 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "features",
-            "outputs"
+            "features"
           ],
           "properties": {
             "features": {
@@ -60,7 +59,8 @@
             },
             "outputs": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "Where `ionc compile` writes the C# sources. Omit it when they are generated at build time by the ionpath.compiler MSBuild SDK; `ionc compile` then skips the dotnet target."
             }
           }
         },

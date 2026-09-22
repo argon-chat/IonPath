@@ -39,7 +39,8 @@
     "",
     "HOW THE BYTES WERE PRODUCED. The schemas live in",
     "src/tests/IonTestClientServer/Compat/Compat.ion, are compiled by `ionc` into all three",
-    "targets, and are vendored into the three test trees (see Compat/README.md). The payload",
+    "targets: vendored into the TypeScript and Rust test trees, generated at build time for C#",
+    "(see Compat/README.md). The payload",
     "hexes were then written by those vendored GENERATED formatters - see `$producer`. All three",
     "runtimes re-derive the same bytes when the suite runs, so a divergence between the writers",
     "shows up as a failing vector rather than as a stale constant."

@@ -1,0 +1,7 @@
+{
+  "name": "IonCompat",
+  "features": ["std"],
+  "generators": {
+    "dotnet": { "features": ["models"] }
+  }
+}

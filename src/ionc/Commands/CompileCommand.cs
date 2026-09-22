@@ -12,6 +12,7 @@ using System.Diagnostics;
 using System.Numerics;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 public class CompileOptions : CommandSettings
 {
@@ -40,6 +41,50 @@ public class CompileOptions : CommandSettings
     [CommandOption("--json")]
     [Description("Output diagnostics as JSON for CI/CD.")]
     public bool JsonOutput { get; set; }
+
+    [CommandOption("--lock-mode <MODE>")]
+    [Description("update (default): validate against ion.lock.json, then record the schema in it. " +
+                 "check: validate, never write. frozen: validate, never write, and fail unless the lock records the current schema.")]
+    [DefaultValue(IonLockMode.Update)]
+    public IonLockMode LockMode { get; set; } = IonLockMode.Update;
+
+    [CommandOption("--dotnet-output <DIR>")]
+    [Description("Write the dotnet target to this directory instead of the config's 'outputs'.")]
+    public string? DotnetOutput { get; set; }
+
+    [CommandOption("--inputs-file <FILE>")]
+    [Description("After a successful compile, list every file it read (one path per line), for incremental builds.")]
+    public string? InputsFile { get; set; }
+
+    [CommandOption("--msbuild")]
+    [Description("Build-integration mode (used by the ionpath.compiler MSBuild SDK): dotnet target only, no console UI, diagnostics in MSBuild format.")]
+    public bool MsBuild { get; set; }
+
+    public override Spectre.Console.ValidationResult Validate()
+        => LockMode is not IonLockMode.Update && (UpdateLock || NoLock)
+            ? Spectre.Console.ValidationResult.Error("--lock-mode cannot be combined with --update-lock or --no-lock.")
+            : Spectre.Console.ValidationResult.Success();
+}
+
+/// <summary>
+/// What a compile does with ion.lock.json once the schema has validated against it.
+/// </summary>
+/// <remarks>
+/// The lock is a ratchet — whatever it records may not be removed again — so writing it is a
+/// decision, not a side effect. <see cref="Update"/> suits a deliberate <c>ionc compile</c>; a build
+/// runs on every save and would ratchet on each local experiment, which is why the MSBuild SDK
+/// defaults to <see cref="Check"/> and CI uses <see cref="Frozen"/>.
+/// </remarks>
+public enum IonLockMode
+{
+    /// <summary>Validate, then record the schema in the lock (the file is only rewritten when it changes).</summary>
+    Update,
+
+    /// <summary>Validate, never write; a lock that is behind the schema is reported as info.</summary>
+    Check,
+
+    /// <summary>Validate, never write, and fail unless the lock records exactly the current schema.</summary>
+    Frozen
 }
 
 public class CompileCommand : AsyncCommand<CompileOptions>
@@ -62,13 +107,23 @@ public class CompileCommand : AsyncCommand<CompileOptions>
         var watch = Stopwatch.StartNew();
         var currentDir = new DirectoryInfo(Directory.GetCurrentDirectory());
 
+        // The build reads this process's stdout for diagnostics alone (MsBuildDiagnosticWriter);
+        // progress bars and status lines would only be noise in its log.
+        if (options.MsBuild)
+            AnsiConsole.Console = AnsiConsole.Create(new AnsiConsoleSettings
+            {
+                Ansi = AnsiSupport.No,
+                Interactive = InteractionSupport.No,
+                Out = new AnsiConsoleOutput(TextWriter.Null)
+            });
+
         var projectFile = currentDir.File("ion.config.json");
         if (!projectFile.Exists)
         {
-            IonDiagnosticRenderer.RenderDiagnostics([
+            Report([
                 new IonDiagnostic("ION", IonDiagnosticSeverity.Error,
                     "Project 'ion.config.json' not found in current directory.", new IonSyntaxBase())
-            ]);
+            ], options);
             return Task.FromResult(-1);
         }
 
@@ -82,10 +137,21 @@ public class CompileCommand : AsyncCommand<CompileOptions>
             // A retired or misspelled generator key ('go' was removed) reaches here as a
             // JsonException from PlatformKeyConverter. Rendering it as a diagnostic keeps the
             // failure readable instead of dumping a deserializer stack trace.
-            IonDiagnosticRenderer.RenderDiagnostics([
+            Report([
                 new IonDiagnostic("ION", IonDiagnosticSeverity.Error,
                     $"Project 'ion.config.json' is not valid: {e.Message}", new IonSyntaxBase())
-            ]);
+            ], options);
+            return Task.FromResult(-1);
+        }
+
+        if (options.MsBuild && !project.Generators.ContainsKey(IonGeneratorPlatform.Dotnet))
+        {
+            Report([
+                new IonDiagnostic("ION", IonDiagnosticSeverity.Error,
+                    "Project 'ion.config.json' has no 'dotnet' generator, so there is nothing to generate " +
+                    "for this build. Add one, e.g. \"dotnet\": { \"features\": [\"models\"] }.",
+                    new IonSyntaxBase { SourceFile = projectFile })
+            ], options);
             return Task.FromResult(-1);
         }
 
@@ -94,10 +160,10 @@ public class CompileCommand : AsyncCommand<CompileOptions>
 
         if (!files.Any())
         {
-            IonDiagnosticRenderer.RenderDiagnostics([
+            Report([
                 new IonDiagnostic("ION", IonDiagnosticSeverity.Error,
                     "Project 'ion.config.json' found, but no any *.ion files found.", new IonSyntaxBase())
-            ]);
+            ], options);
             return Task.FromResult(-1);
         }
 
@@ -116,7 +182,10 @@ public class CompileCommand : AsyncCommand<CompileOptions>
 
             try
             {
-                var syntax = IonParser.Parse(file.Name, File.ReadAllText(file.FullName));
+                // The FileInfo overload, not (name, content): that one synthesizes the file as
+                // "<name>.ion" in the working directory, so a diagnostic positioned through the
+                // module (a lock violation) pointed at a nonexistent "Foo.ion.ion".
+                var syntax = IonParser.Parse(file);
                 list.Add(syntax);
 
                 foreach (var token in (syntax.allTokens ?? []).OfType<InvalidIonBlock>())
@@ -130,16 +199,23 @@ public class CompileCommand : AsyncCommand<CompileOptions>
             {
                 parseErrors.Add((file, e));
                 AnsiConsole.MarkupLine($"[red]Error:[/] Failed to parse file [cyan]{file.Name}[/]: {e.Message.EscapeMarkup()}");
+
+                // The CLI skips such a file with a warning. A build must not: the types it declares
+                // would simply be missing, and the failure would surface as unrelated C# errors.
+                if (options.MsBuild)
+                    invalidBlocks.Add(new IonDiagnostic("ION_PARSE", IonDiagnosticSeverity.Error,
+                        $"Failed to parse file: {e.Message}", new IonSyntaxBase { SourceFile = file }));
             }
         }
 
         // If all files failed to parse, exit early
         if (list.Count == 0)
         {
-            IonDiagnosticRenderer.RenderDiagnostics([
+            Report([
+                .. invalidBlocks,
                 new IonDiagnostic("ION", IonDiagnosticSeverity.Error,
                     "No files were successfully parsed. Cannot proceed with compilation.", new IonSyntaxBase())
-            ]);
+            ], options);
             return Task.FromResult(-1);
         }
         
@@ -154,8 +230,17 @@ public class CompileCommand : AsyncCommand<CompileOptions>
 
         ctx.Diagnostics.AddRange(invalidBlocks);
 
+        // `ionc compile` keeps writing the dotnet target to `outputs`, and the SDK's default globs
+        // would compile those files alongside the ones the build generates — every type twice.
+        if (options.MsBuild && project.Generators[IonGeneratorPlatform.Dotnet] is DotnetGeneratorConfig { Outputs: not null })
+            ctx.Diagnostics.Add(new IonDiagnostic("ION", IonDiagnosticSeverity.Warning,
+                "The dotnet generator's 'outputs' is ignored when the sources are generated at build time. " +
+                "Remove it, so that 'ionc compile' stops writing C# files the build would compile a second time.",
+                new IonSyntaxBase { SourceFile = projectFile }));
+
         // Resolve external module dependencies
         List<IonModule> externalModules = [];
+        IReadOnlyList<ModuleResolver.ResolvedModule> resolvedModules = [];
         if (project.Modules is { Count: > 0 })
         {
             var resolver = new ModuleResolver();
@@ -164,7 +249,8 @@ public class CompileCommand : AsyncCommand<CompileOptions>
             foreach (var diag in moduleResult.Diagnostics)
                 ctx.Diagnostics.Add(diag);
 
-            foreach (var resolved in resolver.GetTopologicalOrder())
+            resolvedModules = resolver.GetTopologicalOrder();
+            foreach (var resolved in resolvedModules)
             {
                 var modFeatures = resolved.Features.ToList();
                 var modCtx = CompilationContext.Create(modFeatures, resolved.Files);
@@ -231,12 +317,7 @@ public class CompileCommand : AsyncCommand<CompileOptions>
         // ION0047 (#use deprecated) and ION1004 (deprecated usage) were unreachable in the CLI even
         // though the LSP surfaced them. Exit code still keys off errors only.
         if (ctx.Diagnostics.Count > 0)
-        {
-            if (options.JsonOutput)
-                RenderDiagnosticsAsJson(ctx.Diagnostics);
-            else
-                IonDiagnosticRenderer.RenderDiagnostics(ctx.Diagnostics);
-        }
+            Report(ctx.Diagnostics, options);
 
         if (!pipelineSuccess)
             return Task.FromResult(-1);
@@ -249,6 +330,9 @@ public class CompileCommand : AsyncCommand<CompileOptions>
             // next check saw nothing. `lock init` / `lock update` pass UpdateLock and still write.
             if (!options.NoLock && options.UpdateLock)
                 WriteLockFile(currentDir, project.Name, ctx);
+            else if (!options.NoLock && options.LockMode is not IonLockMode.Update
+                     && !VerifyLockIsCurrent(currentDir, project.Name, ctx, options))
+                return Task.FromResult(-1);
             AnsiConsole.MarkupLine($"\n[green]:sparkles: Check passed in {watch.Elapsed.TotalSeconds:0.000}s[/]");
             return Task.FromResult(0);
         }
@@ -272,13 +356,17 @@ public class CompileCommand : AsyncCommand<CompileOptions>
         // so remember where the pipeline's own end.
         var diagnosticsBeforeCodegen = ctx.Diagnostics.Count;
 
+        // A build generates C# and nothing else: the other targets write into the source tree,
+        // which stays `ionc compile`'s job.
+        var onlyTarget = options.MsBuild ? nameof(IonGeneratorPlatform.Dotnet) : options.OnlyTarget;
+
         foreach (var (key, value) in project.Generators)
         {
-            if (!string.IsNullOrEmpty(options.OnlyTarget))
+            if (!string.IsNullOrEmpty(onlyTarget))
             {
-                if (!options.OnlyTarget.Equals(key.ToString(), StringComparison.OrdinalIgnoreCase))
+                if (!onlyTarget.Equals(key.ToString(), StringComparison.OrdinalIgnoreCase))
                 {
-                    AnsiConsole.MarkupLine($"  [dim]Skipping {key} (--only={options.OnlyTarget})[/]");
+                    AnsiConsole.MarkupLine($"  [dim]Skipping {key} (--only={onlyTarget})[/]");
                     continue;
                 }
             }
@@ -287,15 +375,32 @@ public class CompileCommand : AsyncCommand<CompileOptions>
 
             if (key is IonGeneratorPlatform.Dotnet)
             {
-                var cfg = value as DotnetGeneratorConfig;
-                var generator = CreateGenerator(IonGeneratorPlatform.Dotnet, project.Name);
-                var outputDirectoryForFiles = new DirectoryInfo(projectFile.Directory!.Combine(cfg!.Outputs).FullName);
+                var cfg = (DotnetGeneratorConfig)value;
+                var outputs = options.DotnetOutput ?? cfg.Outputs;
 
-                if (!options.NoEmitCsProj)
+                if (outputs is null)
+                {
+                    if (options.MsBuild)
+                        ctx.Diagnostics.Add(new IonDiagnostic("ION", IonDiagnosticSeverity.Error,
+                            "No output directory for the dotnet target: pass --dotnet-output.", new IonSyntaxBase()));
+                    else
+                        AnsiConsole.MarkupLine("    [dim]Skipped: no 'outputs' configured — the C# sources are generated at build time (ionpath.compiler MSBuild SDK)[/]");
+                    continue;
+                }
+
+                var generator = CreateGenerator(IonGeneratorPlatform.Dotnet, project.Name);
+                var outputDirectoryForFiles = new DirectoryInfo(projectFile.Directory!.Combine(outputs).FullName);
+
+                // `outputs` has always been an existing project folder, but a build points this at a
+                // fresh directory under obj/.
+                outputDirectoryForFiles.Create();
+
+                if (!options.NoEmitCsProj && !options.MsBuild)
                     generator.GenerateProjectFile(project.Name, outputDirectoryForFiles.File($"{project.Name}.csproj"));
 
-                // Patch csproj with module ProjectReferences (edit, not overwrite)
-                if (project.Modules is { Count: > 0 })
+                // Patch csproj with module ProjectReferences (edit, not overwrite). Never from a
+                // build: it would be rewriting the project that is being built.
+                if (project.Modules is { Count: > 0 } && !options.MsBuild)
                 {
                     var csprojPath = outputDirectoryForFiles.File($"{project.Name}.csproj").FullName;
                     if (File.Exists(csprojPath))
@@ -317,7 +422,7 @@ public class CompileCommand : AsyncCommand<CompileOptions>
                 if (cfg.Features.Contains(DotnetFeature.Server))
                     GenerateServer(generator, outputDirectoryForFiles, ctx);
 
-                AnsiConsole.MarkupLine($"    [green]✓[/] Generated to [dim]{cfg.Outputs}[/]");
+                AnsiConsole.MarkupLine($"    [green]✓[/] Generated to [dim]{outputs.EscapeMarkup()}[/]");
             }
 
             if (key is IonGeneratorPlatform.Browser)
@@ -373,27 +478,145 @@ public class CompileCommand : AsyncCommand<CompileOptions>
         if (codegenDiagnostics.Any(d => d.Severity == IonDiagnosticSeverity.Error))
         {
             AnsiConsole.WriteLine();
-            if (options.JsonOutput)
-                RenderDiagnosticsAsJson(codegenDiagnostics);
-            else
-                IonDiagnosticRenderer.RenderDiagnostics(codegenDiagnostics);
+            Report(codegenDiagnostics, options);
             return Task.FromResult(-1);
         }
 
-        // Write lock file after successful code generation
+        // Record the schema in the lock after successful code generation — or, where the lock is
+        // deliberately left alone, report whether it is behind.
         if (!options.NoLock)
-            WriteLockFile(currentDir, project.Name, ctx);
+        {
+            if (options.LockMode is IonLockMode.Update)
+                WriteLockFile(currentDir, project.Name, ctx);
+            else if (!VerifyLockIsCurrent(currentDir, project.Name, ctx, options))
+                return Task.FromResult(-1);
+        }
+
+        if (options.InputsFile is not null)
+            WriteInputsFile(options.InputsFile, projectFile, files, resolvedModules);
 
         AnsiConsole.MarkupLine($"\n[green]:sparkles: Done in {watch.Elapsed.TotalSeconds:0.000}s[/]");
 
         return Task.FromResult(0);
     }
 
+    private static void Report(List<IonDiagnostic> diagnostics, CompileOptions options)
+    {
+        if (options.MsBuild)
+            MsBuildDiagnosticWriter.Write(diagnostics, Console.Out);
+        else if (options.JsonOutput)
+            RenderDiagnosticsAsJson(diagnostics);
+        else
+            IonDiagnosticRenderer.RenderDiagnostics(diagnostics);
+    }
+
     private static void WriteLockFile(DirectoryInfo projectDir, string moduleName, CompilationContext ctx)
     {
-        var lockFile = SchemaLockGenerator.Generate(moduleName, ctx.ProcessedModules);
-        lockFile.SaveTo(projectDir.FullName);
+        var lockPath = Path.Combine(projectDir.FullName, IonSchemaLock.FileName);
+        var json = SchemaLockGenerator.Generate(moduleName, ctx.ProcessedModules).ToJson();
+
+        // Leave an unchanged lock alone, timestamp included: rewriting an identical file still bumps
+        // its modification time, which git, IDE watchers and CI path triggers all read as a change.
+        // "Unchanged" is judged by content (SameLock), or a checkout that turned the line endings
+        // into CRLF would have the file rewritten on every run anyway.
+        if (File.Exists(lockPath))
+        {
+            var existing = File.ReadAllText(lockPath);
+            if (SameLock(existing, json))
+            {
+                AnsiConsole.MarkupLine($"\n  [green]✓[/] [dim]{IonSchemaLock.FileName}[/] is up to date");
+                return;
+            }
+
+            // Keep the line endings the checkout gave the file, so the real change is the only diff.
+            if (existing.Contains("\r\n"))
+                json = json.Replace("\r\n", "\n").Replace("\n", "\r\n");
+        }
+
+        File.WriteAllText(lockPath, json);
         AnsiConsole.MarkupLine($"\n  [green]✓[/] Updated [dim]{IonSchemaLock.FileName}[/]");
+    }
+
+    /// <summary>
+    /// For the lock modes that never write: reports whether ion.lock.json records exactly the
+    /// current schema — as info under <see cref="IonLockMode.Check"/>, as an error under
+    /// <see cref="IonLockMode.Frozen"/>. Returns <see langword="false"/> only for the error.
+    /// </summary>
+    private static bool VerifyLockIsCurrent(DirectoryInfo projectDir, string moduleName, CompilationContext ctx,
+        CompileOptions options)
+    {
+        var lockPath = Path.Combine(projectDir.FullName, IonSchemaLock.FileName);
+        var json = SchemaLockGenerator.Generate(moduleName, ctx.ProcessedModules).ToJson();
+
+        var problem = !File.Exists(lockPath) ? "does not exist"
+            : SameLock(File.ReadAllText(lockPath), json) ? null
+            : "does not record the current schema: it validates, but the changes are not locked in yet";
+
+        if (problem is null)
+            return true;
+
+        var frozen = options.LockMode is IonLockMode.Frozen;
+        Report([
+            new IonDiagnostic(IonAnalyticCodes.ION0071_LockFileOutOfDate.code,
+                frozen ? IonDiagnosticSeverity.Error : IonDiagnosticSeverity.Info,
+                string.Format(IonAnalyticCodes.ION0071_LockFileOutOfDate.template, problem),
+                new IonSyntaxBase { SourceFile = new FileInfo(lockPath) })
+        ], options);
+        return !frozen;
+    }
+
+    /// <summary>
+    /// Whether two lock documents record the same contract.
+    /// </summary>
+    /// <remarks>
+    /// Compared as JSON, not as text. Definitions come out in the order the <c>.ion</c> files were
+    /// enumerated, which differs between file systems, so a lock written on Windows would never
+    /// textually match one generated on a Linux CI runner; whitespace, line endings and a final
+    /// newline are not content either. Arrays keep their order — a field list is positional.
+    /// </remarks>
+    private static bool SameLock(string a, string b)
+    {
+        try
+        {
+            return JsonNode.DeepEquals(JsonNode.Parse(a), JsonNode.Parse(b));
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Records every file the compilation read, so a build can tell when it has to run again.
+    /// </summary>
+    /// <remarks>
+    /// The build can glob this project's own <c>.ion</c> files, but not the sources of external
+    /// modules, which live wherever <c>modules</c> in <c>ion.config.json</c> points. A module's
+    /// directory is listed in full — including files that failed to parse, which
+    /// <see cref="ModuleResolver"/> drops — because fixing such a file must trigger a rebuild too.
+    /// </remarks>
+    private static void WriteInputsFile(string path, FileInfo projectFile, IEnumerable<FileInfo> ionFiles,
+        IEnumerable<ModuleResolver.ResolvedModule> modules)
+    {
+        var inputs = new SortedSet<string>(StringComparer.Ordinal) { projectFile.FullName };
+
+        var lockPath = Path.Combine(projectFile.DirectoryName!, IonSchemaLock.FileName);
+        if (File.Exists(lockPath))
+            inputs.Add(lockPath);
+
+        foreach (var file in ionFiles)
+            inputs.Add(file.FullName);
+
+        foreach (var module in modules)
+        {
+            inputs.Add(Path.GetFullPath(module.ConfigPath));
+            foreach (var file in Directory.EnumerateFiles(module.RootPath, "*.ion", SearchOption.AllDirectories))
+                inputs.Add(Path.GetFullPath(file));
+        }
+
+        var fullPath = Path.GetFullPath(path);
+        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+        File.WriteAllLines(fullPath, inputs);
     }
 
     private static void RenderDiagnosticsAsJson(List<IonDiagnostic> diagnostics)
@@ -625,8 +848,10 @@ public class CompileCommand : AsyncCommand<CompileOptions>
                 if (!moduleConfig.Generators.TryGetValue(IonGeneratorPlatform.Dotnet, out var modPlatformCfg))
                     continue;
 
+                // No `outputs` means the module is generated at build time by the MSBuild SDK, into
+                // whichever project imports it — there is no generated csproj to point at.
                 var modDotnetCfg = modPlatformCfg as DotnetGeneratorConfig;
-                if (modDotnetCfg is null)
+                if (modDotnetCfg?.Outputs is null)
                     continue;
 
                 var moduleCsprojDir = Path.GetFullPath(Path.Combine(moduleRoot, modDotnetCfg.Outputs));

@@ -9,8 +9,7 @@
         "server",
         "client",
         "models"
-      ],
-      "outputs": "./"
+      ]
     },
     "rust": {
       "features": [

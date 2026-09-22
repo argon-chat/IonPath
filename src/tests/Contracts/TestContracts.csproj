@@ -13,4 +13,6 @@
     <PackageReference Update="GitVersion.MsBuild" Version="6.7.0" />
     <PackageReference Update="Microsoft.SourceLink.GitHub" Version="10.0.203" />
   </ItemGroup>
+  <!-- The C# side of Contracts/*.ion is generated at build time (see src/ionc/Sdk). -->
+  <Import Project="..\..\ionc\InRepo.targets" />
 </Project>

@@ -89,9 +89,9 @@ public sealed class ImportCycleDetectionStage(CompilationContext context)
     /// <c>IonFileSyntax.Name</c>, which is what <c>TransformStage.PrepareModule</c> puts in
     /// <c>IonModule.Name</c>, so a cycle is reported in the same vocabulary as everything else that
     /// talks about modules. Deliberately not <c>file.file.Name</c>: <c>IonParser.Parse(name,
-    /// content)</c> — the overload the CLI uses — synthesizes its <c>FileInfo</c> as
-    /// <c>$"{name}.ion"</c> from a name that already ends in <c>.ion</c>, so that property reads
-    /// <c>a.ion.ion</c>.
+    /// content)</c> — the overload the language server and the tests use — synthesizes its
+    /// <c>FileInfo</c> as <c>$"{name}.ion"</c>, so given a name that already ends in <c>.ion</c>
+    /// that property reads <c>a.ion.ion</c>.
     /// </remarks>
     private static string ModuleNameOf(IonFileSyntax file) => file.Name;
 

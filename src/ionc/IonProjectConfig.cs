@@ -121,7 +121,15 @@ public sealed record DotnetGeneratorConfig : IonPlatformConfig
 {
     [JsonPropertyName("features")] public required HashSet<DotnetFeature> Features { get; init; }
 
-    [JsonPropertyName("outputs")] public required string Outputs { get; init; }
+    /// <summary>
+    /// Where <c>ionc compile</c> writes the C# sources, relative to <c>ion.config.json</c>.
+    /// </summary>
+    /// <remarks>
+    /// Omitted when the sources are generated at build time by the <c>ionpath.compiler</c> MSBuild
+    /// SDK, which chooses the directory itself (under <c>obj/</c>). <c>ionc compile</c> then skips
+    /// the dotnet target instead of writing files the build would compile a second time.
+    /// </remarks>
+    [JsonPropertyName("outputs")] public string? Outputs { get; init; }
 }
 
 public sealed record BrowserGeneratorConfig : IonPlatformConfig
@@ -178,15 +186,18 @@ internal sealed class IonPlatformConfigConverter : JsonConverter<IonPlatformConf
         // with go gone, dotnet is the only `outputs`-shaped platform left that is not already
         // claimed by `crateName`, so an unrecognised feature is now reported by DotnetFeature's own
         // converter instead of as an opaque "unknown platform config format".
-        if (root.TryGetProperty("outputs", out _))
+        //
+        // `features` alone is dotnet too: a project generated at build time by the MSBuild SDK has
+        // no `outputs`, because the build picks the directory.
+        if (root.TryGetProperty("outputs", out _) || root.TryGetProperty("features", out _))
         {
             return JsonSerializer.Deserialize<DotnetGeneratorConfig>(root.GetRawText(), options);
         }
 
         throw new JsonException(
             "Unknown platform config format. A generator block must be one of: dotnet " +
-            "('features' + 'outputs'), browser ('outputFile'), rust ('features' + 'outputs' + " +
-            "'crateName').");
+            "('features', plus 'outputs' unless generated at build time), browser ('outputFile'), " +
+            "rust ('features' + 'outputs' + 'crateName').");
     }
 
     public override void Write(Utf8JsonWriter writer, IonPlatformConfig value, JsonSerializerOptions options)

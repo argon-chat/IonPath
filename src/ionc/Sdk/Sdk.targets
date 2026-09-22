@@ -1,0 +1,200 @@
+<Project>
+  <!--
+    The ionpath.compiler package as an MSBuild SDK: generate the C# side of an IonPath contract
+    at build time.
+
+      <Sdk Name="ionpath.compiler" Version="x.y.z" />
+
+    The package is the `ionc` dotnet tool, so it cannot be a PackageReference (NuGet rejects a
+    DotnetTool package there, NU1212); the SDK resolver has no such restriction, and this way the
+    build runs exactly the compiler the CLI does.
+
+    Before compilation this runs `ionc compile` in its build-integration mode over the directory
+    that holds ion.config.json, and compiles what it writes into $(IonOutputDir)
+    (obj/<config>/<tfm>/ion/ by default), so generated sources never enter the repository. Which
+    sources are generated (models, client, server) still comes from the "dotnet" generator in
+    ion.config.json; its "outputs" is not used, and should be removed so `ionc compile` stops
+    writing C# as well.
+
+    Settable in the project file:
+      IonGenerateOnBuild   true (default) | false
+      IonProjectDirectory  directory holding ion.config.json (default: the project directory)
+      IonOutputDir         where the sources are generated (default: $(IntermediateOutputPath)ion\)
+      IonLockMode          check (default): validate against ion.lock.json, never write it
+                           update:          validate, then record the schema in it (only
+                                            rewritten when the content changes)
+                           frozen:          validate, never write, and fail unless the lock
+                                            records the current schema (the CI gate)
+                           none:            no lock validation
+
+    Why the build does not write the lock by default: the lock is a ratchet, and whatever it
+    records may not be removed again. A build runs on every save, so recording each one would
+    turn every local experiment into a baseline. The baseline moves when someone records it
+    (`ionc compile`, or one build with -p:IonLockMode=update), and `frozen` in CI makes sure
+    nobody forgets.
+      IonCompilerPath      ionc.dll to run (default: the one bundled in this package)
+      IonDotnetHostPath    dotnet host that runs it (default: the one running the build)
+  -->
+
+  <PropertyGroup>
+    <IonGenerateOnBuild Condition="'$(IonGenerateOnBuild)' == ''">true</IonGenerateOnBuild>
+    <IonProjectDirectory Condition="'$(IonProjectDirectory)' == ''">$(MSBuildProjectDirectory)</IonProjectDirectory>
+    <IonProjectDirectory>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(IonProjectDirectory)'))</IonProjectDirectory>
+    <IonLockMode Condition="'$(IonLockMode)' == ''">check</IonLockMode>
+    <!-- The tool itself, from the same package: Sdk\ sits beside tools\ in ionpath.compiler. -->
+    <IonCompilerPath Condition="'$(IonCompilerPath)' == ''">$(MSBuildThisFileDirectory)..\tools\net10.0\any\ionc.dll</IonCompilerPath>
+
+    <!-- DOTNET_HOST_PATH is set by `dotnet build`; an IDE build may only have the SDK root. -->
+    <IonDotnetHostPath Condition="'$(IonDotnetHostPath)' == ''">$(DOTNET_HOST_PATH)</IonDotnetHostPath>
+    <_IonNetCoreRoot Condition="'$(NetCoreRoot)' != ''">$([MSBuild]::EnsureTrailingSlash('$(NetCoreRoot)'))</_IonNetCoreRoot>
+    <IonDotnetHostPath Condition="'$(IonDotnetHostPath)' == '' and '$(_IonNetCoreRoot)' != '' and Exists('$(_IonNetCoreRoot)dotnet.exe')">$(_IonNetCoreRoot)dotnet.exe</IonDotnetHostPath>
+    <IonDotnetHostPath Condition="'$(IonDotnetHostPath)' == '' and '$(_IonNetCoreRoot)' != '' and Exists('$(_IonNetCoreRoot)dotnet')">$(_IonNetCoreRoot)dotnet</IonDotnetHostPath>
+    <IonDotnetHostPath Condition="'$(IonDotnetHostPath)' == '' and '$(OS)' == 'Windows_NT'">dotnet.exe</IonDotnetHostPath>
+    <IonDotnetHostPath Condition="'$(IonDotnetHostPath)' == ''">dotnet</IonDotnetHostPath>
+  </PropertyGroup>
+
+  <!--
+    Runs ionc and turns its output into build diagnostics. Exec cannot do this cleanly: when a
+    tool reports canonical errors, Exec adds an error of its own ("exited with code …"), and with
+    IgnoreExitCode it reports success and the build carries on into CoreCompile. ToolTask fails
+    the task on the tool's own errors alone, and adds one only when the tool exits non-zero
+    without reporting any (a crash, a missing runtime).
+  -->
+  <UsingTask TaskName="IonCompileTask"
+             TaskFactory="RoslynCodeTaskFactory"
+             AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <DotnetHostPath ParameterType="System.String" Required="true" />
+      <CommandArguments ParameterType="System.String" Required="true" />
+      <WorkingDirectory ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Code Type="Class" Language="cs"><![CDATA[
+using System.IO;
+using System.Text;
+using Microsoft.Build.Utilities;
+
+public class IonCompileTask : ToolTask
+{
+    public string DotnetHostPath { get; set; }
+    public string CommandArguments { get; set; }
+    public string WorkingDirectory { get; set; }
+
+    protected override string ToolName => Path.GetFileName(DotnetHostPath);
+    protected override string GenerateFullPathToTool() => DotnetHostPath;
+    protected override string GenerateCommandLineCommands() => CommandArguments;
+    protected override string GetWorkingDirectory() => WorkingDirectory;
+
+    // `ionc compile --msbuild` writes UTF-8 whatever the console code page is.
+    protected override Encoding StandardOutputEncoding => Encoding.UTF8;
+    protected override Encoding StandardErrorEncoding => Encoding.UTF8;
+}
+]]></Code>
+    </Task>
+  </UsingTask>
+
+  <ItemGroup Condition="'$(IonGenerateOnBuild)' == 'true'">
+    <!-- ionc finds the .ion files itself; this list only decides when it has to run again. -->
+    <IonFile Include="$(IonProjectDirectory)**\*.ion" Exclude="$(IonProjectDirectory)bin\**;$(IonProjectDirectory)obj\**" />
+
+    <!-- Visual Studio's fast up-to-date check skips MSBuild entirely unless it knows these. -->
+    <UpToDateCheckInput Include="@(IonFile)" />
+    <UpToDateCheckInput Include="$(IonProjectDirectory)ion.config.json" Condition="Exists('$(IonProjectDirectory)ion.config.json')" />
+    <UpToDateCheckInput Include="$(IonProjectDirectory)ion.lock.json" Condition="Exists('$(IonProjectDirectory)ion.lock.json')" />
+
+    <Watch Include="@(IonFile)" />
+  </ItemGroup>
+
+  <Target Name="_IonPrepare" Condition="'$(IonGenerateOnBuild)' == 'true'">
+    <PropertyGroup>
+      <!-- Set here rather than at evaluation: IntermediateOutputPath is only defined by the SDK's
+           targets, after this file may already have been imported. -->
+      <IonOutputDir Condition="'$(IonOutputDir)' == ''">$(IntermediateOutputPath)ion\</IonOutputDir>
+      <IonOutputDir>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(IonOutputDir)'))</IonOutputDir>
+      <IonCompilerPath>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(IonCompilerPath)'))</IonCompilerPath>
+
+      <_IonConfigFile>$(IonProjectDirectory)ion.config.json</_IonConfigFile>
+      <_IonLockFile Condition="Exists('$(IonProjectDirectory)ion.lock.json')">$(IonProjectDirectory)ion.lock.json</_IonLockFile>
+      <_IonInputsFile>$(IonOutputDir)ionc.inputs</_IonInputsFile>
+      <_IonCacheFile>$(IonOutputDir)ionc.cache</_IonCacheFile>
+      <_IonStampFile>$(IonOutputDir)ionc.stamp</_IonStampFile>
+
+      <_IonLockArgument Condition="'$(IonLockMode)' == 'check'">--lock-mode check</_IonLockArgument>
+      <_IonLockArgument Condition="'$(IonLockMode)' == 'frozen'">--lock-mode frozen</_IonLockArgument>
+      <_IonLockArgument Condition="'$(IonLockMode)' == 'none'">--no-lock</_IonLockArgument>
+      <!-- A quoted path must not end in a backslash: \" escapes the closing quote. -->
+      <_IonArguments>exec --roll-forward Major "$(IonCompilerPath)" compile --msbuild $(_IonLockArgument) --dotnet-output "$(IonOutputDir.TrimEnd('\'))" --inputs-file "$(_IonInputsFile)"</_IonArguments>
+    </PropertyGroup>
+
+    <Error Condition="!Exists('$(_IonConfigFile)')"
+           Text="IonPath: '$(_IonConfigFile)' was not found. Set IonProjectDirectory to the directory that holds ion.config.json, or IonGenerateOnBuild to false." />
+    <Error Condition="!Exists('$(IonCompilerPath)')"
+           Text="IonPath: the compiler was not found at '$(IonCompilerPath)'." />
+    <Error Condition="'$(IonLockMode)' != 'check' and '$(IonLockMode)' != 'update' and '$(IonLockMode)' != 'frozen' and '$(IonLockMode)' != 'none'"
+           Text="IonPath: IonLockMode must be 'check', 'update', 'frozen' or 'none', not '$(IonLockMode)'." />
+
+    <!-- Every file the last successful run read, as ionc recorded it: the sources of external
+         modules live outside this project and cannot be globbed. A recorded file that has since
+         been deleted is a missing input, which makes IonGenerate run again. -->
+    <ReadLinesFromFile File="$(_IonInputsFile)" Condition="Exists('$(_IonInputsFile)')">
+      <Output TaskParameter="Lines" ItemName="_IonRecordedInput" />
+    </ReadLinesFromFile>
+
+    <!-- What timestamps cannot show: an .ion file that is new but carries an old timestamp (a
+         copy keeps it), or a different invocation, such as IonLockMode given as -p: on one build
+         and not the next. This file is rewritten whenever either changes, and is an input below. -->
+    <Hash ItemsToHash="@(IonFile)" IgnoreCase="true">
+      <Output TaskParameter="HashResult" PropertyName="_IonSourceListHash" />
+    </Hash>
+    <MakeDir Directories="$(IonOutputDir)" />
+    <WriteLinesToFile File="$(_IonCacheFile)" Lines="$(_IonSourceListHash);$(_IonArguments)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+  </Target>
+
+  <Target Name="IonGenerate"
+          DependsOnTargets="_IonPrepare"
+          Condition="'$(IonGenerateOnBuild)' == 'true'"
+          Inputs="@(IonFile);@(_IonRecordedInput);$(_IonConfigFile);$(_IonLockFile);$(_IonCacheFile);$(IonCompilerPath);$(MSBuildAllProjects)"
+          Outputs="$(_IonStampFile)">
+    <!-- The directory belongs to the generator. Emptying it first means a deleted .ion file, or a
+         feature taken out of ion.config.json, leaves nothing behind to be compiled. -->
+    <ItemGroup>
+      <_IonPreviousSource Include="$(IonOutputDir)**\*.cs" />
+    </ItemGroup>
+    <Delete Files="@(_IonPreviousSource)" />
+
+    <!-- ionc writes its diagnostics in MSBuild's canonical format, so they surface as real errors
+         and warnings, positioned in the .ion source. Everything else it prints is logged at low
+         importance (-v:d to see it). -->
+    <IonCompileTask DotnetHostPath="$(IonDotnetHostPath)"
+                    CommandArguments="$(_IonArguments)"
+                    WorkingDirectory="$(IonProjectDirectory)" />
+
+    <Touch Files="$(_IonStampFile)" AlwaysCreate="true" />
+  </Target>
+
+  <!-- Runs whether or not IonGenerate was up to date: the sources on disk are compiled either way.
+       Before BeforeCompile, so that _GenerateCompileDependencyCache sees them and a removed
+       source forces a recompile. -->
+  <Target Name="_IonAddGeneratedSources"
+          BeforeTargets="BeforeCompile;CoreCompile"
+          DependsOnTargets="IonGenerate"
+          Condition="'$(IonGenerateOnBuild)' == 'true'">
+    <ItemGroup>
+      <_IonGeneratedSource Include="$(IonOutputDir)**\*.cs" />
+      <Compile Remove="@(_IonGeneratedSource)" />
+      <Compile Include="@(_IonGeneratedSource)" />
+      <FileWrites Include="@(_IonGeneratedSource);$(_IonInputsFile);$(_IonCacheFile);$(_IonStampFile)" />
+    </ItemGroup>
+  </Target>
+
+  <!-- Hands external module sources to Visual Studio's fast up-to-date check, which collects
+       UpToDateCheckInput from a design-time build. -->
+  <Target Name="_IonCollectUpToDateCheckInputs"
+          BeforeTargets="CollectUpToDateCheckInputDesignTime"
+          DependsOnTargets="_IonPrepare"
+          Condition="'$(IonGenerateOnBuild)' == 'true'">
+    <ItemGroup>
+      <UpToDateCheckInput Include="@(_IonRecordedInput)" Condition="Exists('%(Identity)')" />
+    </ItemGroup>
+  </Target>
+</Project>

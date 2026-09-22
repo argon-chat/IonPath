@@ -36,4 +36,11 @@
 	  <PackageReference Update="Microsoft.SourceLink.GitHub" Version="10.0.203" />
 	</ItemGroup>
 
+	<!-- The compat probe schemas, Compat/Compat.ion, are compiled at build time (see Compat/README.md). -->
+	<PropertyGroup>
+		<IonProjectDirectory>Compat</IonProjectDirectory>
+		<IonLockMode>none</IonLockMode>
+	</PropertyGroup>
+	<Import Project="..\..\ionc\InRepo.targets" />
+
 </Project>

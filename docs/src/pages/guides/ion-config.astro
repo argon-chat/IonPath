@@ -78,7 +78,7 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
         </div>
         <div class="type-grid-row">
           <span class="font-mono text-[12px] type-property">outputs</span>
-          <span class="text-[12px] text-text-secondary">Output directory for generated files (relative to project root)</span>
+          <span class="text-[12px] text-text-secondary">Output directory for generated files (relative to project root). Omit it when the C# sources are <a href="/guides/codegen-csharp/#build-time" class="text-accent hover:underline">generated at build time</a> by the <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ionpath.compiler</code> MSBuild SDK; <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">ionc compile</code> then skips the dotnet target.</span>
         </div>
       </div>
 

@@ -7,6 +7,7 @@ on:
       - "src/ion.runtime.client/**"
       - "src/ion.runtime.network/**"
       - "src/ion.compiler/**"
+      - "src/ionc/**"
       - "GitVersion.yml"
   workflow_dispatch: {}
 
@@ -40,7 +41,7 @@ jobs:
       - name: Pack ion.runtime.network
         run: dotnet pack src/ion.runtime.network/ion.runtime.network.csproj -c Release -o ./nupkgs
 
-      - name: Pack ion.compiler (tools)
+      - name: Pack ion.compiler (tool and MSBuild SDK)
         run: dotnet pack src/ionc/ionc.csproj -c Release -o ./nupkgs
 
       - name: Push packages

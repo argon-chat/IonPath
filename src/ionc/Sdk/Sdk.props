@@ -1,0 +1,7 @@
+<Project>
+  <!--
+    Imported before the project body when the project uses <Sdk Name="ionpath.compiler" />.
+    Everything lives in Sdk.targets, after the body, where the project's own IonProjectDirectory,
+    IonLockMode and so on are already set; MSBuild still requires this file to exist.
+  -->
+</Project>

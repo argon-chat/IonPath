@@ -1,0 +1,22 @@
+<Project>
+  <!--
+    Build-time generation for projects inside this repository: the same Sdk\Sdk.targets that the
+    ionpath.compiler package ships, but running the ionc built from source, so a compiler change
+    is exercised by the next build. Import at the end of the project file:
+
+      <Import Project="..\..\ionc\InRepo.targets" />
+
+    (Outside this repository: <Sdk Name="ionpath.compiler" Version="x.y.z" />.)
+  -->
+
+  <PropertyGroup>
+    <IonCompilerPath Condition="'$(IonCompilerPath)' == ''">$(MSBuildThisFileDirectory)bin\$(Configuration)\net10.0\ionc.dll</IonCompilerPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Only for build order: ionc must be built before it can generate anything. -->
+    <ProjectReference Include="$(MSBuildThisFileDirectory)ionc.csproj" ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+
+  <Import Project="Sdk\Sdk.targets" />
+</Project>

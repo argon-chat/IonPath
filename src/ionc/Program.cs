@@ -52,7 +52,14 @@ if (args.Length > 0 && args[0] == "serve")
 
 
 Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+
+// Under a build, stdout is a pipe that the MSBuild SDK's task decodes as UTF-8 (Sdk/Sdk.targets).
+// UTF-16 there arrives NUL-interleaved and no diagnostic is recognised; writing UTF-8 bytes
+// directly also leaves the console code page alone, which a windowless child process may not be
+// able to change.
+if (args.Contains("--msbuild"))
+    Console.SetOut(new StreamWriter(Console.OpenStandardOutput(), new UTF8Encoding(false)) { AutoFlush = true });
+else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
     Console.OutputEncoding = Encoding.Unicode;
 
 

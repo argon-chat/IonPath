@@ -10,8 +10,16 @@
 		<PackAsTool>True</PackAsTool>
 		<ToolCommandName>ionc</ToolCommandName>
 		<PackageId>ionpath.compiler</PackageId>
-		<Description>IonPath compiler and language server - schema-first RPC contract language</Description>
+		<Description>IonPath compiler and language server - schema-first RPC contract language. Also an MSBuild SDK that generates the C# side of a contract at build time.</Description>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
 	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- The package doubles as an MSBuild SDK: <Sdk Name="ionpath.compiler" Version="..." />. -->
+		<None Update="Sdk\Sdk.props" Pack="True" PackagePath="Sdk\Sdk.props" />
+		<None Update="Sdk\Sdk.targets" Pack="True" PackagePath="Sdk\Sdk.targets" />
+		<None Update="README.md" Pack="True" PackagePath="\" />
+	</ItemGroup>
 
 	<ItemGroup>
 		<PackageReference Include="Spectre.Console" Version="0.55.2" />
