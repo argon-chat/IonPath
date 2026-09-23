@@ -31,7 +31,7 @@ jobs:
 
     permissions:
       contents: read
-      id-token: write # required — this is what trusted publishing exchanges
+      id-token: write # required — this is what trusted publishing and the Codecov upload exchange
 
     steps:
       - uses: actions/checkout@v4
@@ -50,6 +50,27 @@ jobs:
 
       - name: Build
         run: dotnet build --configuration Release --no-restore
+
+      - name: Test (with coverage)
+        # Before packing, so a failing test never reaches nuget.org. The Dragonfly backplane tests
+        # need Docker, which ubuntu-latest has.
+        run: >-
+          dotnet test --configuration Release --no-build
+          --settings coverage.runsettings
+          --collect "XPlat Code Coverage"
+          --results-directory ./TestResults
+
+      - name: Upload coverage to Codecov
+        # Authenticates through GitHub OIDC, like NuGet/login — no CODECOV_TOKEN secret.
+        # `fail_ci_if_error` with `continue-on-error`: a failed upload shows as a red step instead of
+        # passing silently, but a Codecov outage does not hold back a release.
+        continue-on-error: true
+        uses: codecov/codecov-action@v5
+        with:
+          use_oidc: true
+          directory: ./TestResults
+          flags: dotnet
+          fail_ci_if_error: true
 
       - name: Pack ion.runtime
         run: dotnet pack src/ion.runtime/ion.runtime.csproj -c Release -o ./nupkgs

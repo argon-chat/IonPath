@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Coverlet settings for `dotnet test`, passed with the settings and collect "XPlat Code Coverage"
+  options (see .github/workflows/release.yaml; a double dash cannot appear in an XML comment).
+
+  Only the ion* assemblies — the ones that ship — are measured. The test hosts (TestServer,
+  TestContracts) are mostly generated code, and counting them would say more about the contracts
+  than about the runtime.
+-->
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat code coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+          <Include>[ion*]*</Include>
+          <ExcludeByAttribute>Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
+          <SkipAutoProps>true</SkipAutoProps>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>
