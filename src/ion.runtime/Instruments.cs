@@ -31,6 +31,8 @@ public static class InstrumentNames
     public const string RpcRequestDuration = "ion-rpc-request-duration";
     public const string RpcActiveConnections = "ion-rpc-active-connections";
     public const string RpcRequestError = "ion-rpc-request-error";
+    public const string StreamDisconnectTotal = "ion-stream-disconnect-total";
+    public const string StreamResumeTotal = "ion-stream-resume-total";
 }
 
 /// <remarks>
@@ -90,4 +92,31 @@ public static class IonInstruments
         RpcActiveConnectionsCounter.Add(-1,
             new KeyValuePair<string, object?>("endpoint", endpoint));
     }
+
+    /// <summary>One stream connection ended; <paramref name="reason"/> is an <c>IonDisconnectReason</c> name.</summary>
+    public static void RecordStreamDisconnect(string method, string reason)
+    {
+        StreamDisconnectCounter.Add(1,
+            new KeyValuePair<string, object?>("method", method),
+            new KeyValuePair<string, object?>("reason", reason));
+    }
+
+    private static readonly Counter<long> StreamDisconnectCounter = Instruments.Meter.CreateCounter<long>(
+        InstrumentNames.StreamDisconnectTotal,
+        description: "Stream connections ended, by reason");
+
+    /// <summary>
+    /// A client tried to resume a stream session; <paramref name="outcome"/> is <c>resumed</c>,
+    /// <c>not_resumable</c> or <c>violation</c>.
+    /// </summary>
+    public static void RecordStreamResume(string method, string outcome)
+    {
+        StreamResumeCounter.Add(1,
+            new KeyValuePair<string, object?>("method", method),
+            new KeyValuePair<string, object?>("outcome", outcome));
+    }
+
+    private static readonly Counter<long> StreamResumeCounter = Instruments.Meter.CreateCounter<long>(
+        InstrumentNames.StreamResumeTotal,
+        description: "Attempts to resume a stream session, by outcome");
 }

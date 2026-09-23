@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+
+		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+		<Title>Ion Stream Backplane on Redis Streams</Title>
+		<Description>Carries IonPath stream-connection pushes, closes and group changes between server nodes through a Redis (or Dragonfly / Valkey) stream.</Description>
+		<PackageId>ionpath.runtime.network.redis</PackageId>
+		<PackageIcon>icon-128.png</PackageIcon>
+	</PropertyGroup>
+	<ItemGroup>
+	  <ProjectReference Include="..\ion.runtime.streams\ion.runtime.streams.csproj" />
+	</ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="StackExchange.Redis" Version="3.2.1" />
+	</ItemGroup>
+	<ItemGroup>
+		<InternalsVisibleTo Include="IonRedisBackplaneTests" />
+	</ItemGroup>
+	<ItemGroup>
+		<None Update="icon-128.png">
+			<Pack>True</Pack>
+			<PackagePath>\</PackagePath>
+		</None>
+	</ItemGroup>
+	<ItemGroup>
+	  <PackageReference Update="GitVersion.MsBuild" Version="6.7.0" />
+	  <PackageReference Update="Microsoft.SourceLink.GitHub" Version="10.0.203" />
+	</ItemGroup>
+</Project>

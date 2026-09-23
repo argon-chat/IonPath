@@ -1,4 +1,4 @@
-import { CborReader, CborWriter } from "../cbor";
+import { CborReader } from "../cbor";
 import { IonFormatterStorage } from "../logic/IonFormatter";
 import { safeFetchBuffer } from "../yetAnotherFetch";
 import {
@@ -8,39 +8,37 @@ import {
   IonProtocolError,
   IonRequestException,
 } from "../unary/IonUnaryRequest";
+import {
+  addStreamListener,
+  type ExchangeProbe,
+  IonStreamCall,
+  type ReconnectEvents,
+  removeStreamListener,
+  resetTransportHealth,
+} from "./IonStreamCall";
 
-function toWebSocketUrl(httpUrl: string): string {
-  const u = new URL(httpUrl);
-  switch (u.protocol) {
-    case "http:":
-      u.protocol = "ws:";
-      break;
-    case "https:":
-      u.protocol = "wss:";
-      break;
-    case "ws:":
-    case "wss:":
-      break;
-    default:
-      throw new Error(`Invalid URL protocol: ${u.protocol}`);
-  }
-  if (
-    (u.protocol === "ws:" && u.port === "80") ||
-    (u.protocol === "wss:" && u.port === "443")
-  ) {
-    u.port = "";
-  }
-  const urlStr = u.toString();
+export type { ReconnectEvents };
 
-  if (urlStr.endsWith("/")) return urlStr.slice(0, -1);
-  return urlStr;
-}
-export type ReconnectEvents = {
-  reconnecting: (attempt: number, delay: number) => void;
-  reconnected: (attempt: number) => void;
-  closed: () => void;
-};
-
+/**
+ * The client of one `stream` method. Generated code creates one per call.
+ *
+ * A call connects over WebTransport or WebSocket — in the order `IonClientContext.streamOptions`
+ * gives, WebTransport first by default — speaks Ion stream protocol v2 on it, and reconnects when
+ * the connection drops without a goodbye. See {@link IonStreamOptions} for the knobs and
+ * {@link IonStreamCall} for how the pieces fit together.
+ *
+ * How a call ends, as seen by the consumer of the returned generator:
+ *
+ * - the server's END: the generator returns;
+ * - the server's ERROR: `IonRequestException` carrying it;
+ * - the server's CLOSE: `IonStreamClosedError` — or a reconnect, when the server allowed one;
+ * - a lost, silent or misbehaving transport: `IonStreamDisconnectedError` once reconnecting gave
+ *   up (or at once when it is off, or for a protocol violation);
+ * - an aborted `signal`: a `DOMException` named `AbortError`.
+ *
+ * A consumer that stops early (`break`, `return()`) or aborts makes the client leave politely: a
+ * CLOSE frame, then a graceful end of the transport.
+ */
 export class IonWsClient {
   constructor(
     private context: IonClientContext,
@@ -48,30 +46,34 @@ export class IonWsClient {
     private methodName: string
   ) {}
 
-  private static listeners = new Map<keyof ReconnectEvents, Function[]>();
-  public static on<K extends keyof ReconnectEvents>(
-    event: K,
-    cb: ReconnectEvents[K]
-  ): void {
-    if (!this.listeners.has(event)) {
-      this.listeners.set(event, []);
-    }
-    (this.listeners.get(event) as ReconnectEvents[K][]).push(cb);
+  /**
+   * Subscribes to reconnect progress of every stream call.
+   *
+   * - `reconnecting(attempt, delay)`: a connection failed and attempt `attempt` starts in `delay` ms;
+   * - `reconnected(attempt)`: that attempt was accepted by the server (it sent READY);
+   * - `closed()`: a call was ended by its consumer — an early `break`/`return()`, or an abort.
+   */
+  public static on<K extends keyof ReconnectEvents>(event: K, cb: ReconnectEvents[K]): void {
+    addStreamListener(event, cb);
   }
 
-  private static emit<K extends keyof ReconnectEvents>(
-    event: K,
-    ...args: Parameters<ReconnectEvents[K]>
-  ): void {
-    const arr = this.listeners.get(event);
-    if (!arr) return;
-    type Args = Parameters<ReconnectEvents[K]>;
-    (arr as ((...a: Args) => void)[]).forEach((cb) => cb(...args));
+  /** Removes a listener added with {@link on}. */
+  public static off<K extends keyof ReconnectEvents>(event: K, cb: ReconnectEvents[K]): void {
+    removeStreamListener(event, cb);
+  }
+
+  /**
+   * Forgets every remembered WebTransport failure, so the next call tries WebTransport again even
+   * inside `webTransportRetryAfterMs`. For tests, and for an app that knows the network changed.
+   */
+  public static resetTransportHealth(): void {
+    resetTransportHealth();
   }
 
   private async terminalExchangeAsync(
     c: IonCallContext,
-    signal?: AbortSignal
+    signal: AbortSignal | undefined,
+    probe: ExchangeProbe
   ): Promise<void> {
     // Inject correlation ID header if set by interceptor or user code
     if (c.correlationId) {
@@ -83,12 +85,15 @@ export class IonWsClient {
       headers: c.requestHeaders,
       signal: signal,
       method: "POST",
-      credentials: "include"
+      credentials: "include",
     });
+
+    if (resp.status === "network-error") probe.networkError = true;
 
     if (!resp.buffer)
       throw new IonRequestException(
-        IonProtocolError.UPSTREAM_ERROR(`no buffer return, status: ${resp.status}`)
+        IonProtocolError.UPSTREAM_ERROR(`no buffer return, status: ${resp.status}`),
+        typeof resp.status === "number" ? resp.status : undefined
       );
 
     const buf = new Uint8Array(await resp.buffer);
@@ -96,22 +101,35 @@ export class IonWsClient {
 
     if (resp.status != 200) {
       try {
-        const error = IonFormatterStorage.get<IonProtocolError>(
-          "IonProtocolError"
-        ).read(new CborReader(buf));
-        throw new IonRequestException(error);
+        const error = IonFormatterStorage.get<IonProtocolError>("IonProtocolError").read(
+          new CborReader(buf)
+        );
+        throw new IonRequestException(error, resp.status as number);
       } catch (e) {
         if (e instanceof IonRequestException) {
           throw e;
         }
         throw new IonRequestException(
-          IonProtocolError.UPSTREAM_ERROR(resp.status.toString())
+          IonProtocolError.UPSTREAM_ERROR(resp.status.toString()),
+          resp.status as number
         );
       }
     }
   }
 
+  /**
+   * Exchanges the context's credentials for a stream ticket (`POST {baseUrl}/ion.att`, through
+   * the context's interceptors) and returns it base56-encoded. Stream calls do this before every
+   * connection attempt; tickets may be single-use.
+   */
   async createExchangeToken(signal?: AbortSignal): Promise<string> {
+    return this.exchangeTicket(signal, { networkError: false });
+  }
+
+  private async exchangeTicket(
+    signal: AbortSignal | undefined,
+    probe: ExchangeProbe
+  ): Promise<string> {
     const ctx: IonCallContext = {
       client: fetch,
       interfaceName: this.interfaceName,
@@ -124,8 +142,8 @@ export class IonWsClient {
       },
     };
 
-    let next: (c: IonCallContext, s?: AbortSignal) => Promise<void> =
-      this.terminalExchangeAsync.bind(this);
+    let next: (c: IonCallContext, s?: AbortSignal) => Promise<void> = (c, s) =>
+      this.terminalExchangeAsync(c, s, probe);
     for (let i = this.context.interceptors.length - 1; i >= 0; i--) {
       const interceptor = this.context.interceptors[i];
       const currentNext = next;
@@ -176,115 +194,34 @@ export class IonWsClient {
     return alphabet[0].repeat(leadingZeroes) + result;
   }
 
-  async *callServerStreaming<TResponse>(
+  /** Calls a server-streaming method; each item of the returned generator is one DATA frame. */
+  callServerStreaming<TResponse>(
     responseTypename: string,
     requestPayload: Uint8Array,
     signal?: AbortSignal,
     correlationId?: string
   ): AsyncGenerator<TResponse, void, unknown> {
-    if (typeof WebSocketStream === "undefined")
-      throw new Error("WebSocketStream is not supported in this browser");
-
-    let wsUrl = `${toWebSocketUrl(this.context.baseUrl)}/ion/${
-      this.interfaceName
-    }/${this.methodName}.ws`;
-
-    // Append correlation headers as query params (browsers don't support custom WS headers)
-    const params = new URLSearchParams();
-    if (this.context.sessionId) params.set("sid", this.context.sessionId);
-    if (correlationId) params.set("cid", correlationId);
-    const qs = params.toString();
-    if (qs) wsUrl += `?${qs}`;
-
-    let attempt = 0;
-    let wss: WebSocketStream | null = null;
-
-    while (true) {
-      try {
-        const exchangeToken = await this.createExchangeToken(signal);
-        wss = new WebSocketStream(wsUrl, {
-          signal,
-          protocols: [`ion!ticket#${exchangeToken}!ver#1`],
-        });
-        const { readable, writable } = await wss.opened;
-        const reader = readable.getReader();
-        const writer = writable.getWriter();
-
-        await writer.write(requestPayload);
-
-        if (attempt > 0) {
-          IonWsClient.emit("reconnected", attempt);
-        }
-        attempt = 0;
-
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-
-          if (!(value instanceof ArrayBuffer)) {
-            console.error(`invalid frame type: ${value},  ${typeof value}`);
-            throw new Error(`Invalid frame type: ${typeof value}`);
-          }
-
-          const msg = new Uint8Array(value);
-          const opcode = msg[0];
-          const body = msg.subarray(1);
-          const cborReader = new CborReader(body);
-
-          if (opcode === 0x00) {
-            yield IonFormatterStorage.get<TResponse>(responseTypename).read(
-              cborReader
-            );
-            continue;
-          } else if (opcode === 0x01) {
-            wss.close();
-            continue;
-          } else if (opcode === 0x02) {
-            const err =
-              IonFormatterStorage.get<IonProtocolError>(
-                "IonProtocolError"
-              ).read(cborReader);
-            wss.close();
-            throw new IonRequestException(err);
-          } else {
-            try {
-              yield IonFormatterStorage.get<TResponse>(responseTypename).read(
-                cborReader
-              );
-              continue;
-            } catch (ex: any) {
-              console.error(ex);
-              wss.close();
-              throw new IonRequestException({
-                code: "-1",
-                message: `Invalid WS frame: ${ex.message}`,
-              });
-            }
-          }
-        }
-        wss.close();
-        throw new Error("WebSocket closed unexpectedly");
-      } catch (err) {
-        wss?.close();
-        console.error(err);
-        attempt++;
-        const delay = Math.min(1000 * 2 ** attempt, 30000);
-
-        IonWsClient.emit("reconnecting", attempt, delay);
-
-        await new Promise((res) => setTimeout(res, delay));
-
-        if (signal?.aborted) {
-          IonWsClient.emit("closed");
-          throw new DOMException("Aborted", "AbortError");
-        }
-
-        continue;
-      }
-    }
+    return new IonStreamCall<TResponse, never>({
+      context: this.context,
+      interfaceName: this.interfaceName,
+      methodName: this.methodName,
+      exchangeTicket: (s, p) => this.exchangeTicket(s, p),
+      responseTypename,
+      requestPayload,
+      input: null,
+      signal,
+      correlationId,
+    }).run();
   }
 
-  async *callServerStreamingFullDuplex<TResponse, TRequest>(
+  /**
+   * Calls a method that streams in both directions. `inputStream` is pumped to the server as soon
+   * as the connection is open, one DATA frame per item and END once it completes; if it throws,
+   * the server gets an `INPUT_FAULTED` ERROR frame and the returned generator throws the same
+   * error. Across a reconnect the same iterator continues — see {@link IonStreamCall} for what
+   * that means for items in flight.
+   */
+  callServerStreamingFullDuplex<TResponse, TRequest>(
     responseTypename: string,
     requestPayload: Uint8Array,
     inputStream: AsyncIterable<TRequest>,
@@ -292,136 +229,16 @@ export class IonWsClient {
     signal?: AbortSignal,
     correlationId?: string
   ): AsyncGenerator<TResponse, void, unknown> {
-    if (typeof WebSocketStream === "undefined")
-      throw new Error("WebSocketStream is not supported in this browser");
-
-    let wsUrl = `${toWebSocketUrl(this.context.baseUrl)}/ion/${
-      this.interfaceName
-    }/${this.methodName}.ws`;
-
-    // Append correlation headers as query params (browsers don't support custom WS headers)
-    const params = new URLSearchParams();
-    if (this.context.sessionId) params.set("sid", this.context.sessionId);
-    if (correlationId) params.set("cid", correlationId);
-    const qs = params.toString();
-    if (qs) wsUrl += `?${qs}`;
-
-    let attempt = 0;
-    let wss: WebSocketStream | null = null;
-    let inputPump: Promise<void> | null = null;
-
-    while (true) {
-      try {
-        const exchangeToken = await this.createExchangeToken(signal);
-        wss = new WebSocketStream(wsUrl, {
-          signal,
-          protocols: [`ion!ticket#${exchangeToken}!ver#1`],
-        });
-        const { readable, writable } = await wss.opened;
-        const reader = readable.getReader();
-        const writer = writable.getWriter();
-
-        await writer.write(requestPayload);
-
-        inputPump = (async () => {
-          try {
-            if (inputStream) {
-              const serializer =
-                IonFormatterStorage.get<TRequest>(inputStreamTypeName);
-
-              for await (const item of inputStream) {
-                const cborWriter = new CborWriter();
-                cborWriter.writeStartArray();
-                serializer.write(cborWriter, item);
-                cborWriter.writeEndArray();
-                const payload = cborWriter.data;
-
-                const frame = new Uint8Array(1 + payload.length);
-                frame[0] = 0x00; 
-                frame.set(payload, 1);
-
-                await writer.write(frame);
-              }
-              await writer.write(new Uint8Array([0x00]));
-            }
-          } catch (e) {
-            console.error("inputStream pump failed", e);
-            try {
-              await wss?.close();
-            } catch {}
-          }
-        })();
-
-        if (attempt > 0) {
-          IonWsClient.emit("reconnected", attempt);
-        }
-        attempt = 0;
-
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-
-          if (!(value instanceof ArrayBuffer)) {
-            console.error(`invalid frame type: ${value},  ${typeof value}`);
-            throw new Error(`Invalid frame type: ${typeof value}`);
-          }
-
-          const msg = new Uint8Array(value);
-          const opcode = msg[0];
-          const body = msg.subarray(1);
-          const cborReader = new CborReader(body);
-
-          if (opcode === 0x00) {
-            yield IonFormatterStorage.get<TResponse>(responseTypename).read(
-              cborReader
-            );
-            continue;
-          } else if (opcode === 0x01) {
-            wss.close();
-            continue;
-          } else if (opcode === 0x02) {
-            const err =
-              IonFormatterStorage.get<IonProtocolError>(
-                "IonProtocolError"
-              ).read(cborReader);
-            wss.close();
-            throw new IonRequestException(err);
-          } else {
-            try {
-              yield IonFormatterStorage.get<TResponse>(responseTypename).read(
-                cborReader
-              );
-              continue;
-            } catch (ex: any) {
-              console.error(ex);
-              wss.close();
-              throw new IonRequestException({
-                code: "-1",
-                message: `Invalid WS frame: ${ex.message}`,
-              });
-            }
-          }
-        }
-        wss.close();
-        throw new Error("WebSocket closed unexpectedly");
-      } catch (err) {
-        wss?.close();
-        await inputPump?.catch(() => {});
-        console.error(err);
-        attempt++;
-        const delay = Math.min(1000 * 2 ** attempt, 30000);
-
-        IonWsClient.emit("reconnecting", attempt, delay);
-
-        await new Promise((res) => setTimeout(res, delay));
-
-        if (signal?.aborted) {
-          IonWsClient.emit("closed");
-          throw new DOMException("Aborted", "AbortError");
-        }
-
-        continue;
-      }
-    }
+    return new IonStreamCall<TResponse, TRequest>({
+      context: this.context,
+      interfaceName: this.interfaceName,
+      methodName: this.methodName,
+      exchangeTicket: (s, p) => this.exchangeTicket(s, p),
+      responseTypename,
+      requestPayload,
+      input: { stream: inputStream, typename: inputStreamTypeName },
+      signal,
+      correlationId,
+    }).run();
   }
 }

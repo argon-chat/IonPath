@@ -70,12 +70,12 @@ IonPath consists of two parts:
 | **Core DSL Grammar**     | ✅     | **C# \ Server**              | ✅     | **HTTP Transport**       | ✅     |
 | **Services**             | ✅     | **C# \ Client**              | ✅     | **QUIC Transport**       | 🔻     |
 | **POCO**                 | ✅     | **TypeScript \ Client**      | ✅     | **NATS**                 | 🔻     |
-| **IonPath Protocol**     | ✅     | **TypeScript \ Server**      | 🔻     | **WebSocket Streaming**  | 🔻     |
-| **Unions**               | ✅     | **Rust \ Client**            | ✅     | **SteamNetworking**      | 🔻     |
-| **Unary Calls**          | ✅     | **Rust \ Server**            | 🔻     | **Unity Platform**       | 🔻     |
-| **Streaming Calls**      | ✅     | **Json Serialization**       | 🔻     | **Orleans Platform**     | 🔻     |
-| **Streaming Hubs**       | 🔻     | **MsgPack Serialization**    | 🔻     |
-|                          |         | **CBOR Serialization**       | ✅     |
+| **IonPath Protocol**     | ✅     | **TypeScript \ Server**      | 🔻     | **WebSocket Streaming**  | ✅     |
+| **Unions**               | ✅     | **Rust \ Client**            | ✅     | **WebTransport Streaming** | ✅   |
+| **Unary Calls**          | ✅     | **Rust \ Server**            | 🔻     | **Redis Streams Backplane** | ✅  |
+| **Streaming Calls**      | ✅     | **Json Serialization**       | 🔻     | **SteamNetworking**      | 🔻     |
+| **Streaming Hubs**       | ✅     | **MsgPack Serialization**    | 🔻     | **Unity Platform**       | 🔻     |
+| **Stream Reconnect & Resume** | ✅ | **CBOR Serialization**       | ✅     | **Orleans Platform**     | 🔻     |
 ---
 
 *Legend: 🚧 – in progress, ✅ – implemented, 🔻 – planned*

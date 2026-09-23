@@ -6,6 +6,9 @@ public record IonTransportOptions
     public List<Type> Interceptors { get; } = new();
     public IonWebSocketOptions WebSocketOptions { get; set; } = new();
 
+    /// <summary>Global <see cref="IIonStreamLifecycle"/> hooks, in registration order.</summary>
+    public List<Type> StreamLifecycles { get; } = new();
+
     /// <summary>
     /// Maps a service interface type to the port it is exclusively bound to.
     /// Services not present in this dictionary are accessible on any port.

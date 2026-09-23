@@ -87,6 +87,7 @@ public class ContractFixtureParseTests
             "LedgerInteraction.ion",
             "MathInteraction.ion",
             "PartialInteraction.ion",
+            "StreamInteraction.ion",
             "VectorInteraction.ion"
         }));
     }
@@ -101,6 +102,7 @@ public class ContractFixtureParseTests
     [TestCase("LedgerInteraction.ion", 2, 1, 2, 0, 0, 0, 0)]
     [TestCase("MathInteraction.ion", 0, 2, 0, 0, 0, 0, 0)]
     [TestCase("PartialInteraction.ion", 2, 1, 0, 0, 0, 0, 0)]
+    [TestCase("StreamInteraction.ion", 1, 1, 0, 1, 0, 0, 0)]
     [TestCase("VectorInteraction.ion", 3, 1, 2, 0, 0, 0, 0)]
     public void Fixture_DeclarationCensusIsUnchanged(
         string fileName, int messages, int services, int typedefs, int unions, int flags, int enums,

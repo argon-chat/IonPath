@@ -30,6 +30,20 @@ export interface IIonUnion<T extends IIonUnion<T>> {}
 export { IonFormatterStorage };
 
 export { IonWsClient } from "./ws/IonWsClient";
+export type { ReconnectEvents } from "./ws/IonWsClient";
+export {
+  IonStreamClosedError,
+  IonStreamDisconnectedError,
+  type IonStreamDisconnectReason,
+} from "./ws/IonStreamErrors";
+export type {
+  IonReconnectOptions,
+  IonStreamOptions,
+  IonStreamTransportKind,
+  WebSocketLike,
+  WebTransportLike,
+  WebTransportStreamLike,
+} from "./ws/IonStreamOptions";
 export {
   IonContentType,
   IonRequest,

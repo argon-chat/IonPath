@@ -89,6 +89,19 @@ export class CborReader {
     this.r = new BinaryReader(buffer);
   }
 
+  /**
+   * Starts over on `bytes[start, end)`, dropping every open container and pending tag.
+   *
+   * For decoding a sequence of independent payloads — stream frames — with one reader. The bytes
+   * are read in place, not copied, so they must stay unchanged until the value is decoded.
+   */
+  reset(bytes: Uint8Array, start = 0, end = bytes.byteLength): void {
+    this.r.reset(bytes, start, end);
+    this.stack.length = 0;
+    this.finished = false;
+    this.pendingTag = false;
+  }
+
   get position() {
     return this.r.position;
   }

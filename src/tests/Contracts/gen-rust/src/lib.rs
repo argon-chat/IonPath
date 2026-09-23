@@ -100,6 +100,11 @@
 //! Exercises every shape the generators have to emit for a partial: as a message
 //! field, as a method argument, as a method return, and under each of the four
 //! modifier stackings (`T~`, `T~[]`, `T~?`, `T~[]?`).
+//!
+//! Streaming surface for the stream lifecycle, transport and resilience tests.
+//!
+//! Each method exists to put the server in one particular state: completing, failing, never
+//! yielding on its own, echoing input, ignoring its cancellation token, or pushing large frames.
 
 use ion_rustcore::formatter::IonFormat;
 use ion_rustcore::{Decoder, Encoder, IonError};
@@ -481,6 +486,16 @@ pub struct PatchEnvelope {
 }
 
 
+/// An event pushed to the listeners of a topic.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LabEvent {
+    /// Monotonic per publisher, so a test can check order and gaps.
+    pub seq: i64,
+    pub topic: String,
+    pub body: String,
+}
+
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Vector {
     pub x: f32,
@@ -588,6 +603,112 @@ impl IonFormat for Dropped {
     fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
         e.array(1)?;
         self.r#fn.ion_write(e)?;
+        Ok(())
+    }
+}
+
+
+/// A union element, to prove a push of one case reaches a stream of the union with its envelope.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LabSignal {
+    Joined(Joined),
+    Left(Left),
+    Said(Said),
+}
+
+impl LabSignal {
+    pub fn union_index(&self) -> u32 {
+        match self {
+            Self::Joined(_) => 0,
+            Self::Left(_) => 1,
+            Self::Said(_) => 2,
+        }
+    }
+}
+
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Joined {
+    pub user: String,
+}
+
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Left {
+    pub user: String,
+}
+
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Said {
+    pub user: String,
+    pub text: String,
+}
+
+
+impl IonFormat for LabSignal {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let (union_index, _depth) =
+            ion_rustcore::formatter::read_union_envelope(d, "LabSignal")?;
+        let value = match union_index {
+                        0 => LabSignal::Joined(<Joined as IonFormat>::ion_read(d)?),            1 => LabSignal::Left(<Left as IonFormat>::ion_read(d)?),            2 => LabSignal::Said(<Said as IonFormat>::ion_read(d)?),
+            _ => return Err(IonError::InvalidUnionIndex(union_index)),
+        };
+        Ok(value)
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        ion_rustcore::formatter::write_union_envelope(e, self.union_index())?;
+        match self {
+                        Self::Joined(v) => v.ion_write(e)?,            Self::Left(v) => v.ion_write(e)?,            Self::Said(v) => v.ion_write(e)?,
+        }
+        Ok(())
+    }
+}
+
+impl IonFormat for Joined {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "Joined")?;
+        let user = <String as IonFormat>::ion_read(d)?;
+        ion_rustcore::formatter::skip_remaining(d, len, 1)?;
+        Ok(Self { user })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(1)?;
+        self.user.ion_write(e)?;
+        Ok(())
+    }
+}
+
+impl IonFormat for Left {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "Left")?;
+        let user = <String as IonFormat>::ion_read(d)?;
+        ion_rustcore::formatter::skip_remaining(d, len, 1)?;
+        Ok(Self { user })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(1)?;
+        self.user.ion_write(e)?;
+        Ok(())
+    }
+}
+
+impl IonFormat for Said {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "Said")?;
+        let user = <String as IonFormat>::ion_read(d)?;
+        let text = <String as IonFormat>::ion_read(d)?;
+        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        Ok(Self { user, text })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(2)?;
+        self.user.ion_write(e)?;
+        self.text.ion_write(e)?;
         Ok(())
     }
 }
@@ -956,6 +1077,25 @@ impl IonFormat for PatchEnvelope {
         ion_rustcore::formatter::write_array(e, &self.many)?;
         ion_rustcore::formatter::write_maybe(e, &self.maybe)?;
         ion_rustcore::formatter::write_maybe(e, &self.maybe_many)?;
+        Ok(())
+    }
+}
+
+impl IonFormat for LabEvent {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "LabEvent")?;
+        let seq = <i64 as IonFormat>::ion_read(d)?;
+        let topic = <String as IonFormat>::ion_read(d)?;
+        let body = <String as IonFormat>::ion_read(d)?;
+        ion_rustcore::formatter::skip_remaining(d, len, 3)?;
+        Ok(Self { seq, topic, body })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(3)?;
+        self.seq.ion_write(e)?;
+        self.topic.ion_write(e)?;
+        self.body.ion_write(e)?;
         Ok(())
     }
 }
@@ -1703,6 +1843,80 @@ impl PatchInteractionClient {
         let buf = e.into_writer();
         let req = ion_rustcore::IonRequest::new(&self.ctx, "IPatchInteraction", "Rewrap");
         req.call::<PatchEnvelope>(&buf).await
+    }
+
+}
+
+/// The streams the stream tests drive.
+pub struct StreamLabClient {
+    ctx: ion_rustcore::IonClientContext,
+}
+
+impl ion_rustcore::FromContext for StreamLabClient {
+    fn from_context(ctx: ion_rustcore::IonClientContext) -> Self {
+        Self { ctx }
+    }
+}
+
+impl StreamLabClient {
+        /// `count` consecutive integers starting at `from`, `delayMs` apart.
+    pub async fn count(&self, from: i32, count: i32, delay_ms: i32) -> Result<ion_rustcore::IonWsStream<i32>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(3)?;
+        from.ion_write(&mut e)?;
+        count.ion_write(&mut e)?;
+        delay_ms.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        ion_rustcore::IonWsStream::open(&self.ctx, "IStreamLab", "Count", &buf).await
+    }
+    /// Yields nothing itself: joins the group `topic` and receives everything by push.
+    pub async fn listen(&self, topic: &String) -> Result<ion_rustcore::IonWsStream<LabEvent>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        topic.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        ion_rustcore::IonWsStream::open(&self.ctx, "IStreamLab", "Listen", &buf).await
+    }
+    /// Push-only stream of a union element; joins the group `room:{room}`.
+    pub async fn signals(&self, room: &String) -> Result<ion_rustcore::IonWsStream<LabSignal>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        room.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        ion_rustcore::IonWsStream::open(&self.ctx, "IStreamLab", "Signals", &buf).await
+    }
+    /// Every input item back, upper-cased, in order.
+    pub async fn echo(&self, ) -> Result<ion_rustcore::IonWsDuplexStream<String, String>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(0)?;
+        
+        let buf = e.into_writer();
+        ion_rustcore::IonWsDuplexStream::open(&self.ctx, "IStreamLab", "Echo", &buf).await
+    }
+    /// `after` items, then an exception.
+    pub async fn explode(&self, after: i32) -> Result<ion_rustcore::IonWsStream<i32>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        after.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        ion_rustcore::IonWsStream::open(&self.ctx, "IStreamLab", "Explode", &buf).await
+    }
+    /// One item, then ignores its cancellation token for `holdMs` before finishing.
+    pub async fn stubborn(&self, hold_ms: i32) -> Result<ion_rustcore::IonWsStream<i32>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        hold_ms.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        ion_rustcore::IonWsStream::open(&self.ctx, "IStreamLab", "Stubborn", &buf).await
+    }
+    /// `count` payloads of `size` bytes each; byte i of payload n is (n + i) mod 251.
+    pub async fn blobs(&self, size: i32, count: i32) -> Result<ion_rustcore::IonWsStream<ion_rustcore::IonBytes>, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(2)?;
+        size.ion_write(&mut e)?;
+        count.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        ion_rustcore::IonWsStream::open(&self.ctx, "IStreamLab", "Blobs", &buf).await
     }
 
 }

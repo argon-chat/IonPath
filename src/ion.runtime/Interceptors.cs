@@ -23,6 +23,16 @@ public class IonRequestException : Exception
         ResponseBody = responseBody;
     }
 
+    /// <param name="innerException">
+    /// The transport failure behind the error. A stream that died carries the socket exception
+    /// here, so "the connection dropped" and "the peer reset it mid-frame" stay distinguishable.
+    /// </param>
+    public IonRequestException(IonProtocolError error, Exception? innerException)
+        : base(Describe(error, null, null), innerException)
+    {
+        Error = error;
+    }
+
     public IonProtocolError Error { get; }
 
     /// <summary>The HTTP status the error arrived on, or null when it did not come from a response.</summary>

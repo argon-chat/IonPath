@@ -18,6 +18,6 @@ pub use interceptor::*;
 pub use client::*;
 pub use request::*;
 pub use service::*;
-pub use streaming::{IonWsStream, IonWsDuplexStream};
+pub use streaming::{IonWsStream, IonWsDuplexStream, IonStreamOptions};
 
 pub use minicbor::{Decoder, Encoder};

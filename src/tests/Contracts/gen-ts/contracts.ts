@@ -7,44 +7,42 @@
 //     Generator: IonPath Codegen
 // </auto-generated>
 //------------------------------------------------------------------------------
-import { 
-  CborReader, 
-  CborWriter, 
-  
-  DateOnly, 
-  IonDateTime, 
-  IonDecimal, 
-  Duration, 
-  TimeOnly, 
-  Guid, 
-  
+import {
+  CborReader,
+  CborWriter,
+  IonDateTime,
+  IonDecimal,
   IonFormatterStorage,
-
+  ServiceExecutor,
+  IonRequest,
+  IonWsClient
+} from "@argon-chat/ion.webcore";
+import type {
+  bytes,
+  DateOnly,
+  Duration,
+  TimeOnly,
+  Guid,
   IonArray,
-  IonMaybe,
   IonPartial,
-
   IIonService,
   IIonUnion,
-  
-  ServiceExecutor,
   IonClientContext,
-  IonRequest,
-  IonWsClient,
-  IonInterceptor
+  IonInterceptor,
+  IonStreamOptions
 } from "@argon-chat/ion.webcore";
 
-type guid = Guid;
-type timeonly = TimeOnly;
-type duration = Duration;
+declare type guid = Guid;
+declare type timeonly = TimeOnly;
+declare type duration = Duration;
 // IonDateTime, never the deprecated `DateTimeOffset { date: Date; offsetMinutes }`
 // shape: `Date` is millisecond-resolution, so it cannot hold the 100ns ticks the
 // wire form carries, and the webcore "datetime" formatter now reads and writes
 // IonDateTime — leaving the old alias here would be a live type mismatch, not just
 // a lossy one.
-type datetime = IonDateTime;
-type decimal = IonDecimal;
-type dateonly = DateOnly;
+declare type datetime = IonDateTime;
+declare type decimal = IonDecimal;
+declare type dateonly = DateOnly;
 
 declare type bool = boolean;
 
@@ -689,6 +687,19 @@ export interface PatchEnvelope {
 };
 
 
+/**
+ * An event pushed to the listeners of a topic.
+ */
+export interface LabEvent {
+  /**
+   * Monotonic per publisher, so a test can check order and gaps.
+   */
+  seq: i8;
+  topic: string;
+  body: string;
+};
+
+
 export interface Vector {
   x: f4;
   y: f4;
@@ -821,6 +832,142 @@ IonFormatterStorage.register("Dropped", {
   write(writer: CborWriter, value: Dropped): void {
     writer.writeStartArray(1);
     IonFormatterStorage.get<bool>('bool').write(writer, value.fn);
+    writer.writeEndArray();
+  }
+});
+
+
+
+/**
+ * A union element, to prove a push of one case reaches a stream of the union with its envelope.
+ */
+export abstract class ILabSignal implements IIonUnion<ILabSignal>
+{
+  abstract UnionKey: string;
+  abstract UnionIndex: number;
+  
+  
+  
+  
+  public isJoined(): this is Joined {
+    return this.UnionKey === "Joined";
+  }
+  public isLeft(): this is Left {
+    return this.UnionKey === "Left";
+  }
+  public isSaid(): this is Said {
+    return this.UnionKey === "Said";
+  }
+
+}
+
+
+export class Joined extends ILabSignal
+{
+  constructor(public user: string) { super(); }
+
+  UnionKey: string = "Joined";
+  UnionIndex: number = 0;
+}
+
+export class Left extends ILabSignal
+{
+  constructor(public user: string) { super(); }
+
+  UnionKey: string = "Left";
+  UnionIndex: number = 1;
+}
+
+export class Said extends ILabSignal
+{
+  constructor(public user: string, public text: string) { super(); }
+
+  UnionKey: string = "Said";
+  UnionIndex: number = 2;
+}
+
+
+
+IonFormatterStorage.register("ILabSignal", {
+  read(reader: CborReader): ILabSignal {
+    const unionIndex = IonFormatterStorage.readStartUnion(reader, "ILabSignal", 3);
+    let value: ILabSignal = null as any;
+
+    if (false)
+    {}
+        else if (unionIndex == 0)
+      value = IonFormatterStorage.get<Joined>("Joined").read(reader);
+    else if (unionIndex == 1)
+      value = IonFormatterStorage.get<Left>("Left").read(reader);
+    else if (unionIndex == 2)
+      value = IonFormatterStorage.get<Said>("Said").read(reader);
+
+    else IonFormatterStorage.invalidUnionIndex("ILabSignal", unionIndex, 3);
+
+    IonFormatterStorage.readEndUnion(reader);
+    return value!;
+  },
+  write(writer: CborWriter, value: ILabSignal): void {
+    writer.writeStartArray(2);
+    writer.writeUInt32(value.UnionIndex);
+    if (false)
+    {}
+        else if (value.UnionIndex == 0) {
+        IonFormatterStorage.get<Joined>("Joined").write(writer, value as Joined);
+    }
+    else if (value.UnionIndex == 1) {
+        IonFormatterStorage.get<Left>("Left").write(writer, value as Left);
+    }
+    else if (value.UnionIndex == 2) {
+        IonFormatterStorage.get<Said>("Said").write(writer, value as Said);
+    }
+  
+    else throw new Error(`Ion union 'ILabSignal' has no case ${value.UnionIndex}; this revision declares 3 case(s)`);
+    writer.writeEndArray();
+  }
+});
+
+
+IonFormatterStorage.register("Joined", {
+  read(reader: CborReader): Joined {
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 1, "Joined");
+    const user = IonFormatterStorage.get<string>('string').read(reader);
+    reader.readEndArrayAndSkip(arraySize - 1);
+    return new Joined(user);
+  },
+  write(writer: CborWriter, value: Joined): void {
+    writer.writeStartArray(1);
+    IonFormatterStorage.get<string>('string').write(writer, value.user);
+    writer.writeEndArray();
+  }
+});
+
+IonFormatterStorage.register("Left", {
+  read(reader: CborReader): Left {
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 1, "Left");
+    const user = IonFormatterStorage.get<string>('string').read(reader);
+    reader.readEndArrayAndSkip(arraySize - 1);
+    return new Left(user);
+  },
+  write(writer: CborWriter, value: Left): void {
+    writer.writeStartArray(1);
+    IonFormatterStorage.get<string>('string').write(writer, value.user);
+    writer.writeEndArray();
+  }
+});
+
+IonFormatterStorage.register("Said", {
+  read(reader: CborReader): Said {
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 2, "Said");
+    const user = IonFormatterStorage.get<string>('string').read(reader);
+    const text = IonFormatterStorage.get<string>('string').read(reader);
+    reader.readEndArrayAndSkip(arraySize - 2);
+    return new Said(user, text);
+  },
+  write(writer: CborWriter, value: Said): void {
+    writer.writeStartArray(2);
+    IonFormatterStorage.get<string>('string').write(writer, value.user);
+    IonFormatterStorage.get<string>('string').write(writer, value.text);
     writer.writeEndArray();
   }
 });
@@ -1158,6 +1305,24 @@ IonFormatterStorage.register("PatchEnvelope", {
     IonFormatterStorage.writeArray<IonPartial<PatchTarget>>(writer, value.many, 'IonPartial<PatchTarget>');
     IonFormatterStorage.writeNullable<IonPartial<PatchTarget>>(writer, value.maybe, 'IonPartial<PatchTarget>');
     IonFormatterStorage.writeNullableArray<IonPartial<PatchTarget>>(writer, value.maybeMany, 'IonPartial<PatchTarget>');
+    writer.writeEndArray();
+  }
+});
+
+IonFormatterStorage.register("LabEvent", {
+  read(reader: CborReader): LabEvent {
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 3, "LabEvent");
+    const seq = IonFormatterStorage.get<i8>('i8').read(reader);
+    const topic = IonFormatterStorage.get<string>('string').read(reader);
+    const body = IonFormatterStorage.get<string>('string').read(reader);
+    reader.readEndArrayAndSkip(arraySize - 3);
+    return { seq, topic, body };
+  },
+  write(writer: CborWriter, value: LabEvent): void {
+    writer.writeStartArray(3);
+    IonFormatterStorage.get<i8>('i8').write(writer, value.seq);
+    IonFormatterStorage.get<string>('string').write(writer, value.topic);
+    IonFormatterStorage.get<string>('string').write(writer, value.body);
     writer.writeEndArray();
   }
 });
@@ -1727,6 +1892,50 @@ export interface IPatchInteraction extends IIonService
 
 
 
+/**
+ * Streaming surface for the stream lifecycle, transport and resilience tests.
+ *
+ * Each method exists to put the server in one particular state: completing, failing, never
+ * yielding on its own, echoing input, ignoring its cancellation token, or pushing large frames.
+ */
+/**
+ * The streams the stream tests drive.
+ */
+export interface IStreamLab extends IIonService
+{
+  /**
+   * `count` consecutive integers starting at `from`, `delayMs` apart.
+   */
+  Count(from: i4, count: i4, delayMs: i4): AsyncIterable<i4>;
+  /**
+   * Yields nothing itself: joins the group `topic` and receives everything by push.
+   */
+  Listen(topic: string): AsyncIterable<LabEvent>;
+  /**
+   * Push-only stream of a union element; joins the group `room:{room}`.
+   */
+  Signals(room: string): AsyncIterable<ILabSignal>;
+  /**
+   * Every input item back, upper-cased, in order.
+   */
+  Echo(input: AsyncIterable<string>): AsyncIterable<string>;
+  /**
+   * `after` items, then an exception.
+   */
+  Explode(after: i4): AsyncIterable<i4>;
+  /**
+   * One item, then ignores its cancellation token for `holdMs` before finishing.
+   */
+  Stubborn(holdMs: i4): AsyncIterable<i4>;
+  /**
+   * `count` payloads of `size` bytes each; byte i of payload n is (n + i) mod 251.
+   */
+  Blobs(size: i4, count: i4): AsyncIterable<bytes>;
+}
+
+
+
+
 export interface IVectorMathInteraction extends IIonService
 {
   Abs(leftOperand: Vector): Promise<Vector>;
@@ -2207,6 +2416,50 @@ export interface IPatchInteraction extends IIonService
    * Messages whose own fields are patches.
    */
   Rewrap(envelope: PatchEnvelope): Promise<PatchEnvelope>;
+}
+
+
+
+
+/**
+ * Streaming surface for the stream lifecycle, transport and resilience tests.
+ *
+ * Each method exists to put the server in one particular state: completing, failing, never
+ * yielding on its own, echoing input, ignoring its cancellation token, or pushing large frames.
+ */
+/**
+ * The streams the stream tests drive.
+ */
+export interface IStreamLab extends IIonService
+{
+  /**
+   * `count` consecutive integers starting at `from`, `delayMs` apart.
+   */
+  Count(from: i4, count: i4, delayMs: i4): AsyncIterable<i4>;
+  /**
+   * Yields nothing itself: joins the group `topic` and receives everything by push.
+   */
+  Listen(topic: string): AsyncIterable<LabEvent>;
+  /**
+   * Push-only stream of a union element; joins the group `room:{room}`.
+   */
+  Signals(room: string): AsyncIterable<ILabSignal>;
+  /**
+   * Every input item back, upper-cased, in order.
+   */
+  Echo(input: AsyncIterable<string>): AsyncIterable<string>;
+  /**
+   * `after` items, then an exception.
+   */
+  Explode(after: i4): AsyncIterable<i4>;
+  /**
+   * One item, then ignores its cancellation token for `holdMs` before finishing.
+   */
+  Stubborn(holdMs: i4): AsyncIterable<i4>;
+  /**
+   * `count` payloads of `size` bytes each; byte i of payload n is (n + i) mod 251.
+   */
+  Blobs(size: i4, count: i4): AsyncIterable<bytes>;
 }
 
 
@@ -3256,6 +3509,135 @@ export class PatchInteraction_Executor extends ServiceExecutor<IPatchInteraction
 
 IonFormatterStorage.registerClientExecutor<IPatchInteraction>('PatchInteraction', PatchInteraction_Executor);
 
+/**
+ * The streams the stream tests drive.
+ */
+export class StreamLab_Executor extends ServiceExecutor<IStreamLab> implements IStreamLab {
+  constructor(public ctx: IonClientContext, private signal: AbortSignal) {
+      super();
+  }
+
+  
+  /**
+   * `count` consecutive integers starting at `from`, `delayMs` apart.
+   */
+  Count(from: i4, count: i4, delayMs: i4): AsyncIterable<i4> {
+    const ws = new IonWsClient(this.ctx, "IStreamLab", "Count");
+    
+    const writer = new CborWriter();
+    
+    writer.writeStartArray(3);
+    
+    IonFormatterStorage.get<i4>('i4').write(writer, from);
+    IonFormatterStorage.get<i4>('i4').write(writer, count);
+    IonFormatterStorage.get<i4>('i4').write(writer, delayMs);
+    
+    writer.writeEndArray();
+    
+    return ws.callServerStreaming<i4>("i4", writer.data, this.signal);
+  }
+  /**
+   * Yields nothing itself: joins the group `topic` and receives everything by push.
+   */
+  Listen(topic: string): AsyncIterable<LabEvent> {
+    const ws = new IonWsClient(this.ctx, "IStreamLab", "Listen");
+    
+    const writer = new CborWriter();
+    
+    writer.writeStartArray(1);
+    
+    IonFormatterStorage.get<string>('string').write(writer, topic);
+    
+    writer.writeEndArray();
+    
+    return ws.callServerStreaming<LabEvent>("LabEvent", writer.data, this.signal);
+  }
+  /**
+   * Push-only stream of a union element; joins the group `room:{room}`.
+   */
+  Signals(room: string): AsyncIterable<ILabSignal> {
+    const ws = new IonWsClient(this.ctx, "IStreamLab", "Signals");
+    
+    const writer = new CborWriter();
+    
+    writer.writeStartArray(1);
+    
+    IonFormatterStorage.get<string>('string').write(writer, room);
+    
+    writer.writeEndArray();
+    
+    return ws.callServerStreaming<ILabSignal>("ILabSignal", writer.data, this.signal);
+  }
+  /**
+   * Every input item back, upper-cased, in order.
+   */
+  Echo(inputStream: AsyncIterable<string>): AsyncIterable<string> {
+    const ws = new IonWsClient(this.ctx, "IStreamLab", "Echo");
+    
+    const writer = new CborWriter();
+    
+    writer.writeStartArray(0);
+    
+    
+    
+    writer.writeEndArray();
+    
+    return ws.callServerStreamingFullDuplex<string, string>("string", writer.data, inputStream, "string", this.signal);
+  }
+  /**
+   * `after` items, then an exception.
+   */
+  Explode(after: i4): AsyncIterable<i4> {
+    const ws = new IonWsClient(this.ctx, "IStreamLab", "Explode");
+    
+    const writer = new CborWriter();
+    
+    writer.writeStartArray(1);
+    
+    IonFormatterStorage.get<i4>('i4').write(writer, after);
+    
+    writer.writeEndArray();
+    
+    return ws.callServerStreaming<i4>("i4", writer.data, this.signal);
+  }
+  /**
+   * One item, then ignores its cancellation token for `holdMs` before finishing.
+   */
+  Stubborn(holdMs: i4): AsyncIterable<i4> {
+    const ws = new IonWsClient(this.ctx, "IStreamLab", "Stubborn");
+    
+    const writer = new CborWriter();
+    
+    writer.writeStartArray(1);
+    
+    IonFormatterStorage.get<i4>('i4').write(writer, holdMs);
+    
+    writer.writeEndArray();
+    
+    return ws.callServerStreaming<i4>("i4", writer.data, this.signal);
+  }
+  /**
+   * `count` payloads of `size` bytes each; byte i of payload n is (n + i) mod 251.
+   */
+  Blobs(size: i4, count: i4): AsyncIterable<bytes> {
+    const ws = new IonWsClient(this.ctx, "IStreamLab", "Blobs");
+    
+    const writer = new CborWriter();
+    
+    writer.writeStartArray(2);
+    
+    IonFormatterStorage.get<i4>('i4').write(writer, size);
+    IonFormatterStorage.get<i4>('i4').write(writer, count);
+    
+    writer.writeEndArray();
+    
+    return ws.callServerStreaming<bytes>("bytes", writer.data, this.signal);
+  }
+
+}
+
+IonFormatterStorage.registerClientExecutor<IStreamLab>('StreamLab', StreamLab_Executor);
+
 export class VectorMathInteraction_Executor extends ServiceExecutor<IVectorMathInteraction> implements IVectorMathInteraction {
   constructor(public ctx: IonClientContext, private signal: AbortSignal) {
       super();
@@ -3392,12 +3774,28 @@ export class VectorMathInteraction_Executor extends ServiceExecutor<IVectorMathI
 IonFormatterStorage.registerClientExecutor<IVectorMathInteraction>('VectorMathInteraction', VectorMathInteraction_Executor);
 
 
-export function createClient(endpoint: string, interceptors: IonInterceptor[]) {
-  const ctx = {
+/**
+ * A client for every service in this module.
+ *
+ * `options.streamOptions` configures `stream` calls (transport order, heartbeat, reconnect);
+ * `options.sessionId` identifies this client instance to the server across calls (a fresh one
+ * by default); `options.signal` cancels every call made through the client.
+ */
+export function createClient(
+  endpoint: string,
+  interceptors: IonInterceptor[],
+  options?: { streamOptions?: IonStreamOptions; sessionId?: string; signal?: AbortSignal }
+) {
+  const ctx: IonClientContext = {
     baseUrl: endpoint,
-    interceptors: interceptors
-  } as IonClientContext;
+    interceptors: interceptors,
+    sessionId: options?.sessionId ?? crypto.randomUUID(),
+    streamOptions: options?.streamOptions
+  };
   const controller = new AbortController();
+  const outer = options?.signal;
+  if (outer?.aborted) controller.abort(outer.reason);
+  else outer?.addEventListener("abort", () => controller.abort(outer.reason), { once: true });
 
   return new Proxy(
     {},
@@ -3413,6 +3811,7 @@ export function createClient(endpoint: string, interceptors: IonInterceptor[]) {
         if (propKey === "MathInteraction") return IonFormatterStorage.createExecutor("MathInteraction", ctx, controller.signal);
         if (propKey === "RandomStreamInteraction") return IonFormatterStorage.createExecutor("RandomStreamInteraction", ctx, controller.signal);
         if (propKey === "PatchInteraction") return IonFormatterStorage.createExecutor("PatchInteraction", ctx, controller.signal);
+        if (propKey === "StreamLab") return IonFormatterStorage.createExecutor("StreamLab", ctx, controller.signal);
         if (propKey === "VectorMathInteraction") return IonFormatterStorage.createExecutor("VectorMathInteraction", ctx, controller.signal);
 
 
@@ -3429,6 +3828,7 @@ export function createClient(endpoint: string, interceptors: IonInterceptor[]) {
     MathInteraction: IMathInteraction;
     RandomStreamInteraction: IRandomStreamInteraction;
     PatchInteraction: IPatchInteraction;
+    StreamLab: IStreamLab;
     VectorMathInteraction: IVectorMathInteraction;
 
   };

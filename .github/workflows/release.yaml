@@ -18,6 +18,8 @@ on:
       - "src/ion.runtime/**"
       - "src/ion.runtime.client/**"
       - "src/ion.runtime.network/**"
+      - "src/ion.runtime.network.redis/**"
+      - "src/ion.runtime.streams/**"
       - "src/ion.compiler/**"
       - "src/ionc/**"
       - "GitVersion.yml"
@@ -55,8 +57,14 @@ jobs:
       - name: Pack ion.runtime.client
         run: dotnet pack src/ion.runtime.client/ion.runtime.client.csproj -c Release -o ./nupkgs
 
+      - name: Pack ion.runtime.streams
+        run: dotnet pack src/ion.runtime.streams/ion.runtime.streams.csproj -c Release -o ./nupkgs
+
       - name: Pack ion.runtime.network
         run: dotnet pack src/ion.runtime.network/ion.runtime.network.csproj -c Release -o ./nupkgs
+
+      - name: Pack ion.runtime.network.redis
+        run: dotnet pack src/ion.runtime.network.redis/ion.runtime.network.redis.csproj -c Release -o ./nupkgs
 
       - name: Pack ion.compiler (tool and MSBuild SDK)
         run: dotnet pack src/ionc/ionc.csproj -c Release -o ./nupkgs

@@ -1,0 +1,43 @@
+//! Streaming surface for the stream lifecycle, transport and resilience tests.
+//!
+//! Each method exists to put the server in one particular state: completing, failing, never
+//! yielding on its own, echoing input, ignoring its cancellation token, or pushing large frames.
+
+/// An event pushed to the listeners of a topic.
+msg LabEvent {
+    /// Monotonic per publisher, so a test can check order and gaps.
+    seq: i8;
+    topic: string;
+    body: string;
+}
+
+/// A union element, to prove a push of one case reaches a stream of the union with its envelope.
+union LabSignal {
+    Joined(user: string),
+    Left(user: string),
+    Said(user: string, text: string)
+}
+
+/// The streams the stream tests drive.
+service StreamLab() {
+    /// `count` consecutive integers starting at `from`, `delayMs` apart.
+    stream Count(from: i4, count: i4, delayMs: i4): i4;
+
+    /// Yields nothing itself: joins the group `topic` and receives everything by push.
+    stream Listen(topic: string): LabEvent;
+
+    /// Push-only stream of a union element; joins the group `room:{room}`.
+    stream Signals(room: string): LabSignal;
+
+    /// Every input item back, upper-cased, in order.
+    stream Echo(stream input: string): string;
+
+    /// `after` items, then an exception.
+    stream Explode(after: i4): i4;
+
+    /// One item, then ignores its cancellation token for `holdMs` before finishing.
+    stream Stubborn(holdMs: i4): i4;
+
+    /// `count` payloads of `size` bytes each; byte i of payload n is (n + i) mod 251.
+    stream Blobs(size: i4, count: i4): bytes;
+}

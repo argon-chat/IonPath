@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<TargetFramework>net10.0</TargetFramework>
@@ -16,6 +16,7 @@
 	</ItemGroup>
 	<ItemGroup>
 	  <ProjectReference Include="..\ion.runtime\ion.runtime.csproj" />
+	  <ProjectReference Include="..\ion.runtime.streams\ion.runtime.streams.csproj" />
 	</ItemGroup>	
 	<ItemGroup>
 		<None Update="icon-128.png">

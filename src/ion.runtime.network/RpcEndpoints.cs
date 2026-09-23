@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
@@ -33,6 +35,9 @@ public static class RpcEndpoints
             services.Configure<IonTransportOptions>(_ => { });
             services.AddSingleton<IonDescriptorStorage>();
             services.AddSingleton<IonRequestTerminatorStorage>();
+            services.AddIonStreamHub();
+            services.TryAddScoped<IIonStreamContextAccessor, IonStreamContextHolder>();
+            services.TryAddSingleton<IonStreamResumeRegistry>();
             var reg = new IonDescriptorRegistration(services);
             onRegistration(reg);
 
@@ -77,6 +82,19 @@ public static class RpcEndpoints
             return services;
         }
 
+        /// <summary>Registers a global stream connect/disconnect hook; see <see cref="IIonStreamLifecycle"/>.</summary>
+        public IServiceCollection AddIonStreamLifecycle<TImplementation>()
+            where TImplementation : class, IIonStreamLifecycle
+        {
+            services.TryAddScoped<TImplementation>();
+            services.Configure<IonTransportOptions>(options =>
+            {
+                if (!options.StreamLifecycles.Contains(typeof(TImplementation)))
+                    options.StreamLifecycles.Add(typeof(TImplementation));
+            });
+            return services;
+        }
+
         public IServiceCollection AddIonInterceptor<TImplementation>(int? port = null)
             where TImplementation : class, IIonInterceptor
         {
@@ -110,18 +128,6 @@ public static class RpcEndpoints
 
     public const string IonStatusCode = "X-Ion-Status";
     public const string SubProtocolTemplate = "ion; ticket={ticket}; ver=1";
-
-    static class IonWs
-    {
-        public const byte OPCODE_DATA = 0x00;
-        public const byte OPCODE_END = 0x01;
-        public const byte OPCODE_ERROR = 0x02;
-    }
-
-    // Cached opcode frames to avoid allocations
-    private static readonly byte[] OpcodeDataFrame = [IonWs.OPCODE_DATA];
-    private static readonly byte[] OpcodeEndFrame = [IonWs.OPCODE_END];
-    private static readonly byte[] OpcodeErrorFrame = [IonWs.OPCODE_ERROR];
 
     private static IIonInterceptor[] ResolveInterceptors(
         IEnumerable<IIonInterceptor> globalInterceptors,
@@ -304,233 +310,10 @@ public static class RpcEndpoints
             .Produces(StatusCodes.Status500InternalServerError, contentType: IonContentType);
         ;
 
-        app.Map("/ion/{interfaceName}/{methodName}.ws", async (HttpContext http,
-            string interfaceName,
-            string methodName,
-            [FromServices] IonDescriptorStorage store,
-            [FromServices] IServiceProvider provider,
-            [FromServices] IOptions<IonTransportOptions> transportOptions,
-            [FromServices] ILoggerFactory lf,
-            CancellationToken ct) =>
-        {
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-            var log = lf.CreateLogger("RPC.WS");
-            var endpoint = $"{interfaceName}/{methodName}";
-
-            IonInstruments.IncrementActiveConnections("ws");
-
-            try
-            {
-                // Extract correlation from HTTP upgrade request headers (with query param fallback for WebSocket)
-                var sessionId = http.Request.Headers[IonCorrelationHeaders.SessionId].FirstOrDefault()
-                    ?? http.Request.Query["sid"].FirstOrDefault();
-                var correlationId = http.Request.Headers[IonCorrelationHeaders.CorrelationId].FirstOrDefault()
-                    ?? http.Request.Query["cid"].FirstOrDefault();
-                if (string.IsNullOrEmpty(correlationId) && transportOptions.Value.GenerateCorrelationIdIfMissing)
-                    correlationId = Guid.NewGuid().ToString("N");
-
-                if (!string.IsNullOrEmpty(correlationId))
-                    http.Response.Headers.Append(IonCorrelationHeaders.CorrelationId, correlationId);
-                if (!string.IsNullOrEmpty(sessionId))
-                    http.Response.Headers.Append(IonCorrelationHeaders.SessionId, sessionId);
-
-                using var logScope = log.BeginScope(new Dictionary<string, object?>
-                {
-                    ["SessionId"] = sessionId,
-                    ["CorrelationId"] = correlationId
-                });
-
-                await using var scope = provider.CreateAsyncScope();
-                var router = store.GetStreamRouter(interfaceName, scope);
-                var ticketExchange = provider.GetService<IIonTicketExchange>();
-
-                if (!http.WebSockets.IsWebSocketRequest)
-                {
-                    log.LogWarning("UNSUPPORTED_TRANSPORT");
-                    http.Response.StatusCode = StatusCodes.Status412PreconditionFailed;
-                    await WriteError(log, http.Response, "UNSUPPORTED_TRANSPORT", $"Transport must be WebSocket");
-                    sw.Stop();
-                    IonInstruments.RecordRequest("ws", endpoint, http.Response.StatusCode);
-                    IonInstruments.RecordRequestDuration("ws", endpoint, sw.Elapsed.TotalMilliseconds);
-                    IonInstruments.RecordError("ws", endpoint, "UNSUPPORTED_TRANSPORT");
-                    return;
-                }
-
-                if (!store.IsServiceAllowedOnPort(interfaceName, http.Connection.LocalPort))
-                {
-                    http.Response.StatusCode = StatusCodes.Status404NotFound;
-                    sw.Stop();
-                    IonInstruments.RecordRequest("ws", endpoint, http.Response.StatusCode);
-                    IonInstruments.RecordRequestDuration("ws", endpoint, sw.Elapsed.TotalMilliseconds);
-                    return;
-                }
-
-                if (router is null)
-                {
-                    log.LogWarning("ENTRYPOINT_NOT_FOUND");
-                    http.Response.StatusCode = StatusCodes.Status412PreconditionFailed;
-                    await WriteError(log, http.Response, "ENTRYPOINT_NOT_FOUND",
-                        $"Method {methodName} is not server-streaming");
-                    sw.Stop();
-                    IonInstruments.RecordRequest("ws", endpoint, http.Response.StatusCode);
-                    IonInstruments.RecordRequestDuration("ws", endpoint, sw.Elapsed.TotalMilliseconds);
-                    IonInstruments.RecordError("ws", endpoint, "ENTRYPOINT_NOT_FOUND");
-                    return;
-                }
-
-                var subProtocol = http.WebSockets.WebSocketRequestedProtocols.FirstOrDefault(x => x.StartsWith("ion"));
-
-                if (string.IsNullOrEmpty(subProtocol) && ticketExchange is not null)
-                {
-                    log.LogWarning("UNSUPPORTED_SUB_PROTOCOL");
-                    http.Response.StatusCode = StatusCodes.Status412PreconditionFailed;
-                    await WriteError(log, http.Response, "UNSUPPORTED_SUB_PROTOCOL",
-                        $"Transport sub-protocol must be ion");
-                    sw.Stop();
-                    IonInstruments.RecordRequest("ws", endpoint, http.Response.StatusCode);
-                    IonInstruments.RecordRequestDuration("ws", endpoint, sw.Elapsed.TotalMilliseconds);
-                    IonInstruments.RecordError("ws", endpoint, "UNSUPPORTED_SUB_PROTOCOL");
-                    return;
-                }
-
-                var ticket = string.IsNullOrEmpty(subProtocol)
-                    ? null
-                    : IonTicketExtractor.ExtractTicketBytes(subProtocol);
-
-                if (ticket is null && ticketExchange is not null)
-                {
-                    log.LogWarning("TICKET_BROKEN");
-                    http.Response.StatusCode = StatusCodes.Status412PreconditionFailed;
-                    await WriteError(log, http.Response, "TICKET_BROKEN", $"Transport ticket has been broken");
-                    sw.Stop();
-                    IonInstruments.RecordRequest("ws", endpoint, http.Response.StatusCode);
-                    IonInstruments.RecordRequestDuration("ws", endpoint, sw.Elapsed.TotalMilliseconds);
-                    IonInstruments.RecordError("ws", endpoint, "TICKET_BROKEN");
-                    return;
-                }
-
-                object? ticketData = null;
-
-                if (ticketExchange is not null)
-                {
-                    var (error, t) =
-                        await ticketExchange.OnExchangeTransactionAsync(ticket.Value).ConfigureAwait(true);
-                    ticketData = t;
-                    if (error is not null)
-                    {
-                        log.LogWarning(error.ToString());
-                        // Every other failure branch sets a status before writing the body; this one did not, so a
-                        // refused ticket answered 200 OK with an error payload. A WebSocket client sees only that
-                        // the handshake did not upgrade — "Incomplete handshake, status code: 200" — with no way to
-                        // reach the reason. 401 rather than the neighbouring 412: the ticket parsed fine, it was
-                        // rejected.
-                        http.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                        await WriteError(http.Response, error.Value);
-                        sw.Stop();
-                        IonInstruments.RecordRequest("ws", endpoint, http.Response.StatusCode);
-                        IonInstruments.RecordRequestDuration("ws", endpoint, sw.Elapsed.TotalMilliseconds);
-                        IonInstruments.RecordError("ws", endpoint, error.Value.code);
-                        return;
-                    }
-                }
-
-
-                using var ws = await http.WebSockets.AcceptWebSocketAsync(subProtocol).ConfigureAwait(true);
-
-                var invokeMsg = await ReceiveSetupMessageAsync(ws, ct).ConfigureAwait(true);
-
-                if (invokeMsg.messageType == WebSocketMessageType.Close)
-                {
-                    await CloseGracefullyAsync(ws, "ack", ct);
-                    sw.Stop();
-                    IonInstruments.RecordRequest("ws", endpoint, StatusCodes.Status200OK);
-                    IonInstruments.RecordRequestDuration("ws", endpoint, sw.Elapsed.TotalMilliseconds);
-                    return;
-                }
-
-                if (invokeMsg.messageType != WebSocketMessageType.Binary || invokeMsg.payload.Length == 0)
-                {
-                    await CloseGracefullyAsync(ws, "Expected binary INVOKE frame", ct);
-                    sw.Stop();
-                    IonInstruments.RecordRequest("ws", endpoint, StatusCodes.Status400BadRequest);
-                    IonInstruments.RecordRequestDuration("ws", endpoint, sw.Elapsed.TotalMilliseconds);
-                    IonInstruments.RecordError("ws", endpoint, "INVALID_FRAME");
-                    return;
-                }
-
-                var reader = new CborReader(invokeMsg.payload);
-
-                try
-                {
-                    if (ticketExchange is not null)
-                        ticketExchange.OnTicketApply(ticketData!);
-
-                    var inputStream = router.IsAllowInputStream(methodName) ? ReadIncomingStreamAsync(ws, ct) : null;
-
-                    await foreach (var encodedItem in router
-                                       .StreamRouteExecuteAsync(methodName, reader, inputStream, ct)
-                                       .ConfigureAwait(true))
-                        await SendOpFrameAsync(ws, IonWs.OPCODE_DATA, encodedItem, ct);
-
-                    await SendOpFrameAsync(ws, IonWs.OPCODE_END, ReadOnlyMemory<byte>.Empty, ct);
-                    await CloseGracefullyAsync(ws, "done", ct);
-
-                    sw.Stop();
-                    IonInstruments.RecordRequest("ws", endpoint, StatusCodes.Status200OK);
-                    IonInstruments.RecordRequestDuration("ws", endpoint, sw.Elapsed.TotalMilliseconds);
-                }
-                catch (OperationCanceledException)
-                {
-                    try
-                    {
-                        await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "cancel", CancellationToken.None);
-                    }
-                    catch
-                    {
-                    }
-
-                    sw.Stop();
-                    IonInstruments.RecordRequest("ws", endpoint, StatusCodes.Status499ClientClosedRequest);
-                    IonInstruments.RecordRequestDuration("ws", endpoint, sw.Elapsed.TotalMilliseconds);
-                    IonInstruments.RecordError("ws", endpoint, "OPERATION_CANCELLED");
-                }
-                catch (Exception ex)
-                {
-                    log.LogError(ex, "WS handler failed for {Endpoint}", endpoint);
-                    try
-                    {
-                        var err = IonErrorSanitizer.Sanitize(ex, transportOptions.Value.DetailedErrors);
-                        var writer = new CborWriter();
-                        IonFormatterStorage<IonProtocolError>.Write(writer, err);
-                        var bytes = writer.Encode();
-                        await SendOpFrameAsync(ws, IonWs.OPCODE_ERROR, bytes, ct);
-                    }
-                    catch
-                    {
-                    }
-
-                    try
-                    {
-                        await ws.CloseAsync(WebSocketCloseStatus.InternalServerError, "exception",
-                            CancellationToken.None);
-                    }
-                    catch (Exception closeEx)
-                    {
-                        log.LogWarning(closeEx, "Failed to close WebSocket gracefully for {Endpoint}", endpoint);
-                    }
-
-                    sw.Stop();
-                    IonInstruments.RecordRequest("ws", endpoint, StatusCodes.Status500InternalServerError);
-                    IonInstruments.RecordRequestDuration("ws", endpoint, sw.Elapsed.TotalMilliseconds);
-                    IonInstruments.RecordError("ws", endpoint, "INTERNAL_ERROR");
-                }
-            }
-            finally
-            {
-                IonInstruments.DecrementActiveConnections("ws");
-            }
-        });
-
+        // One handler for both transports; the request says which one it is. `.wt` is the path
+        // WebTransport clients use, `.ws` the WebSocket one — either accepts either.
+        app.Map("/ion/{interfaceName}/{methodName}.ws", IonStreamEndpoint.HandleAsync);
+        app.Map("/ion/{interfaceName}/{methodName}.wt", IonStreamEndpoint.HandleAsync);
 
         app.MapPost("/ion/{interfaceName}/{methodName}.unary", async (
                 string interfaceName, string methodName,
@@ -711,167 +494,6 @@ public static class RpcEndpoints
         resp.ContentType = IonContentType;
         resp.Headers.Append(IonStatusCode, error.code);
         await IonBinarySerializer.SerializeAsync(error, async memory => { await resp.BodyWriter.WriteAsync(memory); });
-    }
-
-    private static async Task SendOpFrameAsync(
-        WebSocket ws,
-        byte opcode,
-        ReadOnlyMemory<byte> cborPayload,
-        CancellationToken ct)
-    {
-        if (cborPayload.IsEmpty)
-        {
-            var frame = opcode switch
-            {
-                IonWs.OPCODE_DATA => OpcodeDataFrame,
-                IonWs.OPCODE_END => OpcodeEndFrame,
-                IonWs.OPCODE_ERROR => OpcodeErrorFrame,
-                _ => [opcode]
-            };
-            await ws.SendAsync(frame, WebSocketMessageType.Binary, true, ct).ConfigureAwait(false);
-            return;
-        }
-
-        var rented = ArrayPool<byte>.Shared.Rent(cborPayload.Length + 1);
-        try
-        {
-            rented[0] = opcode;
-            cborPayload.Span.CopyTo(rented.AsSpan(1));
-            await ws.SendAsync(new ArraySegment<byte>(rented, 0, cborPayload.Length + 1), WebSocketMessageType.Binary,
-                true, ct).ConfigureAwait(false);
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(rented);
-        }
-    }
-
-
-    private static async Task<(WebSocketMessageType messageType, ReadOnlyMemory<byte> payload)>
-        ReceiveSetupMessageAsync(
-            WebSocket ws,
-            CancellationToken ct)
-    {
-        var buffer = ArrayPool<byte>.Shared.Rent(64 * 1024);
-        try
-        {
-            using var ms = new MemoryStream(64 * 1024);
-            WebSocketReceiveResult result;
-            do
-            {
-                var seg = new ArraySegment<byte>(buffer);
-                result = await ws.ReceiveAsync(seg, ct).ConfigureAwait(false);
-                if (result.MessageType == WebSocketMessageType.Close)
-                    return (result.MessageType, ReadOnlyMemory<byte>.Empty);
-                if (result.Count > 0)
-                    ms.Write(buffer, 0, result.Count);
-            } while (!result.EndOfMessage);
-
-            // Copy data before returning buffer to pool to avoid use-after-return
-            return (WebSocketMessageType.Binary, ms.ToArray());
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(buffer);
-        }
-    }
-
-    private static async Task CloseGracefullyAsync(WebSocket ws, string message, CancellationToken ct)
-    {
-        try
-        {
-            if (ws.State == WebSocketState.CloseReceived)
-                await ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, message, ct).ConfigureAwait(false);
-            else if (ws.State == WebSocketState.Open)
-                await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, message, ct).ConfigureAwait(false);
-        }
-        catch
-        {
-            // Ignore close errors - connection may already be terminated
-        }
-    }
-
-    private static async Task<(WebSocketMessageType messageType, byte opcode, ReadOnlyMemory<byte> payload)>
-        ReceiveOpFrameAsync(WebSocket ws, CancellationToken ct)
-    {
-        var rented = ArrayPool<byte>.Shared.Rent(64 * 1024);
-        try
-        {
-            var segment = new ArraySegment<byte>(rented);
-            var result = await ws.ReceiveAsync(segment, ct).ConfigureAwait(false);
-
-            if (result.MessageType == WebSocketMessageType.Close)
-                return (result.MessageType, 0, ReadOnlyMemory<byte>.Empty);
-
-            if (result.MessageType != WebSocketMessageType.Binary || result.Count == 0)
-                throw new InvalidOperationException("Expected non-empty binary frame");
-
-            var opcode = rented[0];
-            // Copy payload before returning buffer to pool
-            var payload = result.Count > 1
-                ? rented.AsSpan(1, result.Count - 1).ToArray()
-                : [];
-
-            return (result.MessageType, opcode, payload);
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(rented);
-        }
-    }
-
-    sealed class WebSocketScope(WebSocket ws) : IAsyncDisposable
-    {
-        public async ValueTask DisposeAsync()
-        {
-            if (ws.State is WebSocketState.Open or WebSocketState.CloseReceived)
-            {
-                try
-                {
-                    await ws.CloseAsync(
-                        WebSocketCloseStatus.NormalClosure,
-                        "Stream disposed",
-                        CancellationToken.None
-                    ).ConfigureAwait(false);
-                }
-                catch
-                {
-                }
-            }
-        }
-    }
-
-    public static async IAsyncEnumerable<ReadOnlyMemory<byte>> ReadIncomingStreamAsync(
-        WebSocket ws,
-        [EnumeratorCancellation] CancellationToken ct)
-    {
-        await using var _ = new WebSocketScope(ws);
-
-        while (!ct.IsCancellationRequested)
-        {
-            var (msgType, opcode, payload) = await ReceiveOpFrameAsync(ws, ct).ConfigureAwait(false);
-
-            if (msgType == WebSocketMessageType.Close)
-                yield break;
-
-            switch (opcode)
-            {
-                case IonWs.OPCODE_DATA:
-                    if (payload.IsEmpty)
-                        yield break;
-                    yield return payload;
-                    break;
-
-                case IonWs.OPCODE_END:
-                    yield break;
-
-                case IonWs.OPCODE_ERROR:
-                    throw new InvalidOperationException("Received OPCODE_ERROR from client");
-
-                default:
-                    throw new InvalidOperationException($"Unknown opcode {opcode}");
-            }
-        }
     }
 
     /// <summary>

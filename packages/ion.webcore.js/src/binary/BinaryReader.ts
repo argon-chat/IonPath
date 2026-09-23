@@ -25,6 +25,18 @@ export class BinaryReader {
     }
   }
 
+  /**
+   * Points the reader at `bytes[start, end)` and rewinds it.
+   *
+   * Lets a caller that decodes one small payload after another — a stream client reading frames
+   * — keep one reader instead of allocating a reader per payload. The window is taken by
+   * reference, not copied: the bytes must stay unchanged until the reader is done with them.
+   */
+  reset(bytes: Uint8Array, start = 0, end = bytes.byteLength) {
+    this.view = new DataView(bytes.buffer, bytes.byteOffset + start, end - start);
+    this.offset = 0;
+  }
+
   get position() {
     return this.offset;
   }

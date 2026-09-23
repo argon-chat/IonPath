@@ -1,4 +1,4 @@
-﻿namespace ion.runtime.network;
+namespace ion.runtime.network;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -8,11 +8,21 @@ public interface IIonTransportRegistration
         where TInterface : class, IIonService
         where TImpl : class, TInterface;
 
-    IIonTransportRegistration AddInterceptor<TImpl>(int? port = null) 
+    IIonTransportRegistration AddInterceptor<TImpl>(int? port = null)
         where TImpl : class, IIonInterceptor;
 
     IIonTransportRegistration IonWithSubProtocolTicketExchange<T>()
         where T : class, IIonTicketExchange;
+
+    /// <summary>
+    /// Registers connect/disconnect hooks that run for every stream, before the service's own
+    /// (on connect) and after them (on disconnect). Resolved from each connection's scope.
+    /// </summary>
+    IIonTransportRegistration AddStreamLifecycle<T>()
+        where T : class, IIonStreamLifecycle;
+
+    /// <summary>Configures heartbeats, timeouts and limits for stream calls.</summary>
+    IIonTransportRegistration ConfigureStreams(Action<IonStreamOptions> configure);
 }
 
 
@@ -46,5 +56,15 @@ internal readonly struct IonDescriptorRegistration(IServiceCollection col) : IIo
         return this;
     }
 
+    public IIonTransportRegistration AddStreamLifecycle<T>() where T : class, IIonStreamLifecycle
+    {
+        col.AddIonStreamLifecycle<T>();
+        return this;
+    }
 
+    public IIonTransportRegistration ConfigureStreams(Action<IonStreamOptions> configure)
+    {
+        col.Configure(configure);
+        return this;
+    }
 }

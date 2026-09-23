@@ -13,7 +13,7 @@ readme = "README.md"
 [dependencies]
 minicbor = { version = "2", features = ["std", "half"] }
 reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
-tokio = { version = "1", features = ["rt", "macros", "sync"] }
+tokio = { version = "1", features = ["rt", "macros", "sync", "time", "net"] }
 tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"] }
 futures-util = "0.3"
 uuid = { version = "1", features = ["v4"] }
@@ -28,3 +28,5 @@ serde_json = "1"
 # tests/float_golden.rs builds f2 values from their IEEE bit patterns; `half` is already in the
 # tree as minicbor's "half" feature dependency.
 half = "2"
+# tests/streaming_v2.rs runs an in-process WebSocket server on a multi-threaded runtime.
+tokio = { version = "1", features = ["rt-multi-thread", "net", "time", "macros", "io-util"] }

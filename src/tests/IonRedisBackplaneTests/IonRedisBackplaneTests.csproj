@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<LangVersion>latest</LangVersion>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<IsPackable>false</IsPackable>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="coverlet.collector" Version="10.0.0">
+		  <PrivateAssets>all</PrivateAssets>
+		  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+		<PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.4.0" />
+		<PackageReference Include="NUnit" Version="4.5.1" />
+		<PackageReference Include="NUnit.Analyzers" Version="4.12.0">
+		  <PrivateAssets>all</PrivateAssets>
+		  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+		<PackageReference Include="NUnit3TestAdapter" Version="6.2.0" />
+		<PackageReference Include="Testcontainers" Version="4.13.0" />
+		<!-- Testcontainers 4.13 pulls SSH.NET 2025.1.0, which has known vulnerabilities (NU1903); 4.14+ moved to this one. -->
+		<PackageReference Include="SSH.NET" Version="2026.0.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\ion.runtime.network.redis\ion.runtime.network.redis.csproj" />
+		<!-- Only for the test that registers the backplane next to AddIonProtocol; the library itself needs no web stack. -->
+		<ProjectReference Include="..\..\ion.runtime.network\ion.runtime.network.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Using Include="NUnit.Framework" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <PackageReference Update="Microsoft.SourceLink.GitHub" Version="10.0.203" />
+	</ItemGroup>
+
+</Project>

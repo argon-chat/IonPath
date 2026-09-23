@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<TargetFramework>net10.0</TargetFramework>
@@ -22,10 +22,15 @@
 		  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
 		<PackageReference Include="NUnit3TestAdapter" Version="6.2.0" />
+		<!-- Dragonfly for the cross-node backplane tests (Streaming/Backplane). -->
+		<PackageReference Include="Testcontainers" Version="4.13.0" />
+		<!-- Testcontainers 4.13 pulls SSH.NET 2025.1.0, which has known vulnerabilities (NU1903). -->
+		<PackageReference Include="SSH.NET" Version="2026.0.0" />
 	</ItemGroup>
 
 	<ItemGroup>
 		<ProjectReference Include="..\TestServer\TestServer.csproj" />
+		<ProjectReference Include="..\..\ion.runtime.network.redis\ion.runtime.network.redis.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

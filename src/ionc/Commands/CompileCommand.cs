@@ -13,6 +13,7 @@ using System.Numerics;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 
 public class CompileOptions : CommandSettings
 {
@@ -646,46 +647,22 @@ public class CompileCommand : AsyncCommand<CompileOptions>
 
         fileBuilder.AppendLine(generator.FileHeader());
 
-        fileBuilder.AppendLine(
+        // The body first, so the imports can be limited to what it uses: an unused import fails a
+        // consumer's `noUnusedLocals` just as surely as a missing one fails the build.
+        var body = new StringBuilder();
+        body.AppendLine(
             """
-            import { 
-              CborReader, 
-              CborWriter, 
-              
-              DateOnly, 
-              IonDateTime, 
-              IonDecimal, 
-              Duration, 
-              TimeOnly, 
-              Guid, 
-              
-              IonFormatterStorage,
-
-              IonArray,
-              IonMaybe,
-              IonPartial,
-
-              IIonService,
-              IIonUnion,
-              
-              ServiceExecutor,
-              IonClientContext,
-              IonRequest,
-              IonWsClient,
-              IonInterceptor
-            } from "@argon-chat/ion.webcore";
-
-            type guid = Guid;
-            type timeonly = TimeOnly;
-            type duration = Duration;
+            declare type guid = Guid;
+            declare type timeonly = TimeOnly;
+            declare type duration = Duration;
             // IonDateTime, never the deprecated `DateTimeOffset { date: Date; offsetMinutes }`
             // shape: `Date` is millisecond-resolution, so it cannot hold the 100ns ticks the
             // wire form carries, and the webcore "datetime" formatter now reads and writes
             // IonDateTime — leaving the old alias here would be a live type mismatch, not just
             // a lossy one.
-            type datetime = IonDateTime;
-            type decimal = IonDecimal;
-            type dateonly = DateOnly;
+            declare type datetime = IonDateTime;
+            declare type decimal = IonDecimal;
+            declare type dateonly = DateOnly;
 
             declare type bool = boolean;
 
@@ -726,16 +703,16 @@ public class CompileCommand : AsyncCommand<CompileOptions>
         var distinctDefsList = allDefinitions.DistinctBy(x => x.name.Identifier).ToList();
         var distinctServices = allServices.DistinctBy(x => x.name.Identifier).ToList();
 
-        fileBuilder.AppendLine(generator.GenerateTypes(distinctDefsList));
-        fileBuilder.AppendLine(generator.GenerateAllFormatters(distinctDefsList));
+        body.AppendLine(generator.GenerateTypes(distinctDefsList));
+        body.AppendLine(generator.GenerateAllFormatters(distinctDefsList));
 
         // Partial<T> schemas. Emitted after the ordinary formatters, but order is irrelevant:
         // registerPartial resolves each field's formatter lazily. Services are passed too,
         // because a `T~` can appear only in a method argument or return type.
-        fileBuilder.AppendLine(generator.GeneratePartialRegistrations(distinctDefsList, distinctServices));
+        body.AppendLine(generator.GeneratePartialRegistrations(distinctDefsList, distinctServices));
 
         foreach (var module in context.ProcessedModules)
-            fileBuilder.AppendLine(generator.GenerateServices(module));
+            body.AppendLine(generator.GenerateServices(module));
 
         // When singleFileOutput, also generate services from external modules
         if (cfg.SingleFileOutput && externalModules.Count > 0)
@@ -743,19 +720,41 @@ public class CompileCommand : AsyncCommand<CompileOptions>
             foreach (var extModule in externalModules)
             {
                 if (extModule.Services.Count > 0)
-                    fileBuilder.AppendLine(generator.GenerateServices(extModule));
+                    body.AppendLine(generator.GenerateServices(extModule));
             }
         }
 
-        fileBuilder.AppendLine(generator.GenerateAllServiceClientImpl(distinctServices));
-        fileBuilder.AppendLine(generator.GenerateClientProxy(distinctServices));
+        body.AppendLine(generator.GenerateAllServiceClientImpl(distinctServices));
+        body.AppendLine(generator.GenerateClientProxy(distinctServices));
 
         // The dotnet and rust targets both create their output directory; this one did not, so a
         // browser `outputFile` pointing anywhere that does not already exist failed the whole
         // compile with a bare DirectoryNotFoundException after all the work was done.
         outputFile.Directory?.Create();
 
+        var text = body.ToString();
+        // Values and types are imported apart: under `verbatimModuleSyntax` (and `isolatedModules`)
+        // a type imported as a value is an error, and consumers' tsconfigs are not ours to choose.
+        AppendImport(fileBuilder, "import", text,
+            "CborReader", "CborWriter", "IonDateTime", "IonDecimal", "IonFormatterStorage", "IonMaybe",
+            "ServiceExecutor", "IonRequest", "IonWsClient");
+        AppendImport(fileBuilder, "import type", text,
+            "bytes", "DateOnly", "Duration", "TimeOnly", "Guid", "IonArray", "IonPartial", "IIonService",
+            "IIonUnion", "IonClientContext", "IonInterceptor", "IonStreamOptions");
+        fileBuilder.AppendLine();
+        fileBuilder.Append(text);
+
         File.WriteAllText(outputFile.FullName, fileBuilder.ToString());
+
+        static void AppendImport(StringBuilder to, string keyword, string body, params string[] names)
+        {
+            var used = names.Where(n => Regex.IsMatch(body, $@"(?<![\w$.]){n}(?![\w$])")).ToArray();
+            if (used.Length == 0)
+                return;
+            to.AppendLine($"{keyword} {{");
+            to.AppendLine(string.Join(",\n", used.Select(n => $"  {n}")));
+            to.AppendLine("} from \"@argon-chat/ion.webcore\";");
+        }
     }
 
     private void GenerateDotNetDefault(IIonCodeGenerator generator, DirectoryInfo currentDir, IonProjectConfig project,

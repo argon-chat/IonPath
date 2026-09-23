@@ -2,6 +2,7 @@ import { CborReader } from "../cbor";
 import type { IonArray } from "../baseTypes";
 import { IonFormatterStorage } from "../logic/IonFormatter";
 import { safeFetchBuffer } from "../yetAnotherFetch";
+import type { IonStreamOptions } from "../ws/IonStreamOptions";
 
 export const IonContentType = "application/ion";
 
@@ -212,13 +213,14 @@ export class IonRequest {
         const error = IonFormatterStorage.get<IonProtocolError>(
           "IonProtocolError"
         ).read(new CborReader(buf));
-        throw new IonRequestException(error);
+        throw new IonRequestException(error, resp.status as number);
       } catch (e) {
         if (e instanceof IonRequestException) {
           throw e;
         }
         throw new IonRequestException(
-          IonProtocolError.UPSTREAM_ERROR(resp.status.toString())
+          IonProtocolError.UPSTREAM_ERROR(resp.status.toString()),
+          resp.status as number
         );
       }
     }
@@ -230,13 +232,27 @@ export interface IonClientContext {
   interceptors: IonInterceptor[];
   /** Auto-generated session ID. Persists for the lifetime of this client context (tab/instance). */
   sessionId: string;
+  /**
+   * How `stream` calls connect, keep alive and reconnect. Optional: every field has a default,
+   * see {@link IonStreamOptions}.
+   */
+  streamOptions?: IonStreamOptions;
 }
 
 export type IonProtocolError = { code: string; message: string };
 
 export class IonRequestException extends Error {
-  constructor(public error: IonProtocolError) {
-    super(`Ion Transport Error: ${error.message}`);
+  /**
+   * @param error  The protocol error the server (or this client) reported.
+   * @param status The HTTP status of the response that carried it, when there was one. A retry
+   *   policy needs it to tell "refused" (4xx) from "try again later" (5xx, 408, 429).
+   */
+  constructor(
+    public error: IonProtocolError,
+    public status?: number,
+    options?: { cause?: unknown }
+  ) {
+    super(`Ion Transport Error: ${error.message}`, options);
   }
 }
 IonFormatterStorage.register<IonProtocolError>("IonProtocolError", {

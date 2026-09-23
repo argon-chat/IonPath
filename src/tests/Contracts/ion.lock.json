@@ -1212,6 +1212,183 @@
         }
       }
     },
+    "LabEvent": {
+      "kind": "Msg",
+      "nextIndex": 3,
+      "fields": [
+        {
+          "index": 0,
+          "name": "seq",
+          "type": "i8"
+        },
+        {
+          "index": 1,
+          "name": "topic",
+          "type": "string"
+        },
+        {
+          "index": 2,
+          "name": "body",
+          "type": "string"
+        }
+      ]
+    },
+    "LabSignal": {
+      "kind": "Union",
+      "nextIndex": 3,
+      "cases": [
+        {
+          "index": 0,
+          "name": "Joined",
+          "fields": [
+            {
+              "index": 0,
+              "name": "user",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "index": 1,
+          "name": "Left",
+          "fields": [
+            {
+              "index": 0,
+              "name": "user",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "index": 2,
+          "name": "Said",
+          "fields": [
+            {
+              "index": 0,
+              "name": "user",
+              "type": "string"
+            },
+            {
+              "index": 1,
+              "name": "text",
+              "type": "string"
+            }
+          ]
+        }
+      ]
+    },
+    "StreamLab": {
+      "kind": "Service",
+      "methods": {
+        "Count": {
+          "args": [
+            {
+              "index": 0,
+              "name": "from",
+              "type": "i4"
+            },
+            {
+              "index": 1,
+              "name": "count",
+              "type": "i4"
+            },
+            {
+              "index": 2,
+              "name": "delayMs",
+              "type": "i4"
+            }
+          ],
+          "returns": "i4",
+          "modifiers": [
+            "stream"
+          ]
+        },
+        "Listen": {
+          "args": [
+            {
+              "index": 0,
+              "name": "topic",
+              "type": "string"
+            }
+          ],
+          "returns": "LabEvent",
+          "modifiers": [
+            "stream"
+          ]
+        },
+        "Signals": {
+          "args": [
+            {
+              "index": 0,
+              "name": "room",
+              "type": "string"
+            }
+          ],
+          "returns": "LabSignal",
+          "modifiers": [
+            "stream"
+          ]
+        },
+        "Echo": {
+          "args": [
+            {
+              "index": 0,
+              "name": "input",
+              "type": "string",
+              "modifier": "stream"
+            }
+          ],
+          "returns": "string",
+          "modifiers": [
+            "stream"
+          ]
+        },
+        "Explode": {
+          "args": [
+            {
+              "index": 0,
+              "name": "after",
+              "type": "i4"
+            }
+          ],
+          "returns": "i4",
+          "modifiers": [
+            "stream"
+          ]
+        },
+        "Stubborn": {
+          "args": [
+            {
+              "index": 0,
+              "name": "holdMs",
+              "type": "i4"
+            }
+          ],
+          "returns": "i4",
+          "modifiers": [
+            "stream"
+          ]
+        },
+        "Blobs": {
+          "args": [
+            {
+              "index": 0,
+              "name": "size",
+              "type": "i4"
+            },
+            {
+              "index": 1,
+              "name": "count",
+              "type": "i4"
+            }
+          ],
+          "returns": "bytes",
+          "modifiers": [
+            "stream"
+          ]
+        }
+      }
+    },
     "Vector": {
       "kind": "Msg",
       "nextIndex": 3,

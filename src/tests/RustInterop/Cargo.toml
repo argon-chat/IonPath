@@ -1,0 +1,15 @@
+[package]
+name = "rust-interop"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "The Rust Ion stream client against the real .NET server; driven by ForeignClientInteropTests"
+
+[dependencies]
+# Both path dependencies name the same directory, so the generated contracts and this crate share
+# one ion_rustcore.
+ion-rustcore = { path = "../../../packages/ion.rustcore" }
+test-contracts = { path = "../Contracts/gen-rust" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+futures-util = "0.3"
+async-trait = "0.1"

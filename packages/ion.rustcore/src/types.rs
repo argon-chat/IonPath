@@ -125,6 +125,59 @@ pub enum IonError {
     /// The counterpart is `IonUnionEnvelopeError` in TypeScript.
     #[error("Ion union '{union_type}' envelope must be exactly [index, payload] (2 items), got {actual_items}")]
     UnionEnvelope { union_type: &'static str, actual_items: u64 },
+
+    // ── stream outcomes ─────────────────────────────────────────────────────
+    // How a `stream` call ends is how its item stream ends: `None` after END, `Protocol` after
+    // ERROR, and one of these two otherwise. They mirror `ion.runtime.IonStreamClosedException`
+    // and `IonStreamDisconnectedException` in C#.
+    /// The server closed the stream on purpose with a CLOSE frame — a kick, a revoked session, a
+    /// restart. `allow_reconnect` says whether coming straight back is welcome.
+    #[error("The server closed the stream{}", closed_detail(.reason, .allow_reconnect))]
+    StreamClosed { reason: Option<String>, allow_reconnect: bool },
+
+    /// The stream ended without the server saying so: the transport died, went silent past the
+    /// timeout, or broke the protocol. Always safe to retry.
+    #[error("Stream disconnected ({reason}): {message}")]
+    StreamDisconnected { reason: DisconnectReason, message: String },
+}
+
+fn closed_detail(reason: &Option<String>, allow_reconnect: &bool) -> String {
+    let reason = reason.as_deref().map(|r| format!(": {r}")).unwrap_or_default();
+    let reconnect = if *allow_reconnect { " (reconnecting is allowed)" } else { "" };
+    format!("{reason}{reconnect}")
+}
+
+/// Why a stream ended without an END, ERROR or CLOSE from the server — the members of C#'s
+/// `ion.runtime.IonDisconnectReason` a client can observe.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DisconnectReason {
+    /// The connection died, or the server closed the WebSocket without ending the stream.
+    TransportLost,
+    /// The server sent nothing for longer than the timeout, or did not accept the stream in time.
+    Timeout,
+    /// The server sent something the stream protocol does not allow.
+    ProtocolViolation,
+}
+
+impl DisconnectReason {
+    /// The error code the other runtimes report for the same failure.
+    pub fn code(&self) -> &'static str {
+        match self {
+            DisconnectReason::TransportLost => "STREAM_DISCONNECTED",
+            DisconnectReason::Timeout => "STREAM_TIMEOUT",
+            DisconnectReason::ProtocolViolation => "PROTOCOL_VIOLATION",
+        }
+    }
+}
+
+impl fmt::Display for DisconnectReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            DisconnectReason::TransportLost => "transport lost",
+            DisconnectReason::Timeout => "timeout",
+            DisconnectReason::ProtocolViolation => "protocol violation",
+        })
+    }
 }
 
 impl From<minicbor::decode::Error> for IonError {

@@ -1,4 +1,4 @@
-﻿namespace ion.compiler.CodeGen;
+namespace ion.compiler.CodeGen;
 
 using ion.runtime;
 using syntax;
@@ -1523,7 +1523,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string RouterStreamMethodTemplate =
         """
-            public IAsyncEnumerable<Memory<byte>> StreamRouteExecuteAsync(string methodName, CborReader reader, IAsyncEnumerable<ReadOnlyMemory<byte>>? inputStream, [EnumeratorCancellation] CancellationToken ct)
+            public IAsyncEnumerable<Memory<byte>> StreamRouteFramesAsync(string methodName, CborReader reader, IAsyncEnumerable<ReadOnlyMemory<byte>>? inputStream, CancellationToken ct)
             {
                 {serviceStreamRouteBranch}
                 
@@ -1541,51 +1541,34 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             }
         """;
 
+    // One reused CborReader for the whole input stream (see IonStreamFrames.DecodeInput).
     private static readonly string CastedInputStreamTemplate =
         """
-        var inputStreamCasted = inputStream is null
-        ? null
-        : inputStream.Select(bytes =>
-        {
-            var reader = new CborReader(bytes);
-            var arr = reader.ReadStartArray();
-            var result = IonFormatterStorage<{inputStreamType}>.Read(reader);
-            reader.ReadEndArray();
-
-            return result;
-        });
+        var inputStreamCasted = IonStreamFrames.DecodeInput<{inputStreamType}>(inputStream);
         """;
 
+    // Not an iterator: the arguments are decoded before the first frame is asked for, so a
+    // malformed call fails the connection instead of opening an empty stream. The frames come out
+    // of one reused writer and pooled buffer (IonStreamFrames.Encode) — nothing per item beyond the
+    // item itself — and each is valid until the next MoveNextAsync, which the server honours by
+    // sending it before asking for the next.
     private static readonly string ServiceStreamExecutorMethodTemplate =
         """
-        {methodDoc}    public async IAsyncEnumerable<Memory<byte>> {methodNameRaw}_Execute(CborReader reader, IAsyncEnumerable<ReadOnlyMemory<byte>>? inputStream, CancellationToken ct = default)
+        {methodDoc}    public IAsyncEnumerable<Memory<byte>> {methodNameRaw}_Execute(CborReader reader, IAsyncEnumerable<ReadOnlyMemory<byte>>? inputStream, CancellationToken ct = default)
             {
                 var service = scope.ServiceProvider.GetRequiredService<I{serviceTypename}>();
 
                 const int argumentSize = {argSize};
-                
+
                 {inputCastedStream}
 
                 var arraySize = reader.ReadStartMessage(argumentSize, "{serviceTypename}.{methodNameRaw}");
-                    
+
                 {fieldReadExpression}
 
                 reader.ReadEndArrayAndSkip(arraySize - argumentSize);
 
-                await foreach (var e in service.{methodName}({fieldReadArgs}))
-                {
-                    var writer = new CborWriter();
-
-                    IonFormatterStorage<{returnType}>.Write(writer, e);
-
-                    var mem = MemoryPool<byte>.Shared.Rent(writer.BytesWritten);
-
-                    writer.Encode(mem.Memory.Span);
-
-                    yield return mem.Memory;
-
-                    mem.Dispose();
-                }
+                return IonStreamFrames.Encode(service.{methodName}({fieldReadArgs}), ct);
             }
         """;
 

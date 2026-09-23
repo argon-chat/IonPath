@@ -1695,12 +1695,28 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
 
     private static readonly string ProxyTemplate =
         """
-        export function createClient(endpoint: string, interceptors: IonInterceptor[]) {
-          const ctx = {
+        /**
+         * A client for every service in this module.
+         *
+         * `options.streamOptions` configures `stream` calls (transport order, heartbeat, reconnect);
+         * `options.sessionId` identifies this client instance to the server across calls (a fresh one
+         * by default); `options.signal` cancels every call made through the client.
+         */
+        export function createClient(
+          endpoint: string,
+          interceptors: IonInterceptor[],
+          options?: { streamOptions?: IonStreamOptions; sessionId?: string; signal?: AbortSignal }
+        ) {
+          const ctx: IonClientContext = {
             baseUrl: endpoint,
-            interceptors: interceptors
-          } as IonClientContext;
+            interceptors: interceptors,
+            sessionId: options?.sessionId ?? crypto.randomUUID(),
+            streamOptions: options?.streamOptions
+          };
           const controller = new AbortController();
+          const outer = options?.signal;
+          if (outer?.aborted) controller.abort(outer.reason);
+          else outer?.addEventListener("abort", () => controller.abort(outer.reason), { once: true });
 
           return new Proxy(
             {},

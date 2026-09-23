@@ -23,5 +23,11 @@ export default defineConfig({
     // `types` at — a published package with no types and no error to say so.
     dts({ bundleTypes: true }),
   ],
-  test: {},
+  test: {
+    // `test/interop` runs the code `ionc` generates for the test contracts
+    // (src/tests/Contracts/gen-ts/contracts.ts), which imports this runtime by its package name.
+    // In tests that name is this source tree — never `dist/`, which would be a second copy of the
+    // runtime with its own formatter registry. Exact match only, so nothing else is rerouted.
+    alias: [{ find: /^@argon-chat\/ion\.webcore$/, replacement: resolve(__dirname, 'src/index.ts') }],
+  },
 })
