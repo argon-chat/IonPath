@@ -70,6 +70,21 @@ public class Tests
     }
 
 
+    // Value-returning calls go through CallCoreAsync, which the 1.16.0 fix missed: its own catch
+    // swallowed the decoded error and rethrew UPSTREAM_ERROR with the HTTP reason phrase.
+    [Test]
+    public async Task UnaryCall_Test_ServerErrorKeepsItsCode()
+    {
+        await using var scope = _factoryAsp.Services.CreateAsyncScope();
+        var client = IonClient.Create(httpClient, WsFactory);
+        var service = client.ForService<IMathInteraction>(scope);
+
+        var refused = ThrowsAsync<IonRequestException>(async () => await service.Div(4, 0));
+
+        That(refused?.Error.code, Is.EqualTo("DIVIDE_BY_ZERO"));
+        That(refused?.Error.msg, Is.EqualTo("rightOperand is zero"));
+    }
+
     [Test]
     public async Task UnaryCall_Test_Nullable()
     {

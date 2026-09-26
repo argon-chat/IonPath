@@ -1,5 +1,16 @@
 [
   {
+    "version": "2.0.1",
+    "date": "2026-09-26",
+    "title": "Real Errors From Every .NET Call",
+    "changes": [
+      {
+        "type": "fixed",
+        "description": "1.16.0 fixed the .NET client's error handling on two of its three failure paths. The third, shared by every unary method that returns a value, still caught its own decoded IonRequestException and rethrew UPSTREAM_ERROR with the HTTP reason phrase, so a refusal and a server crash differed only by \"Bad Request\" against \"Internal Server Error\". It now builds the exception through the same IonResponseError helper as the other two"
+      }
+    ]
+  },
+  {
     "version": "1.17.0",
     "date": "2026-08-21",
     "title": "Forward Compatibility, and a Decoder That Fails Loudly",

@@ -252,21 +252,7 @@ public class IonRequest(IonClientContext context, Type interfaceName, MethodInfo
             c.ResponsePayload = respBytes;
 
             if (!c.HttpResponse.IsSuccessStatusCode)
-            {
-                try
-                {
-                    var error = IonFormatterStorage<IonProtocolError>.Read(new CborReader(respBytes));
-                    throw new IonRequestException(error);
-                }
-                catch
-                {
-                    throw new IonRequestException(
-                        IonProtocolError.UPSTREAM_ERROR(
-                            c.HttpResponse.ReasonPhrase ?? c.HttpResponse.StatusCode.ToString()
-                        )
-                    );
-                }
-            }
+                throw IonResponseError.From(c.HttpResponse, respBytes);
         }
     }
 }

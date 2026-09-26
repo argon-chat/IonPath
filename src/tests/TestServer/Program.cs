@@ -59,7 +59,11 @@ public class MathImpl : IMathInteraction
 
     public Task<Int32> Sub(int leftOperand, int rightOperand, CancellationToken ct = default) => Task.FromResult(leftOperand - rightOperand);
 
-    public Task<Int32> Div(int leftOperand, int rightOperand, CancellationToken ct = default) => Task.FromResult(leftOperand / rightOperand);
+    // A refusal the client must receive by its code, not as the transport's reason phrase.
+    public Task<Int32> Div(int leftOperand, int rightOperand, CancellationToken ct = default)
+        => rightOperand == 0
+            ? throw new IonRequestException(new IonProtocolError("DIVIDE_BY_ZERO", "rightOperand is zero"))
+            : Task.FromResult(leftOperand / rightOperand);
 
     public Task<Int32> Pow(int leftOperand, int rightOperand, CancellationToken ct = default) => Task.FromResult((int)Math.Pow(leftOperand, rightOperand));
     public Task<IonArray<Int32>> PowArray(int leftOperand, IonArray<Int32> rightOperand, CancellationToken ct = default)
