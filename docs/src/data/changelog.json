@@ -7,6 +7,10 @@
       {
         "type": "fixed",
         "description": "1.16.0 fixed the .NET client's error handling on two of its three failure paths. The third, shared by every unary method that returns a value, still caught its own decoded IonRequestException and rethrew UPSTREAM_ERROR with the HTTP reason phrase, so a refusal and a server crash differed only by \"Bad Request\" against \"Internal Server Error\". It now builds the exception through the same IonResponseError helper as the other two"
+      },
+      {
+        "type": "fixed",
+        "description": "The .NET WebTransport client handed MsQuic a host name, and MsQuic connects to the first address only. On Linux localhost resolves to ::1 first, so a server listening on 127.0.0.1 alone was unreachable over WebTransport, reported as an ALPN negotiation failure, while WebSockets to the same URL worked. The client now resolves the name itself and tries each address in order, keeping the name as the TLS target"
       }
     ]
   },

@@ -96,33 +96,69 @@ internal sealed class WebTransportClientTransport : IonClientTransport
 
     public override bool IsClosed => peerFinished && outputCompleted;
 
+    /// <summary>
+    /// Opens the QUIC connection, trying every address the host resolves to in resolver order.
+    /// </summary>
+    /// <remarks>
+    /// Given a name, MsQuic connects to the first address only. TCP falls through the list, QUIC did
+    /// not: on Linux <c>localhost</c> resolves to <c>::1</c> first, so a server listening on
+    /// <c>127.0.0.1</c> alone was unreachable over WebTransport (reported as an ALPN failure) while
+    /// WebSockets to the same URL worked. The name stays the TLS target either way.
+    /// </remarks>
+    private static async Task<QuicConnection> ConnectQuicAsync(Uri uri, IonStreamClientOptions options, CancellationToken ct)
+    {
+        EndPoint[] endpoints = IPAddress.TryParse(uri.DnsSafeHost, out _)
+            ? [new DnsEndPoint(uri.IdnHost, uri.Port)]
+            : [.. (await Dns.GetHostAddressesAsync(uri.IdnHost, ct).ConfigureAwait(false)).Select(a => new IPEndPoint(a, uri.Port))];
+
+        if (endpoints.Length == 0)
+            endpoints = [new DnsEndPoint(uri.IdnHost, uri.Port)];
+
+        for (var i = 0; ; i++)
+        {
+            try
+            {
+                return await QuicConnection.ConnectAsync(Options(endpoints[i]), ct).ConfigureAwait(false);
+            }
+            catch (Exception) when (i < endpoints.Length - 1 && !ct.IsCancellationRequested)
+            {
+                // The next address may be the one the server listens on; the last one's failure is the one reported.
+            }
+        }
+
+        QuicClientConnectionOptions Options(EndPoint endpoint)
+        {
+            var quic = new QuicClientConnectionOptions
+            {
+                RemoteEndPoint = endpoint,
+                DefaultStreamErrorCode = H3RequestCancelled,
+                DefaultCloseErrorCode = H3NoError,
+                MaxInboundUnidirectionalStreams = 8,
+                MaxInboundBidirectionalStreams = 0,
+                ClientAuthenticationOptions = new SslClientAuthenticationOptions
+                {
+                    ApplicationProtocols = [SslApplicationProtocol.Http3],
+                    TargetHost = uri.IdnHost,
+                    RemoteCertificateValidationCallback = options.ServerCertificateValidation
+                }
+            };
+
+            // QUIC's own idle timer must outlast the Ion heartbeat, or the connection dies of silence the
+            // heartbeat was about to break.
+            if (options.ServerTimeout > TimeSpan.Zero)
+                quic.IdleTimeout = options.ServerTimeout + options.ServerTimeout;
+            if (options.KeepAliveInterval > TimeSpan.Zero)
+                quic.KeepAliveInterval = options.KeepAliveInterval;
+
+            return quic;
+        }
+    }
+
     /// <summary>Establishes the session and the Ion stream on it.</summary>
     /// <exception cref="IonWebTransportRefusedException">The server answered the CONNECT with a non-200 status.</exception>
     public static async Task<WebTransportClientTransport> ConnectAsync(Uri uri, IonStreamClientOptions options, CancellationToken ct)
     {
-        var quic = new QuicClientConnectionOptions
-        {
-            RemoteEndPoint = new DnsEndPoint(uri.IdnHost, uri.Port),
-            DefaultStreamErrorCode = H3RequestCancelled,
-            DefaultCloseErrorCode = H3NoError,
-            MaxInboundUnidirectionalStreams = 8,
-            MaxInboundBidirectionalStreams = 0,
-            ClientAuthenticationOptions = new SslClientAuthenticationOptions
-            {
-                ApplicationProtocols = [SslApplicationProtocol.Http3],
-                TargetHost = uri.IdnHost,
-                RemoteCertificateValidationCallback = options.ServerCertificateValidation
-            }
-        };
-
-        // QUIC's own idle timer must outlast the Ion heartbeat, or the connection dies of silence the
-        // heartbeat was about to break.
-        if (options.ServerTimeout > TimeSpan.Zero)
-            quic.IdleTimeout = options.ServerTimeout + options.ServerTimeout;
-        if (options.KeepAliveInterval > TimeSpan.Zero)
-            quic.KeepAliveInterval = options.KeepAliveInterval;
-
-        var connection = await QuicConnection.ConnectAsync(quic, ct).ConfigureAwait(false);
+        var connection = await ConnectQuicAsync(uri, options, ct).ConfigureAwait(false);
 
         QuicStream? control = null, session = null, data = null;
         var inboundCts = new CancellationTokenSource();

@@ -78,11 +78,14 @@ jobs:
 
       - name: Test (with coverage)
         # Before packing, so a failing test never reaches nuget.org. The Dragonfly backplane tests
-        # need Docker, which ubuntu-latest has.
+        # need Docker, which ubuntu-latest has. A hung test is killed and named instead of holding the
+        # job until GitHub's six-hour limit.
+        timeout-minutes: 30
         run: >-
           dotnet test --configuration Release --no-build
           --settings coverage.runsettings
           --collect "XPlat Code Coverage"
+          --blame-hang-timeout 5m --blame-hang-dump-type none
           --results-directory ./TestResults
 
       - name: Upload coverage to Codecov
