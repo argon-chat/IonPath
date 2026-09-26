@@ -254,6 +254,9 @@ public class StreamPushTests(IonStreamTransportKind transport)
                 var group = $"churn-{random.Next(groupCount)}";
                 if (random.Next(2) == 0) await ctx.AddToGroupAsync(group);
                 else await ctx.RemoveFromGroupAsync(group);
+                // Group calls complete synchronously; without a yield eight loops starve the pool on a small
+                // runner and every heartbeat times out, which is not what this test is about.
+                await Task.Yield();
             }
         })).ToArray();
 
