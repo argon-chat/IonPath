@@ -14,6 +14,8 @@ name: Publish NuGet Packages
 
 on:
   push:
+    branches:
+      - master
     paths:
       - "src/ion.runtime/**"
       - "src/ion.runtime.client/**"
@@ -23,7 +25,12 @@ on:
       - "src/ion.compiler/**"
       - "src/ionc/**"
       - "GitVersion.yml"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build, test and pack, but do not publish"
+        type: boolean
+        default: false
 
 jobs:
   publish:
@@ -50,6 +57,24 @@ jobs:
 
       - name: Build
         run: dotnet build --configuration Release --no-restore
+
+      - name: Install msquic
+        # WebTransport runs over System.Net.Quic, which on Linux needs libmsquic; without it every
+        # WebTransport-parametrised stream test fails with "no configured transport can reach".
+        run: |
+          wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
+          sudo dpkg -i packages-microsoft-prod.deb
+          sudo apt-get update
+          sudo apt-get install -y libmsquic
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install ion.webcore.js dependencies
+        # The JS interop test runs the package's vitest suite against the real server.
+        run: bun install --frozen-lockfile
+        working-directory: packages/ion.webcore.js
 
       - name: Test (with coverage)
         # Before packing, so a failing test never reaches nuget.org. The Dragonfly backplane tests
@@ -92,6 +117,7 @@ jobs:
 
       - name: NuGet login (OIDC → temporary API key)
         # Requested after packing, not at the start of the job: the key expires after an hour.
+        if: ${{ !inputs.dry_run }}
         id: login
         uses: NuGet/login@v1
         with:
@@ -100,6 +126,7 @@ jobs:
       - name: Push packages
         # No `|| true`: `--skip-duplicate` already covers an unchanged version, so anything else
         # that fails here — a rejected key, a policy mismatch — must fail the run, not pass green.
+        if: ${{ !inputs.dry_run }}
         run: |
           for pkg in ./nupkgs/*.nupkg; do
             echo "Publishing $pkg"
