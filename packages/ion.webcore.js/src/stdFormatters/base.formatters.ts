@@ -86,7 +86,8 @@ IonFormatterStorage.register("dateonly", {
     return { year: y, month: m, day: d };
   },
   write(writer: CborWriter, value: DateOnly): void {
-    writer.writeStartArray(null);
+    // Definite length, like Ion_dateonly_Formatter: [year, month, day, 0 (calendar, reserved)].
+    writer.writeStartArray(4);
     writer.writeInt32(value.year);
     writer.writeInt32(value.month);
     writer.writeInt32(value.day);
@@ -95,21 +96,30 @@ IonFormatterStorage.register("dateonly", {
   },
 });
 
+// `timeonly` is a CBOR array of five integers — [hour, minute, second, millisecond, microsecond] —
+// exactly as Ion_timeonly_Formatter (.NET) and IonTimeOnly (Rust) write and expect it. Until 2.0.1
+// this runtime wrote and read the five integers bare, so a `timeonly` field coming from a .NET
+// server failed on the array header ("expected an integer, got major type 4") and a `timeonly`
+// written from the browser was unreadable on the server.
 IonFormatterStorage.register("timeonly", {
   read(reader: CborReader): TimeOnly {
+    reader.readStartArray();
     const h = reader.readInt32();
     const m = reader.readInt32();
     const s = reader.readInt32();
     const ms = reader.readInt32();
     const µs = reader.readInt32();
+    reader.readEndArray();
     return { hour: h, minute: m, second: s, millisecond: ms, microsecond: µs };
   },
   write(writer: CborWriter, value: TimeOnly): void {
+    writer.writeStartArray(5);
     writer.writeInt32(value.hour);
     writer.writeInt32(value.minute);
     writer.writeInt32(value.second);
     writer.writeInt32(value.millisecond);
     writer.writeInt32(value.microsecond);
+    writer.writeEndArray();
   },
 });
 
