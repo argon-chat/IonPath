@@ -156,7 +156,9 @@ public class CompileCommand : AsyncCommand<CompileOptions>
             return Task.FromResult(-1);
         }
 
-        var files = currentDir.EnumerateFiles("*.ion", SearchOption.AllDirectories).ToList();
+        // Sorted: the declarations are emitted in file order, and file systems other than NTFS list entries in
+        // creation or hash order — the same contracts generated a reordered client on Linux (IonSourceOrder).
+        var files = IonSourceOrder.Sort(currentDir.EnumerateFiles("*.ion", SearchOption.AllDirectories), currentDir);
 
 
         if (!files.Any())
