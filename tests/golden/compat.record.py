@@ -114,7 +114,13 @@ VERDICTS = [
 
     # ── optionality ──────────────────────────────────────────────────────────
     ("prefix", "optional-added.forward", "correct", None),
+    # Was a field-count error until 2.0.3; a nullable append now works in both directions.
     ("exact", "optional-added.backward", "correct", None),
+    # ── nullable fields / arguments appended: both directions ────────────────
+    # The `.required-missing` and `.required-after-nullable` backward vectors are typed errors
+    # on purpose - only a payload short by NULLABLE fields is acceptable.
+    ("prefix", "nullable-appended.", "correct", None),
+    ("prefix", "nullable-argument-added.", "correct", None),
     ("exact", "optional-tightened.forward.null", "correct", None),
     ("exact", "optional-tightened.forward.set", "correct", None),
     ("exact", "optional-tightened.backward", "correct", None),
@@ -341,7 +347,7 @@ def main():
         ("divergentErrorTyping", divergent_typing),
     ])
 
-    # keep the census above the 144 vectors it summarises
+    # keep the census above the vectors it summarises
     reordered = collections.OrderedDict()
     for k in doc:
         if k == "evolution":

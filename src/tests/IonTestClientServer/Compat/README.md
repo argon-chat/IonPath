@@ -46,6 +46,13 @@ Two more, found the same way:
   has infinite size". The probe schema routes its recursion through `T[]` (`TreeV1`) instead,
   which is fine because `Vec<T>` is already indirection.
 
+* **A field named `d` generates a Rust reader that does not compile.** The generated
+  `ion_read(d: &mut Decoder<'_>)` binds each field to a local of the field's name, so
+  `let d = …;` shadows the decoder and every later read is handed the field's value instead
+  (E0308). The nullable-append probes (`NullAppendV2`, `GrowNullCaseV2`) spell their fields
+  `note`/`xs`/`inner` for that reason. The reader's own declared-count local is `__len` rather
+  than `len` so that a field named `len` cannot shadow it the same way.
+
 * **`Set<T>` where T is a `msg` generates Rust that does not compile.**
   The generated struct derives `Debug, Clone, PartialEq`; `HashSet<T>` needs `Eq + Hash`. C# and
   TypeScript are fine. So the portable message-bearing container positions today are `T[]`,

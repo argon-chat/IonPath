@@ -644,7 +644,8 @@ export class CborReader {
    * `skipSize` is `declaredLength - fieldsRead`. A **negative** value means the payload is shorter
    * than the schema, which is a decode failure — not a distance. It used to be passed through
    * `Math.abs()`, which turned "one field missing" into "skip one more item", i.e. a read past the
-   * end of the array and into whatever followed it.
+   * end of the array and into whatever followed it. A message with a nullable tail, which may
+   * legitimately arrive short, is closed with `IonFormatterStorage.readEndMessage` instead.
    */
   readEndArrayAndSkip(skipSize: number) {
     if (skipSize < 0) throw new IonFieldCountError("<message>", -skipSize, 0);

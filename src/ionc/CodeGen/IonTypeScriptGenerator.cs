@@ -486,9 +486,9 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         """
         IonFormatterStorage.register("{ionType}", {
           read(reader: CborReader): {ionType} {
-            const arraySize = IonFormatterStorage.readStartMessage(reader, {fieldsCount}, "{ionType}");
+            const arraySize = {readStartMessage};
             {fieldReadExpression}
-            reader.readEndArrayAndSkip(arraySize - {fieldsCount});
+            {readEndMessage};
             return { {ctorFields} };
           },
           write(writer: CborWriter, value: {ionType}): void {
@@ -503,9 +503,9 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         """
         IonFormatterStorage.register("{ionType}", {
           read(reader: CborReader): {ionType} {
-            const arraySize = IonFormatterStorage.readStartMessage(reader, {fieldsCount}, "{ionType}");
+            const arraySize = {readStartMessage};
             {fieldReadExpression}
-            reader.readEndArrayAndSkip(arraySize - {fieldsCount});
+            {readEndMessage};
             return new {ionType}({ctorFields});
           },
           write(writer: CborWriter, value: {ionType}): void {
@@ -898,20 +898,46 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
             return GenerateFormatterForFlags(flags);
 
         var name = type.name.Identifier;
+        var count = type.fields.Count;
+        var required = IonWireShape.RequiredCount(type.fields);
 
         // A union case is constructed positionally (`new X(a, b)`), a plain message is an object
         // literal (`{ a, b }`) — so a renamed local is spelled out as `name: __name` in the second
         // and simply passed along in the first.
         var template = (type.IsUnionCase ? FormatterTemplateForUnion : FormatterTemplate)
+            .Replace("{readStartMessage}", ReadStartMessageCall(name, required, count))
+            .Replace("{readEndMessage}", ReadEndMessageCall(required, count))
             .Replace("{ionType}", name)
             .Replace("{fieldReadExpression}", GenerateReadField(type))
             .Replace("{ctorFields}",
                 type.IsUnionCase ? GenerateCaptureField(type) : GenerateObjectLiteralFields(type))
             .Replace("{fieldWriteExpression}", GenerateWriteField(type))
-            .Replace("{fieldsCount}", type.fields.Count.ToString());
+            .Replace("{fieldsCount}", count.ToString());
 
         return template;
     }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Short payloads: a nullable tail an older writer did not send
+    // ═══════════════════════════════════════════════════════════════════
+    //
+    // The same shape as the C# and Rust generators (see IonWireShape). When every field is
+    // required the emitted pair is the one ionc has always emitted —
+    //     readStartMessage(reader, N, "T") … reader.readEndArrayAndSkip(arraySize - N)
+    // — so code for such a message is unchanged. When the message ends in nullable fields it is
+    //     readStartMessage(reader, N, "T", R) … IonFormatterStorage.readEndMessage(reader, arraySize, N)
+    // and every field at index i >= R reads as `arraySize > i ? <read> : null`, so a payload
+    // written before those fields existed decodes with the missing tail as null.
+
+    private static string ReadStartMessageCall(string context, int required, int total)
+        => required == total
+            ? $"IonFormatterStorage.readStartMessage(reader, {total}, \"{context}\")"
+            : $"IonFormatterStorage.readStartMessage(reader, {total}, \"{context}\", {required})";
+
+    private static string ReadEndMessageCall(int required, int total)
+        => required == total
+            ? $"reader.readEndArrayAndSkip(arraySize - {total})"
+            : $"IonFormatterStorage.readEndMessage(reader, arraySize, {total})";
 
     /// <summary>
     /// An Ion name as a TypeScript <em>binding</em> identifier — a <c>const</c> the formatter
@@ -956,8 +982,18 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
     private static string GenerateCaptureField(IonMethod method)
         => string.Join(", ", method.arguments.Select(TsBind));
 
-    private static string GenerateReadField(IonType type) =>
-        string.Join($"\n{new string(' ', 4)}", type.fields.Select(GenerateReadField));
+    /// <summary>
+    /// The read statements for a message or union case: required fields unconditionally, the
+    /// nullable tail behind a bound on <c>arraySize</c>.
+    /// </summary>
+    private static string GenerateReadField(IonType type)
+    {
+        var required = IonWireShape.RequiredCount(type.fields);
+
+        return string.Join($"\n{new string(' ', 4)}", type.fields.Select((field, index) => index < required
+            ? GenerateReadField(field)
+            : $"const {TsBind(field)} = arraySize > {index} ? {ReadMaybeExpression(field)} : {AbsentMaybeExpression(field)};"));
+    }
 
     private static string GenerateReadField(IonField field) =>
         field switch
@@ -1028,6 +1064,10 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
     }
 
     private static string GenerateReadMaybeField(ITypeWithName field)
+        => $"const {TsBind(field)} = {ReadMaybeExpression(field)};";
+
+    /// <summary>The expression that reads a <c>T?</c> field.</summary>
+    private static string ReadMaybeExpression(ITypeWithName field)
     {
         if (field.Type is not IonGenericType { IsMaybe: true } maybeType)
             throw new InvalidOperationException();
@@ -1035,10 +1075,23 @@ public class IonTypeScriptGenerator(string @namespace) : IIonCodeGenerator
         {
             var element = innerArray.TypeArguments[0];
             return
-                $"const {TsBind(field)} = IonFormatterStorage.readNullable{FixedInfix(innerArray)}Array<{ResolveTypeName(element)}>(reader, '{UnwrapTypeForLookup(element)}'{FixedLengthArg(innerArray)});";
+                $"IonFormatterStorage.readNullable{FixedInfix(innerArray)}Array<{ResolveTypeName(element)}>(reader, '{UnwrapTypeForLookup(element)}'{FixedLengthArg(innerArray)})";
         }
         return
-            $"const {TsBind(field)} = IonFormatterStorage.{(UseMaybeWrapper ? "readMaybe" : "readNullable")}<{ResolveTypeName(maybeType.TypeArguments[0])}>(reader, '{UnwrapTypeForLookup(maybeType.TypeArguments[0])}');";
+            $"IonFormatterStorage.{(UseMaybeWrapper ? "readMaybe" : "readNullable")}<{ResolveTypeName(maybeType.TypeArguments[0])}>(reader, '{UnwrapTypeForLookup(maybeType.TypeArguments[0])}')";
+    }
+
+    /// <summary>
+    /// What a <c>T?</c> field the payload does not carry reads as: what
+    /// <see cref="ReadMaybeExpression"/> returns for a CBOR null.
+    /// </summary>
+    private static string AbsentMaybeExpression(ITypeWithName field)
+    {
+        if (field.Type is not IonGenericType { IsMaybe: true } maybeType)
+            throw new InvalidOperationException();
+        return UseMaybeWrapper && maybeType.TypeArguments[0] is not IonGenericType { IsArray: true }
+            ? $"IonMaybe.None<{ResolveTypeName(maybeType.TypeArguments[0])}>()"
+            : "null";
     }
 
 

@@ -401,8 +401,13 @@ public static class IonAnalyticCodes
         = new("ION0027", "Breaking change: {0} '{1}' member '{2}' changed value from '{3}' to '{4}'.");
     public static readonly IonAnalyticCode ION0028_LockUnionCaseReordered
         = new("ION0028", "Breaking change: union '{0}' case '{1}' changed index from {2} to {3}. Index is the wire discriminator.");
+    /// <remarks>
+    /// An appended field is always skipped by an older reader; the direction that breaks is a
+    /// reader on <i>this</i> schema handed a payload written before the field existed. A nullable
+    /// field reads as null there, so only a non-nullable one is reported.
+    /// </remarks>
     public static readonly IonAnalyticCode ION0029_LockFieldAddedNonNullable
-        = new("ION0029", "Field '{0}' added to '{1}' is not nullable. Older readers will fail to deserialize. Consider using '{0}: {2}?'.");
+        = new("ION0029", "Field '{0}' added to '{1}' is not nullable, so a payload written before it existed cannot be read with this schema. Consider using '{0}: {2}?': a nullable field the payload does not carry reads as null.");
 
     // ── Schema lock, second pass: union case payloads, enum members, base types ──
     //
@@ -539,8 +544,9 @@ public static class IonAnalyticCodes
     /// </remarks>
     public static readonly IonAnalyticCode ION0029_LockUnionCaseFieldAddedNonNullable
         = new("ION0029",
-            "Field '{0}' added to case '{2}' of union '{1}' is not nullable. Older readers will fail " +
-            "to deserialize. Consider using '{0}: {3}?'.");
+            "Field '{0}' added to case '{2}' of union '{1}' is not nullable, so a payload written " +
+            "before it existed cannot be read with this schema. Consider using '{0}: {3}?': a " +
+            "nullable field the payload does not carry reads as null.");
 
     // ── Lock document integrity (ION0069) and closed value spaces (ION0070) ──
     //

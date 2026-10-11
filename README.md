@@ -28,7 +28,7 @@ IonPath consists of two parts:
 - **Streaming & RPC ready** — defines request/response/event shapes
 - **Designed for low-latency systems** — suitable for WebSocket, QUIC, or custom transports
 - **Strong static typing & contract lockfiles** — lockfiles pin contract versions across services/CI, guarantee consistency, and prevent accidental breaking changes
-- **Backward-compatible evolution** — strict compatibility checks; the protocol safely ignores unknown fields when a consumer uses an older contract version
+- **Backward-compatible evolution** — strict compatibility checks; the protocol safely ignores unknown fields when a consumer uses an older contract version, and reads a payload from an older contract version when every field added since is nullable (the missing fields read as null). A nullable field appended to a message, a union case or a method's argument list therefore works in both directions
 
 ---
 

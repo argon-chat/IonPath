@@ -77,6 +77,36 @@ const nest2trial = { ...nest2, tier: C.TierV2.Trial, tiers: new Set([C.TierV2.Fr
 put("NestV2_newEnumUnion", "NestV2", nest2trial);
 put("TreeV1_depth3", "TreeV1", { v: 1, kids: [{ v: 2, kids: [{ v: 3, kids: [] }] }] });
 
+// nullable fields appended: v1 payloads a v2 reader must accept, v2 payloads a v1 reader skips.
+put("NullAppendV1", "NullAppendV1", { a: 1, b: "b" });
+put("NullAppendV2_set", "NullAppendV2", {
+  a: 1, b: "b", c: 7, note: "n", xs: [1, 2], inner: { a: 2, b: "c" },
+});
+put("NullAppendV2_null", "NullAppendV2", { a: 1, b: "b", c: null, note: null, xs: null, inner: null });
+put("MidNullV1", "MidNullV1", { a: 1, b: null });
+put("MidNullV2", "MidNullV2", { a: 1, b: null, c: 3 });
+const nullNest1: any = {
+  list: [{ a: 1, b: "b" }],
+  slots: [{ a: 2, b: "c" }, { a: 3, b: "d" }],
+  byName: new Map([["k", { a: 4, b: "e" }]]),
+  opt: { a: 5, b: "f" },
+  tail: 99,
+};
+const nullNest2: any = {
+  list: [{ a: 1, b: "b", c: 11, note: null, xs: null, inner: null }],
+  slots: [
+    { a: 2, b: "c", c: null, note: "s", xs: null, inner: null },
+    { a: 3, b: "d", c: null, note: null, xs: [3], inner: null },
+  ],
+  byName: new Map([["k", { a: 4, b: "e", c: null, note: null, xs: null, inner: { a: 9, b: "z" } }]]),
+  opt: { a: 5, b: "f", c: 15, note: "o", xs: [], inner: null },
+  tail: 99,
+};
+put("NullNestV1", "NullNestV1", nullNest1);
+put("NullNestV2", "NullNestV2", nullNest2);
+put("GrowNullHolderV1", "GrowNullHolderV1", { g: new C.GrowNullCaseV1(1, "b"), n: 5 });
+put("GrowNullHolderV2", "GrowNullHolderV2", { g: new C.GrowNullCaseV2(1, "b", 7, "n"), n: 5 });
+
 // method-argument envelopes: exactly what the generated client writes.
 const argEnv = (items: Array<[string, any]>) => {
   const w = new CborWriter();
@@ -90,5 +120,26 @@ out["args_EchoNestV2"] = argEnv([["NestV2", nest2], ["i4", 99]]);
 out["args_Echo_1arg_V1"] = argEnv([["AppendedV1", { a: 1, b: "b" }]]);
 out["args_Echo_1arg_V2"] = argEnv([["AppendedV2", { a: 1, b: "b", c: 7 }]]);
 out["args_Echo_2args_V2"] = argEnv([["AppendedV2", { a: 1, b: "b", c: 7 }], ["i4", 42]]);
+// `Tag` gained two trailing nullable arguments in v2; a v2 client writes all three.
+const argEnvNullable = (items: Array<[string, any, boolean]>) => {
+  const w = new CborWriter();
+  w.writeStartArray(items.length);
+  for (const [n, v, nullable] of items)
+    if (nullable) IonFormatterStorage.writeNullable<any>(w, v, n);
+    else IonFormatterStorage.get<any>(n).write(w, v);
+  w.writeEndArray();
+  return hex(w.data);
+};
+out["args_Tag_V1"] = argEnvNullable([["AppendedV1", { a: 1, b: "b" }, false]]);
+out["args_Tag_V2"] = argEnvNullable([
+  ["AppendedV1", { a: 1, b: "b" }, false],
+  ["string", "n", true],
+  ["i4", 5, true],
+]);
+out["args_Tag_V2_nulls"] = argEnvNullable([
+  ["AppendedV1", { a: 1, b: "b" }, false],
+  ["string", null, true],
+  ["i4", null, true],
+]);
 
 console.log(JSON.stringify(out, null, 2));

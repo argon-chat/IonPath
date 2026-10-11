@@ -258,6 +258,73 @@ pub struct SetHolderV2 {
 
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct NullAppendV1 {
+    pub a: i32,
+    pub b: String,
+}
+
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct NullAppendV2 {
+    pub a: i32,
+    pub b: String,
+    pub c: Option<i32>,
+    pub note: Option<String>,
+    pub xs: Option<Vec<i32>>,
+    pub inner: Option<AppendedV1>,
+}
+
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MidNullV1 {
+    pub a: i32,
+    pub b: Option<String>,
+}
+
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MidNullV2 {
+    pub a: i32,
+    pub b: Option<String>,
+    pub c: i32,
+}
+
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct NullNestV1 {
+    pub list: Vec<NullAppendV1>,
+    pub slots: [NullAppendV1; 2],
+    pub by_name: std::collections::HashMap<String, NullAppendV1>,
+    pub opt: Option<NullAppendV1>,
+    pub tail: i32,
+}
+
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct NullNestV2 {
+    pub list: Vec<NullAppendV2>,
+    pub slots: [NullAppendV2; 2],
+    pub by_name: std::collections::HashMap<String, NullAppendV2>,
+    pub opt: Option<NullAppendV2>,
+    pub tail: i32,
+}
+
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GrowNullHolderV1 {
+    pub g: GrowNullV1,
+    pub n: i32,
+}
+
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GrowNullHolderV2 {
+    pub g: GrowNullV2,
+    pub n: i32,
+}
+
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct TreeV1 {
     pub v: i32,
     pub kids: Vec<TreeV1>,
@@ -331,9 +398,9 @@ impl IonFormat for ShapeV1 {
 
 impl IonFormat for CircleV1 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "CircleV1")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "CircleV1", 1, 1)?;
         let r = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 1)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 1)?;
         Ok(Self { r })
     }
 
@@ -346,9 +413,9 @@ impl IonFormat for CircleV1 {
 
 impl IonFormat for SquareV1 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "SquareV1")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "SquareV1", 1, 1)?;
         let s = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 1)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 1)?;
         Ok(Self { s })
     }
 
@@ -418,9 +485,9 @@ impl IonFormat for ShapeV2 {
 
 impl IonFormat for CircleV2 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "CircleV2")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "CircleV2", 1, 1)?;
         let r = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 1)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 1)?;
         Ok(Self { r })
     }
 
@@ -433,9 +500,9 @@ impl IonFormat for CircleV2 {
 
 impl IonFormat for SquareV2 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "SquareV2")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "SquareV2", 1, 1)?;
         let s = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 1)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 1)?;
         Ok(Self { s })
     }
 
@@ -448,9 +515,9 @@ impl IonFormat for SquareV2 {
 
 impl IonFormat for TriangleV2 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "TriangleV2")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "TriangleV2", 1, 1)?;
         let t = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 1)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 1)?;
         Ok(Self { t })
     }
 
@@ -505,10 +572,10 @@ impl IonFormat for GrowV1 {
 
 impl IonFormat for GrowCaseV1 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "GrowCaseV1")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "GrowCaseV1", 2, 2)?;
         let a = <i32 as IonFormat>::ion_read(d)?;
         let b = <String as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { a, b })
     }
 
@@ -565,11 +632,11 @@ impl IonFormat for GrowV2 {
 
 impl IonFormat for GrowCaseV2 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "GrowCaseV2")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "GrowCaseV2", 3, 3)?;
         let a = <i32 as IonFormat>::ion_read(d)?;
         let b = <String as IonFormat>::ion_read(d)?;
         let c = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 3)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 3)?;
         Ok(Self { a, b, c })
     }
 
@@ -583,15 +650,139 @@ impl IonFormat for GrowCaseV2 {
 }
 
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum GrowNullV1 {
+    GrowNullCaseV1(GrowNullCaseV1),
+}
+
+impl GrowNullV1 {
+    pub fn union_index(&self) -> u32 {
+        match self {
+            Self::GrowNullCaseV1(_) => 0,
+        }
+    }
+}
+
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GrowNullCaseV1 {
+    pub a: i32,
+    pub b: String,
+}
+
+
+impl IonFormat for GrowNullV1 {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let (union_index, _depth) =
+            ion_rustcore::formatter::read_union_envelope(d, "GrowNullV1")?;
+        let value = match union_index {
+                        0 => GrowNullV1::GrowNullCaseV1(<GrowNullCaseV1 as IonFormat>::ion_read(d)?),
+            _ => return Err(IonError::InvalidUnionIndex(union_index)),
+        };
+        Ok(value)
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        ion_rustcore::formatter::write_union_envelope(e, self.union_index())?;
+        match self {
+                        Self::GrowNullCaseV1(v) => v.ion_write(e)?,
+        }
+        Ok(())
+    }
+}
+
+impl IonFormat for GrowNullCaseV1 {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "GrowNullCaseV1", 2, 2)?;
+        let a = <i32 as IonFormat>::ion_read(d)?;
+        let b = <String as IonFormat>::ion_read(d)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
+        Ok(Self { a, b })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(2)?;
+        self.a.ion_write(e)?;
+        self.b.ion_write(e)?;
+        Ok(())
+    }
+}
+
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum GrowNullV2 {
+    GrowNullCaseV2(GrowNullCaseV2),
+}
+
+impl GrowNullV2 {
+    pub fn union_index(&self) -> u32 {
+        match self {
+            Self::GrowNullCaseV2(_) => 0,
+        }
+    }
+}
+
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GrowNullCaseV2 {
+    pub a: i32,
+    pub b: String,
+    pub c: Option<i32>,
+    pub note: Option<String>,
+}
+
+
+impl IonFormat for GrowNullV2 {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let (union_index, _depth) =
+            ion_rustcore::formatter::read_union_envelope(d, "GrowNullV2")?;
+        let value = match union_index {
+                        0 => GrowNullV2::GrowNullCaseV2(<GrowNullCaseV2 as IonFormat>::ion_read(d)?),
+            _ => return Err(IonError::InvalidUnionIndex(union_index)),
+        };
+        Ok(value)
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        ion_rustcore::formatter::write_union_envelope(e, self.union_index())?;
+        match self {
+                        Self::GrowNullCaseV2(v) => v.ion_write(e)?,
+        }
+        Ok(())
+    }
+}
+
+impl IonFormat for GrowNullCaseV2 {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "GrowNullCaseV2", 4, 2)?;
+        let a = <i32 as IonFormat>::ion_read(d)?;
+        let b = <String as IonFormat>::ion_read(d)?;
+        let c = if __len > 2 { ion_rustcore::formatter::read_maybe::<i32>(d)? } else { None };
+        let note = if __len > 3 { ion_rustcore::formatter::read_maybe::<String>(d)? } else { None };
+        ion_rustcore::formatter::read_message_end(d, __len, 4)?;
+        Ok(Self { a, b, c, note })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(4)?;
+        self.a.ion_write(e)?;
+        self.b.ion_write(e)?;
+        ion_rustcore::formatter::write_maybe(e, &self.c)?;
+        ion_rustcore::formatter::write_maybe(e, &self.note)?;
+        Ok(())
+    }
+}
+
+
 
 // ═══════════════ Formatters ═══════════════
 
 impl IonFormat for AppendedV1 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "AppendedV1")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "AppendedV1", 2, 2)?;
         let a = <i32 as IonFormat>::ion_read(d)?;
         let b = <String as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { a, b })
     }
 
@@ -605,11 +796,11 @@ impl IonFormat for AppendedV1 {
 
 impl IonFormat for AppendedV2 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "AppendedV2")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "AppendedV2", 3, 3)?;
         let a = <i32 as IonFormat>::ion_read(d)?;
         let b = <String as IonFormat>::ion_read(d)?;
         let c = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 3)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 3)?;
         Ok(Self { a, b, c })
     }
 
@@ -624,10 +815,10 @@ impl IonFormat for AppendedV2 {
 
 impl IonFormat for InsertedV1 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "InsertedV1")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "InsertedV1", 2, 2)?;
         let a = <i32 as IonFormat>::ion_read(d)?;
         let c = <bool as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { a, c })
     }
 
@@ -641,11 +832,11 @@ impl IonFormat for InsertedV1 {
 
 impl IonFormat for InsertedV2 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "InsertedV2")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "InsertedV2", 3, 3)?;
         let a = <i32 as IonFormat>::ion_read(d)?;
         let b = <String as IonFormat>::ion_read(d)?;
         let c = <bool as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 3)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 3)?;
         Ok(Self { a, b, c })
     }
 
@@ -660,11 +851,11 @@ impl IonFormat for InsertedV2 {
 
 impl IonFormat for RemovedV1 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "RemovedV1")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "RemovedV1", 3, 3)?;
         let a = <i32 as IonFormat>::ion_read(d)?;
         let b = <String as IonFormat>::ion_read(d)?;
         let c = <bool as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 3)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 3)?;
         Ok(Self { a, b, c })
     }
 
@@ -679,10 +870,10 @@ impl IonFormat for RemovedV1 {
 
 impl IonFormat for RemovedV2 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "RemovedV2")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "RemovedV2", 2, 2)?;
         let a = <i32 as IonFormat>::ion_read(d)?;
         let c = <bool as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { a, c })
     }
 
@@ -696,10 +887,10 @@ impl IonFormat for RemovedV2 {
 
 impl IonFormat for ReorderedV1 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "ReorderedV1")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "ReorderedV1", 2, 2)?;
         let a = <i32 as IonFormat>::ion_read(d)?;
         let b = <String as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { a, b })
     }
 
@@ -713,10 +904,10 @@ impl IonFormat for ReorderedV1 {
 
 impl IonFormat for ReorderedV2 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "ReorderedV2")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "ReorderedV2", 2, 2)?;
         let b = <String as IonFormat>::ion_read(d)?;
         let a = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { b, a })
     }
 
@@ -730,10 +921,10 @@ impl IonFormat for ReorderedV2 {
 
 impl IonFormat for RetypedV1 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "RetypedV1")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "RetypedV1", 2, 2)?;
         let a = <i32 as IonFormat>::ion_read(d)?;
         let b = <String as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { a, b })
     }
 
@@ -747,10 +938,10 @@ impl IonFormat for RetypedV1 {
 
 impl IonFormat for RetypedV2 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "RetypedV2")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "RetypedV2", 2, 2)?;
         let a = <i32 as IonFormat>::ion_read(d)?;
         let b = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { a, b })
     }
 
@@ -764,9 +955,9 @@ impl IonFormat for RetypedV2 {
 
 impl IonFormat for WidenedV1 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "WidenedV1")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "WidenedV1", 1, 1)?;
         let a = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 1)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 1)?;
         Ok(Self { a })
     }
 
@@ -779,9 +970,9 @@ impl IonFormat for WidenedV1 {
 
 impl IonFormat for WidenedV2 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "WidenedV2")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "WidenedV2", 1, 1)?;
         let a = <i64 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 1)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 1)?;
         Ok(Self { a })
     }
 
@@ -794,9 +985,9 @@ impl IonFormat for WidenedV2 {
 
 impl IonFormat for OptAddedV1 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "OptAddedV1")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "OptAddedV1", 1, 1)?;
         let a = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 1)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 1)?;
         Ok(Self { a })
     }
 
@@ -809,10 +1000,10 @@ impl IonFormat for OptAddedV1 {
 
 impl IonFormat for OptAddedV2 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "OptAddedV2")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "OptAddedV2", 2, 1)?;
         let a = <i32 as IonFormat>::ion_read(d)?;
-        let b = ion_rustcore::formatter::read_maybe::<String>(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        let b = if __len > 1 { ion_rustcore::formatter::read_maybe::<String>(d)? } else { None };
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { a, b })
     }
 
@@ -826,10 +1017,10 @@ impl IonFormat for OptAddedV2 {
 
 impl IonFormat for OptTightenedV1 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "OptTightenedV1")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "OptTightenedV1", 2, 1)?;
         let a = <i32 as IonFormat>::ion_read(d)?;
-        let b = ion_rustcore::formatter::read_maybe::<String>(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        let b = if __len > 1 { ion_rustcore::formatter::read_maybe::<String>(d)? } else { None };
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { a, b })
     }
 
@@ -843,10 +1034,10 @@ impl IonFormat for OptTightenedV1 {
 
 impl IonFormat for OptTightenedV2 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "OptTightenedV2")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "OptTightenedV2", 2, 2)?;
         let a = <i32 as IonFormat>::ion_read(d)?;
         let b = <String as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { a, b })
     }
 
@@ -860,9 +1051,9 @@ impl IonFormat for OptTightenedV2 {
 
 impl IonFormat for VarToFixedV1 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "VarToFixedV1")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "VarToFixedV1", 1, 1)?;
         let xs = ion_rustcore::formatter::read_array::<i32>(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 1)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 1)?;
         Ok(Self { xs })
     }
 
@@ -875,9 +1066,9 @@ impl IonFormat for VarToFixedV1 {
 
 impl IonFormat for VarToFixedV2 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "VarToFixedV2")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "VarToFixedV2", 1, 1)?;
         let xs = <[i32; 3] as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 1)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 1)?;
         Ok(Self { xs })
     }
 
@@ -890,10 +1081,10 @@ impl IonFormat for VarToFixedV2 {
 
 impl IonFormat for EnumHolderV1 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "EnumHolderV1")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "EnumHolderV1", 2, 2)?;
         let t = <TierV1 as IonFormat>::ion_read(d)?;
         let n = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { t, n })
     }
 
@@ -907,10 +1098,10 @@ impl IonFormat for EnumHolderV1 {
 
 impl IonFormat for EnumHolderV2 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "EnumHolderV2")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "EnumHolderV2", 2, 2)?;
         let t = <TierV2 as IonFormat>::ion_read(d)?;
         let n = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { t, n })
     }
 
@@ -924,10 +1115,10 @@ impl IonFormat for EnumHolderV2 {
 
 impl IonFormat for UnionHolderV1 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "UnionHolderV1")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "UnionHolderV1", 2, 2)?;
         let s = <ShapeV1 as IonFormat>::ion_read(d)?;
         let n = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { s, n })
     }
 
@@ -941,10 +1132,10 @@ impl IonFormat for UnionHolderV1 {
 
 impl IonFormat for UnionHolderV2 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "UnionHolderV2")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "UnionHolderV2", 2, 2)?;
         let s = <ShapeV2 as IonFormat>::ion_read(d)?;
         let n = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { s, n })
     }
 
@@ -958,7 +1149,7 @@ impl IonFormat for UnionHolderV2 {
 
 impl IonFormat for NestV1 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "NestV1")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "NestV1", 9, 9)?;
         let bare = <AppendedV1 as IonFormat>::ion_read(d)?;
         let list = ion_rustcore::formatter::read_array::<AppendedV1>(d)?;
         let slots = <[AppendedV1; 2] as IonFormat>::ion_read(d)?;
@@ -968,7 +1159,7 @@ impl IonFormat for NestV1 {
         let tiers = <std::collections::HashSet<TierV1> as IonFormat>::ion_read(d)?;
         let shape = <ShapeV1 as IonFormat>::ion_read(d)?;
         let tail = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 9)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 9)?;
         Ok(Self { bare, list, slots, by_name, opt, tier, tiers, shape, tail })
     }
 
@@ -989,7 +1180,7 @@ impl IonFormat for NestV1 {
 
 impl IonFormat for NestV2 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "NestV2")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "NestV2", 9, 9)?;
         let bare = <AppendedV2 as IonFormat>::ion_read(d)?;
         let list = ion_rustcore::formatter::read_array::<AppendedV2>(d)?;
         let slots = <[AppendedV2; 2] as IonFormat>::ion_read(d)?;
@@ -999,7 +1190,7 @@ impl IonFormat for NestV2 {
         let tiers = <std::collections::HashSet<TierV2> as IonFormat>::ion_read(d)?;
         let shape = <ShapeV2 as IonFormat>::ion_read(d)?;
         let tail = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 9)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 9)?;
         Ok(Self { bare, list, slots, by_name, opt, tier, tiers, shape, tail })
     }
 
@@ -1020,10 +1211,10 @@ impl IonFormat for NestV2 {
 
 impl IonFormat for ShiftedV1 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "ShiftedV1")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "ShiftedV1", 2, 2)?;
         let a = <i32 as IonFormat>::ion_read(d)?;
         let c = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { a, c })
     }
 
@@ -1037,11 +1228,11 @@ impl IonFormat for ShiftedV1 {
 
 impl IonFormat for ShiftedV2 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "ShiftedV2")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "ShiftedV2", 3, 3)?;
         let a = <i32 as IonFormat>::ion_read(d)?;
         let b = <i32 as IonFormat>::ion_read(d)?;
         let c = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 3)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 3)?;
         Ok(Self { a, b, c })
     }
 
@@ -1056,10 +1247,10 @@ impl IonFormat for ShiftedV2 {
 
 impl IonFormat for SwapV1 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "SwapV1")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "SwapV1", 2, 2)?;
         let x = <i32 as IonFormat>::ion_read(d)?;
         let y = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { x, y })
     }
 
@@ -1073,10 +1264,10 @@ impl IonFormat for SwapV1 {
 
 impl IonFormat for SwapV2 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "SwapV2")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "SwapV2", 2, 2)?;
         let y = <i32 as IonFormat>::ion_read(d)?;
         let x = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { y, x })
     }
 
@@ -1090,10 +1281,10 @@ impl IonFormat for SwapV2 {
 
 impl IonFormat for GrowHolderV1 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "GrowHolderV1")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "GrowHolderV1", 2, 2)?;
         let g = <GrowV1 as IonFormat>::ion_read(d)?;
         let n = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { g, n })
     }
 
@@ -1107,10 +1298,10 @@ impl IonFormat for GrowHolderV1 {
 
 impl IonFormat for GrowHolderV2 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "GrowHolderV2")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "GrowHolderV2", 2, 2)?;
         let g = <GrowV2 as IonFormat>::ion_read(d)?;
         let n = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { g, n })
     }
 
@@ -1124,10 +1315,10 @@ impl IonFormat for GrowHolderV2 {
 
 impl IonFormat for SetHolderV1 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "SetHolderV1")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "SetHolderV1", 2, 2)?;
         let s = <std::collections::HashSet<TierV1> as IonFormat>::ion_read(d)?;
         let n = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { s, n })
     }
 
@@ -1141,10 +1332,10 @@ impl IonFormat for SetHolderV1 {
 
 impl IonFormat for SetHolderV2 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "SetHolderV2")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "SetHolderV2", 2, 2)?;
         let s = <std::collections::HashSet<TierV2> as IonFormat>::ion_read(d)?;
         let n = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { s, n })
     }
 
@@ -1156,12 +1347,170 @@ impl IonFormat for SetHolderV2 {
     }
 }
 
+impl IonFormat for NullAppendV1 {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "NullAppendV1", 2, 2)?;
+        let a = <i32 as IonFormat>::ion_read(d)?;
+        let b = <String as IonFormat>::ion_read(d)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
+        Ok(Self { a, b })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(2)?;
+        self.a.ion_write(e)?;
+        self.b.ion_write(e)?;
+        Ok(())
+    }
+}
+
+impl IonFormat for NullAppendV2 {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "NullAppendV2", 6, 2)?;
+        let a = <i32 as IonFormat>::ion_read(d)?;
+        let b = <String as IonFormat>::ion_read(d)?;
+        let c = if __len > 2 { ion_rustcore::formatter::read_maybe::<i32>(d)? } else { None };
+        let note = if __len > 3 { ion_rustcore::formatter::read_maybe::<String>(d)? } else { None };
+        let xs = if __len > 4 { ion_rustcore::formatter::read_maybe::<Vec<i32>>(d)? } else { None };
+        let inner = if __len > 5 { ion_rustcore::formatter::read_maybe::<AppendedV1>(d)? } else { None };
+        ion_rustcore::formatter::read_message_end(d, __len, 6)?;
+        Ok(Self { a, b, c, note, xs, inner })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(6)?;
+        self.a.ion_write(e)?;
+        self.b.ion_write(e)?;
+        ion_rustcore::formatter::write_maybe(e, &self.c)?;
+        ion_rustcore::formatter::write_maybe(e, &self.note)?;
+        ion_rustcore::formatter::write_maybe(e, &self.xs)?;
+        ion_rustcore::formatter::write_maybe(e, &self.inner)?;
+        Ok(())
+    }
+}
+
+impl IonFormat for MidNullV1 {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "MidNullV1", 2, 1)?;
+        let a = <i32 as IonFormat>::ion_read(d)?;
+        let b = if __len > 1 { ion_rustcore::formatter::read_maybe::<String>(d)? } else { None };
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
+        Ok(Self { a, b })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(2)?;
+        self.a.ion_write(e)?;
+        ion_rustcore::formatter::write_maybe(e, &self.b)?;
+        Ok(())
+    }
+}
+
+impl IonFormat for MidNullV2 {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "MidNullV2", 3, 3)?;
+        let a = <i32 as IonFormat>::ion_read(d)?;
+        let b = ion_rustcore::formatter::read_maybe::<String>(d)?;
+        let c = <i32 as IonFormat>::ion_read(d)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 3)?;
+        Ok(Self { a, b, c })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(3)?;
+        self.a.ion_write(e)?;
+        ion_rustcore::formatter::write_maybe(e, &self.b)?;
+        self.c.ion_write(e)?;
+        Ok(())
+    }
+}
+
+impl IonFormat for NullNestV1 {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "NullNestV1", 5, 5)?;
+        let list = ion_rustcore::formatter::read_array::<NullAppendV1>(d)?;
+        let slots = <[NullAppendV1; 2] as IonFormat>::ion_read(d)?;
+        let by_name = <std::collections::HashMap<String, NullAppendV1> as IonFormat>::ion_read(d)?;
+        let opt = ion_rustcore::formatter::read_maybe::<NullAppendV1>(d)?;
+        let tail = <i32 as IonFormat>::ion_read(d)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 5)?;
+        Ok(Self { list, slots, by_name, opt, tail })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(5)?;
+        ion_rustcore::formatter::write_array(e, &self.list)?;
+        self.slots.ion_write(e)?;
+        self.by_name.ion_write(e)?;
+        ion_rustcore::formatter::write_maybe(e, &self.opt)?;
+        self.tail.ion_write(e)?;
+        Ok(())
+    }
+}
+
+impl IonFormat for NullNestV2 {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "NullNestV2", 5, 5)?;
+        let list = ion_rustcore::formatter::read_array::<NullAppendV2>(d)?;
+        let slots = <[NullAppendV2; 2] as IonFormat>::ion_read(d)?;
+        let by_name = <std::collections::HashMap<String, NullAppendV2> as IonFormat>::ion_read(d)?;
+        let opt = ion_rustcore::formatter::read_maybe::<NullAppendV2>(d)?;
+        let tail = <i32 as IonFormat>::ion_read(d)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 5)?;
+        Ok(Self { list, slots, by_name, opt, tail })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(5)?;
+        ion_rustcore::formatter::write_array(e, &self.list)?;
+        self.slots.ion_write(e)?;
+        self.by_name.ion_write(e)?;
+        ion_rustcore::formatter::write_maybe(e, &self.opt)?;
+        self.tail.ion_write(e)?;
+        Ok(())
+    }
+}
+
+impl IonFormat for GrowNullHolderV1 {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "GrowNullHolderV1", 2, 2)?;
+        let g = <GrowNullV1 as IonFormat>::ion_read(d)?;
+        let n = <i32 as IonFormat>::ion_read(d)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
+        Ok(Self { g, n })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(2)?;
+        self.g.ion_write(e)?;
+        self.n.ion_write(e)?;
+        Ok(())
+    }
+}
+
+impl IonFormat for GrowNullHolderV2 {
+    fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "GrowNullHolderV2", 2, 2)?;
+        let g = <GrowNullV2 as IonFormat>::ion_read(d)?;
+        let n = <i32 as IonFormat>::ion_read(d)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
+        Ok(Self { g, n })
+    }
+
+    fn ion_write(&self, e: &mut Encoder<Vec<u8>>) -> Result<(), IonError> {
+        e.array(2)?;
+        self.g.ion_write(e)?;
+        self.n.ion_write(e)?;
+        Ok(())
+    }
+}
+
 impl IonFormat for TreeV1 {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "TreeV1")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "TreeV1", 2, 2)?;
         let v = <i32 as IonFormat>::ion_read(d)?;
         let kids = ion_rustcore::formatter::read_array::<TreeV1>(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { v, kids })
     }
 
@@ -1204,6 +1553,14 @@ impl CompatSvcV1Client {
         let req = ion_rustcore::IonRequest::new(&self.ctx, "ICompatSvcV1", "EchoNest");
         req.call::<NestV1>(&buf).await
     }
+    pub async fn tag(&self, v: &AppendedV1) -> Result<AppendedV1, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(1)?;
+        v.ion_write(&mut e)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "ICompatSvcV1", "Tag");
+        req.call::<AppendedV1>(&buf).await
+    }
 
 }
 
@@ -1234,6 +1591,16 @@ impl CompatSvcV2Client {
         let buf = e.into_writer();
         let req = ion_rustcore::IonRequest::new(&self.ctx, "ICompatSvcV2", "EchoNest");
         req.call::<NestV2>(&buf).await
+    }
+    pub async fn tag(&self, v: &AppendedV1, note: &Option<String>, weight: &Option<i32>) -> Result<AppendedV1, ion_rustcore::IonError> {
+        let mut e = ion_rustcore::Encoder::new(Vec::new());
+        e.array(3)?;
+        v.ion_write(&mut e)?;
+        ion_rustcore::formatter::write_maybe(&mut e, &note)?;
+        ion_rustcore::formatter::write_maybe(&mut e, &weight)?;
+        let buf = e.into_writer();
+        let req = ion_rustcore::IonRequest::new(&self.ctx, "ICompatSvcV2", "Tag");
+        req.call::<AppendedV1>(&buf).await
     }
 
 }

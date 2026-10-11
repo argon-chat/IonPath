@@ -146,26 +146,52 @@ const codecFor = (spec: string): Codec => {
       const f = IonFormatterStorage.get<any>("I" + args[0]);
       return { read: (r) => f.read(r), write: (w, v) => f.write(w, v as any) };
     }
-    case "Args":
-      // The generated executor prologue, verbatim:
-      //   var arraySize = reader.ReadStartArray() ?? throw ...
+    case "Args": {
+      // The generated executor prologue. When every argument is required:
+      //   var arraySize = reader.ReadStartMessage(argumentSize, "Svc.Method");
       //   <one read per declared argument>
       //   reader.ReadEndArrayAndSkip(arraySize - argumentSize);
+      // An argument spelled `T?` is nullable. When the list ends in nullable arguments the
+      // prologue requires everything up to the last non-nullable one and reads the rest only while
+      // the payload still carries them:
+      //   var arraySize = reader.ReadStartMessage(argumentSize, "Svc.Method", requiredFields: R);
+      //   var __note = arraySize > 1 ? reader.ReadNullable<string>() : default!;
+      //   reader.ReadEndMessage(arraySize, argumentSize);
+      const params = args.map((spec) =>
+        spec.endsWith("?")
+          ? { type: spec.slice(0, -1), nullable: true }
+          : { type: spec, nullable: false }
+      );
+      const required = params.reduce((r, p, i) => (p.nullable ? r : i + 1), 0);
+      const allRequired = required === params.length;
       return {
         read: (r) => {
-          const arraySize = r.readStartArray();
-          if (arraySize === null) throw new Error("undefined len array not allowed");
-          const values = args.map((t) => IonFormatterStorage.get<any>(t).read(r));
-          r.readEndArrayAndSkip(arraySize - args.length);
+          const arraySize = allRequired
+            ? IonFormatterStorage.readStartMessage(r, params.length, "Args")
+            : IonFormatterStorage.readStartMessage(r, params.length, "Args", required);
+          const values = params.map((p, i) =>
+            !p.nullable
+              ? IonFormatterStorage.get<any>(p.type).read(r)
+              : i < arraySize
+                ? IonFormatterStorage.readNullable<any>(r, p.type)
+                : null
+          );
+          if (allRequired) r.readEndArrayAndSkip(arraySize - params.length);
+          else IonFormatterStorage.readEndMessage(r, arraySize, params.length);
           return values;
         },
         write: (w, v) => {
           const values = v as unknown[];
-          w.writeStartArray(args.length);
-          args.forEach((t, i) => IonFormatterStorage.get<any>(t).write(w, values[i] as any));
+          w.writeStartArray(params.length);
+          params.forEach((p, i) =>
+            p.nullable
+              ? IonFormatterStorage.writeNullable<any>(w, values[i] as any, p.type)
+              : IonFormatterStorage.get<any>(p.type).write(w, values[i] as any)
+          );
           w.writeEndArray();
         },
       };
+    }
     default:
       throw new Error(`unknown reader spec '${spec}'`);
   }

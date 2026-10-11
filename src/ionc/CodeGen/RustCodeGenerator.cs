@@ -322,8 +322,15 @@ public sealed class RustCodeGenerator : CodeGeneratorBase
 
     protected override string GenerateMessageFormatter(IonType type, bool isUnionCase)
     {
+        // Fields up to and including the last non-nullable one are required and read
+        // unconditionally; the nullable tail is read only while the payload still has it, so a
+        // payload written before those fields were appended decodes with them `None`. The same
+        // shape as the C# and TypeScript generators — see IonWireShape.
+        var required = IonWireShape.RequiredCount(type.fields);
         var readFields = string.Join($"\n{Emitter.Indent(2)}",
-            type.fields.Select(f => GenerateReadField(f)));
+            type.fields.Select((f, index) => index < required
+                ? GenerateReadField(f)
+                : $"let {ToSnakeCase(f.name.Identifier)} = if __len > {index} {{ {ReadMaybeExpression(f.type)} }} else {{ None }};"));
         var writeFields = string.Join($"\n{Emitter.Indent(2)}",
             type.fields.Select(f => GenerateWriteField(f, "self.")));
         var ctorArgs = string.Join(", ", type.fields.Select(f => ToSnakeCase(f.name.Identifier)));
@@ -335,9 +342,18 @@ public sealed class RustCodeGenerator : CodeGeneratorBase
             .Set("readFields", readFields)
             .Set("writeFields", writeFields)
             .Set("ctorArgs", ctorArgs)
-            .Set("fieldsCount", type.fields.Count.ToString());
+            .Set("fieldsCount", type.fields.Count.ToString())
+            .Set("requiredCount", required.ToString());
 
         return ctx.Apply(template);
+    }
+
+    /// <summary>The expression that reads a <c>T?</c> field: an <c>Option&lt;T&gt;</c>.</summary>
+    private string ReadMaybeExpression(IonType type)
+    {
+        if (type is not IonGenericType { IsMaybe: true } maybe)
+            throw new InvalidOperationException($"'{type.name.Identifier}' is not nullable");
+        return $"ion_rustcore::formatter::read_maybe::<{TypeResolver.Resolve(maybe.TypeArguments[0])}>(d)?";
     }
 
     protected override string GenerateUnionFormatter(IonUnion union)
@@ -382,8 +398,8 @@ public sealed class RustCodeGenerator : CodeGeneratorBase
 
         return field.type switch
         {
-            IonGenericType { IsMaybe: true } maybe =>
-                $"let {varName} = ion_rustcore::formatter::read_maybe::<{TypeResolver.Resolve(maybe.TypeArguments[0])}>(d)?;",
+            IonGenericType { IsMaybe: true } =>
+                $"let {varName} = {ReadMaybeExpression(field.type)};",
             IonGenericType { IsArray: true, FixedSize: null } array =>
                 $"let {varName} = ion_rustcore::formatter::read_array::<{TypeResolver.Resolve(array.TypeArguments[0])}>(d)?;",
             _ =>

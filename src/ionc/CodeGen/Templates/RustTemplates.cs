@@ -26,14 +26,23 @@ public sealed class RustTemplateProvider : ITemplateProvider
     /// It is bound as <c>_depth</c> and not <c>_</c>: <c>DepthGuard</c> is <c>#[must_use]</c> and
     /// releases on drop, so <c>let _ =</c> would drop it immediately and count nothing.
     /// </para>
+    /// <para>
+    /// <c>read_message_start</c> (rather than the older <c>read_message_header</c>) also checks
+    /// the declared count against <c>{requiredCount}</c> — the fields up to and including the last
+    /// non-nullable one — <i>before</i> any field is read, and <c>read_message_end</c> closes an
+    /// array that may be shorter than <c>{fieldsCount}</c>. Each field past the required count is
+    /// read as <c>if __len &gt; i { … } else { None }</c>, so a payload written before a nullable
+    /// field was appended decodes with that field <c>None</c>. The count is bound as <c>__len</c>
+    /// so that a field named <c>len</c> cannot shadow it.
+    /// </para>
     /// </remarks>
     public string FormatterTemplate =>
         """
         impl IonFormat for {typeName} {
             fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-                let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "{typeName}")?;
+                let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "{typeName}", {fieldsCount}, {requiredCount})?;
                 {readFields}
-                ion_rustcore::formatter::skip_remaining(d, len, {fieldsCount})?;
+                ion_rustcore::formatter::read_message_end(d, __len, {fieldsCount})?;
                 Ok(Self { {ctorArgs} })
             }
 
@@ -47,15 +56,15 @@ public sealed class RustTemplateProvider : ITemplateProvider
 
     /// <summary>
     /// A union case's <c>IonFormat</c> impl — a message like any other, including its
-    /// <c>read_message_header</c> depth guard.
+    /// <c>read_message_start</c> depth guard and its nullable-tail handling.
     /// </summary>
     public string FormatterUnionCaseTemplate =>
         """
         impl IonFormat for {typeName} {
             fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-                let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "{typeName}")?;
+                let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "{typeName}", {fieldsCount}, {requiredCount})?;
                 {readFields}
-                ion_rustcore::formatter::skip_remaining(d, len, {fieldsCount})?;
+                ion_rustcore::formatter::read_message_end(d, __len, {fieldsCount})?;
                 Ok(Self { {ctorArgs} })
             }
 
@@ -101,8 +110,9 @@ public sealed class RustTemplateProvider : ITemplateProvider
     /// <remarks>
     /// <para>
     /// <b>A union envelope is exactly <c>[index, payload]</c> — two items, in every revision of
-    /// every union.</b> Growth happens inside the case payload, which is a message and skips its
-    /// own tail. The old <c>d.array()?; let union_index = d.u32()?;</c> discarded the declared
+    /// every union.</b> Growth happens inside the case payload, which is a message: it skips a
+    /// newer peer's tail, and reads an older peer's shorter payload when the fields added since are
+    /// nullable. The old <c>d.array()?; let union_index = d.u32()?;</c> discarded the declared
     /// length, so a three-item envelope left its stray item in the stream and the <i>next field of
     /// the enclosing message</i> read it as its own value — <c>[[0, [1,"b"], 9], 5]</c> decoded
     /// with <c>n = 9</c>, silently. <c>read_union_envelope</c> rejects any length other than two

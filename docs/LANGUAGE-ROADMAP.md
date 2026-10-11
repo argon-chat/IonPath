@@ -48,6 +48,8 @@ Every non-primitive Ion value is a **definite-length CBOR array**, written in fi
 | Rust | `d.array()?` then N reads, then `skip_remaining(d, len, N)` | `e.array(N)?` | `src/ionc/CodeGen/Templates/RustTemplates.cs:12-28` |
 | TypeScript | positional, same shape | same | `src/ionc/CodeGen/IonTypeScriptGenerator.cs` (mirrors the C# template) |
 
+> **Since 2.0.3** a reader also accepts a *shorter* array when every field it lacks is nullable: it requires the fields up to and including the last non-nullable one (`IonWireShape.RequiredCount`), reads each later field only while `i < declared`, and leaves the rest null. That is `ReadStartMessage(N, ctx, requiredFields: R)` … `ReadEndMessage(arraySize, N)` in C#, the same pair in TypeScript, and `read_message_start(d, ctx, N, R)` … `read_message_end(d, len, N)` in Rust (which now checks the count before reading). A nullable field appended at the end therefore works in both directions; a missing non-nullable field is still the typed field-count error. Unlike the dead stack's `arraySize > i ? read : default!` below, a missing *required* field never becomes a default.
+
 Unions are a 2-element array `[u32 caseOrdinal, payload]`. The ordinal is the loop counter over declared cases — `src/ionc/CodeGen/IonCSharpGenerator.cs:1241/1255/1258` — read back at `:1338` and dispatched at `:1364`. An unrecognised ordinal is a hard `InvalidOperationException` (`:1343`).
 
 **Consequences, stated plainly:**

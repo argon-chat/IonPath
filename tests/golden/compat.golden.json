@@ -60,7 +60,7 @@
     "Set<T>": "what a `Set<T>` field reads (CBOR tag 258)",
     "Maybe<T>": "what a `T?` field reads",
     "Union<U>": "the generated union formatter for U",
-    "Args<T0,T1,...>": "the method-argument envelope: ReadStartArray(), each argument, ReadEndArrayAndSkip(len - argc) - the generated executor prologue, verbatim"
+    "Args<T0,T1,...>": "the method-argument envelope, as the generated executor prologue reads it: ReadStartMessage(argc), each argument, ReadEndArrayAndSkip(len - argc). An argument spelled `T?` is nullable; when the list ends in nullable arguments the prologue is ReadStartMessage(argc, required), each trailing nullable argument read only while len > i (null otherwise), ReadEndMessage(len, argc)"
   },
   "lockCheck": {
     "$comment": [
@@ -82,13 +82,13 @@
         "axis": "append",
         "caught": "warning",
         "diagnostic": "ION0029 (field added is not nullable)",
-        "note": "Correct: appending is the one safe edit, and the warning is about the reader's inability to distinguish 'absent' from 'default', not about the wire."
+        "note": "Correct, and the warning is the whole story: a non-nullable append works forward only. An old reader skips the new field (`appended.forward.*`), but a new reader handed an old payload has nothing to put in it and raises the typed field-count error (`appended.backward.*`). Making the field nullable is what makes it work both ways."
       },
       {
         "axis": "optional-add",
         "caught": "no",
         "diagnostic": null,
-        "note": "Correct on the wire, but see the `optional-added.backward` vectors: a NEW reader still cannot read an OLD writer's payload, because `?` describes the value, not its presence."
+        "note": "Correct: a nullable field appended at the end is compatible in both directions - an old reader skips it, a new reader reads it as null from an old payload (`optional-added.backward`, `nullable-appended.*`)."
       },
       {
         "axis": "insert-middle",
@@ -202,7 +202,7 @@
         "axis": "union-case-append",
         "caught": "warning",
         "diagnostic": "ION0029 (field added is not nullable)",
-        "note": "Deliberately identical to appending to a msg: a case payload is a positional array nested in the union envelope, so the same rule applies."
+        "note": "Deliberately identical to appending to a msg: a case payload is a positional array nested in the union envelope, so the same rule applies - a nullable field appended to a case works both ways (`nullable-appended.*.union-*`)."
       },
       {
         "axis": "union-case-insert",
@@ -220,7 +220,7 @@
         "axis": "method-add-arg",
         "caught": "error",
         "diagnostic": "ION0026 (argument count)",
-        "note": "Correct - stricter than the wire, which skips a trailing argument (see `argument-added.forward`)."
+        "note": "Correct for the required argument probed here - stricter than the wire, which skips a trailing argument (see `argument-added.forward`). The lock compares argument counts only, so it rejects a trailing NULLABLE argument too, although the executor now reads one an older client did not send as null (`nullable-argument-added.*`)."
       },
       {
         "axis": "method-arg-retype",
@@ -271,7 +271,7 @@
       "Ion decode failure and another an untyped exception. Wire-compatible, and still a",
       "defect - a caller cannot write one handler that works against all three."
     ],
-    "agreeCount": 144,
+    "agreeCount": 168,
     "divergentAcceptance": [],
     "divergentValue": [],
     "divergentErrorTypingCount": 0,
@@ -312,7 +312,7 @@
       "direction": "v1-writes-v2-reads",
       "reader": "AppendedV2",
       "hex": "82016162",
-      "notes": "A new reader against an old writer. There is no field to read, so this must be a typed decode error naming what was expected - never a default value, and never a read past the array.",
+      "notes": "A new reader against an old writer. The appended `c: i4` is NOT nullable, so there is nothing honest to put in it: this must be a typed decode error naming what was expected - never a default value, and never a read past the array. Compare `nullable-appended.backward.bare`, where the appended fields are nullable and the same shortfall reads as null.",
       "verdict": "correct",
       "expect": {
         "cs": {
@@ -325,7 +325,7 @@
         },
         "rust": {
           "outcome": "error",
-          "error": "Decode"
+          "error": "FieldCount"
         }
       }
     },
@@ -376,7 +376,7 @@
         },
         "rust": {
           "outcome": "error",
-          "error": "Decode"
+          "error": "FieldCount"
         }
       }
     },
@@ -427,7 +427,7 @@
         },
         "rust": {
           "outcome": "error",
-          "error": "Decode"
+          "error": "FieldCount"
         }
       }
     },
@@ -477,7 +477,7 @@
         },
         "rust": {
           "outcome": "error",
-          "error": "Decode"
+          "error": "FieldCount"
         }
       }
     },
@@ -526,7 +526,7 @@
         },
         "rust": {
           "outcome": "error",
-          "error": "Decode"
+          "error": "FieldCount"
         }
       }
     },
@@ -575,7 +575,7 @@
         },
         "rust": {
           "outcome": "error",
-          "error": "Decode"
+          "error": "FieldCount"
         }
       }
     },
@@ -625,7 +625,7 @@
         },
         "rust": {
           "outcome": "error",
-          "error": "Decode"
+          "error": "FieldCount"
         }
       }
     },
@@ -725,7 +725,7 @@
         },
         "rust": {
           "outcome": "error",
-          "error": "Decode"
+          "error": "FieldCount"
         }
       }
     },
@@ -775,7 +775,7 @@
         },
         "rust": {
           "outcome": "error",
-          "error": "Decode"
+          "error": "FieldCount"
         }
       }
     },
@@ -825,7 +825,7 @@
         },
         "rust": {
           "outcome": "error",
-          "error": "Decode"
+          "error": "FieldCount"
         }
       }
     },
@@ -874,7 +874,7 @@
         },
         "rust": {
           "outcome": "error",
-          "error": "Decode"
+          "error": "FieldCount"
         }
       }
     },
@@ -917,15 +917,15 @@
       "expect": {
         "cs": {
           "outcome": "error",
-          "error": "IonContainerExhaustedException"
+          "error": "IonFieldCountException"
         },
         "ts": {
           "outcome": "error",
-          "error": "IonContainerOverreadError"
+          "error": "IonFieldCountError"
         },
         "rust": {
           "outcome": "error",
-          "error": "Decode"
+          "error": "FieldCount"
         }
       }
     },
@@ -972,7 +972,7 @@
         },
         "rust": {
           "outcome": "error",
-          "error": "Decode"
+          "error": "FieldCount"
         }
       }
     },
@@ -1024,7 +1024,7 @@
         },
         "rust": {
           "outcome": "error",
-          "error": "Decode"
+          "error": "FieldCount"
         }
       }
     },
@@ -1156,7 +1156,7 @@
         },
         "rust": {
           "outcome": "error",
-          "error": "Decode"
+          "error": "FieldCount"
         }
       }
     },
@@ -1469,20 +1469,23 @@
       "direction": "v1-writes-v2-reads",
       "reader": "OptAddedV2",
       "hex": "8101",
-      "notes": "Adding an OPTIONAL field is still adding a field: `?` describes the value, not its presence on the wire. A v2 reader is not entitled to treat the missing slot as null.",
+      "notes": "A v2 reader against a v1 payload that predates the nullable `b`. The array is one item short and the item it lacks is nullable, so `b` reads as null: appending a nullable field works in both directions. This used to be a field-count error, which made every payload the previous build had stored unreadable after the upgrade that grew the message.",
       "verdict": "correct",
       "expect": {
         "cs": {
-          "outcome": "error",
-          "error": "IonFieldCountException"
+          "outcome": "ok",
+          "reencodedHex": "8201f6",
+          "consumed": 2
         },
         "ts": {
-          "outcome": "error",
-          "error": "IonFieldCountError"
+          "outcome": "ok",
+          "reencodedHex": "8201f6",
+          "consumed": 2
         },
         "rust": {
-          "outcome": "error",
-          "error": "Decode"
+          "outcome": "ok",
+          "reencodedHex": "8201f6",
+          "consumed": 2
         }
       }
     },
@@ -1559,6 +1562,636 @@
           "outcome": "ok",
           "reencodedHex": "82016162",
           "consumed": 4
+        }
+      }
+    },
+    {
+      "name": "nullable-appended.forward.bare",
+      "axis": "nullable-appended",
+      "position": "bare",
+      "direction": "v2-writes-v1-reads",
+      "reader": "NullAppendV1",
+      "hex": "8601616207616e82010282026163",
+      "notes": "v2 appended four nullable fields (scalar, string, array, message) and set them all; v1 skips them as surplus, exactly like any appended field.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 14
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 14
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 14
+        }
+      }
+    },
+    {
+      "name": "nullable-appended.forward.bare.nulls",
+      "axis": "nullable-appended",
+      "position": "bare",
+      "direction": "v2-writes-v1-reads",
+      "reader": "NullAppendV1",
+      "hex": "86016162f6f6f6f6",
+      "notes": "The same with every appended field null: the items are on the wire as CBOR nulls and are skipped the same way.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 8
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 8
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "82016162",
+          "consumed": 8
+        }
+      }
+    },
+    {
+      "name": "nullable-appended.backward.bare",
+      "axis": "nullable-appended",
+      "position": "bare",
+      "direction": "v1-writes-v2-reads",
+      "reader": "NullAppendV2",
+      "hex": "82016162",
+      "notes": "THE CASE THIS AXIS EXISTS FOR. A v2 reader against a v1 payload: the array is four items short and every one of them is nullable, so they read as null and `consumed` stays at the message's own bytes. This is what a cached snapshot, a stored replay result or a queued job written by the previous build looks like after the upgrade that grew the message.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "86016162f6f6f6f6",
+          "consumed": 4
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "86016162f6f6f6f6",
+          "consumed": 4
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "86016162f6f6f6f6",
+          "consumed": 4
+        }
+      }
+    },
+    {
+      "name": "nullable-appended.backward.partial",
+      "axis": "nullable-appended",
+      "position": "bare",
+      "direction": "v1-writes-v2-reads",
+      "reader": "NullAppendV2",
+      "hex": "8301616207",
+      "notes": "A writer from an intermediate revision that had only `c`: the reader takes the item that is there and nulls the three after it.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "8601616207f6f6f6",
+          "consumed": 5
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "8601616207f6f6f6",
+          "consumed": 5
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "8601616207f6f6f6",
+          "consumed": 5
+        }
+      }
+    },
+    {
+      "name": "nullable-appended.backward.array",
+      "axis": "nullable-appended",
+      "position": "T[]",
+      "direction": "v1-writes-v2-reads",
+      "reader": "Array<NullAppendV2>",
+      "hex": "828201616282016162",
+      "notes": "Two short elements. A reader that read a nullable field past its own element's end would take element 1's header as element 0's `c`.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "8286016162f6f6f6f686016162f6f6f6f6",
+          "consumed": 9
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "8286016162f6f6f6f686016162f6f6f6f6",
+          "consumed": 9
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "8286016162f6f6f6f686016162f6f6f6f6",
+          "consumed": 9
+        }
+      }
+    },
+    {
+      "name": "nullable-appended.backward.fixed",
+      "axis": "nullable-appended",
+      "position": "T[N]",
+      "direction": "v1-writes-v2-reads",
+      "reader": "Fixed<NullAppendV2,2>",
+      "hex": "828201616282016162",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "8286016162f6f6f6f686016162f6f6f6f6",
+          "consumed": 9
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "8286016162f6f6f6f686016162f6f6f6f6",
+          "consumed": 9
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "8286016162f6f6f6f686016162f6f6f6f6",
+          "consumed": 9
+        }
+      }
+    },
+    {
+      "name": "nullable-appended.backward.map",
+      "axis": "nullable-appended",
+      "position": "Map value",
+      "direction": "v1-writes-v2-reads",
+      "reader": "Map<string,NullAppendV2>",
+      "hex": "a1616b82016162",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "a1616b86016162f6f6f6f6",
+          "consumed": 7
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "a1616b86016162f6f6f6f6",
+          "consumed": 7
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "a1616b86016162f6f6f6f6",
+          "consumed": 7
+        }
+      }
+    },
+    {
+      "name": "nullable-appended.backward.maybe",
+      "axis": "nullable-appended",
+      "position": "T?",
+      "direction": "v1-writes-v2-reads",
+      "reader": "Maybe<NullAppendV2>",
+      "hex": "82016162",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "86016162f6f6f6f6",
+          "consumed": 4
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "86016162f6f6f6f6",
+          "consumed": 4
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "86016162f6f6f6f6",
+          "consumed": 4
+        }
+      }
+    },
+    {
+      "name": "nullable-appended.forward.every-position",
+      "axis": "nullable-appended",
+      "position": "all at once",
+      "direction": "v2-writes-v1-reads",
+      "reader": "NullNestV1",
+      "hex": "8581860161620bf6f6f68286026163f66173f6f686036164f6f68103f6a1616b86046165f6f6f68209617a860561660f616f80f61863",
+      "notes": "The grown message in `T[]`, `T[N]`, Map value and `T?` at once, with a mix of set and null tail fields and `tail: i4 = 99` as the sentinel.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "858182016162828202616382036164a1616b82046165820561661863",
+          "consumed": 54
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "858182016162828202616382036164a1616b82046165820561661863",
+          "consumed": 54
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "858182016162828202616382036164a1616b82046165820561661863",
+          "consumed": 54
+        }
+      }
+    },
+    {
+      "name": "nullable-appended.backward.every-position",
+      "axis": "nullable-appended",
+      "position": "all at once",
+      "direction": "v1-writes-v2-reads",
+      "reader": "NullNestV2",
+      "hex": "858182016162828202616382036164a1616b82046165820561661863",
+      "notes": "Every element is a short v1 payload. If any position read a field from past its element, `tail` is the field that shows it.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "858186016162f6f6f6f68286026163f6f6f6f686036164f6f6f6f6a1616b86046165f6f6f6f686056166f6f6f6f61863",
+          "consumed": 28
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "858186016162f6f6f6f68286026163f6f6f6f686036164f6f6f6f6a1616b86046165f6f6f6f686056166f6f6f6f61863",
+          "consumed": 28
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "858186016162f6f6f6f68286026163f6f6f6f686036164f6f6f6f6a1616b86046165f6f6f6f686056166f6f6f6f61863",
+          "consumed": 28
+        }
+      }
+    },
+    {
+      "name": "nullable-appended.forward.union-payload",
+      "axis": "nullable-appended",
+      "position": "union case payload",
+      "direction": "v2-writes-v1-reads",
+      "reader": "Union<GrowNullV1>",
+      "hex": "82008401616207616e",
+      "notes": "A union case payload is a message: two nullable fields appended to the case are skipped by a v1 reader. The envelope stays `[index, payload]`.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "820082016162",
+          "consumed": 9
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "820082016162",
+          "consumed": 9
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "820082016162",
+          "consumed": 9
+        }
+      }
+    },
+    {
+      "name": "nullable-appended.backward.union-payload",
+      "axis": "nullable-appended",
+      "position": "union case payload",
+      "direction": "v1-writes-v2-reads",
+      "reader": "Union<GrowNullV2>",
+      "hex": "820082016162",
+      "notes": "A v1 case payload read by v2: the two nullable fields it lacks read as null, inside an envelope that is still exactly two items.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "820084016162f6f6",
+          "consumed": 6
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "820084016162f6f6",
+          "consumed": 6
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "820084016162f6f6",
+          "consumed": 6
+        }
+      }
+    },
+    {
+      "name": "nullable-appended.forward.union-holder",
+      "axis": "nullable-appended",
+      "position": "union in a field",
+      "direction": "v2-writes-v1-reads",
+      "reader": "GrowNullHolderV1",
+      "hex": "8282008401616207616e05",
+      "notes": "The grown union with a sentinel `n: i4 = 5` behind it.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "8282008201616205",
+          "consumed": 11
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "8282008201616205",
+          "consumed": 11
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "8282008201616205",
+          "consumed": 11
+        }
+      }
+    },
+    {
+      "name": "nullable-appended.backward.union-holder",
+      "axis": "nullable-appended",
+      "position": "union in a field",
+      "direction": "v1-writes-v2-reads",
+      "reader": "GrowNullHolderV2",
+      "hex": "8282008201616205",
+      "notes": "A short case payload followed by `n`: a case reader that consumed one item too many would hand `n` the wrong value.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "82820084016162f6f605",
+          "consumed": 8
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "82820084016162f6f605",
+          "consumed": 8
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "82820084016162f6f605",
+          "consumed": 8
+        }
+      }
+    },
+    {
+      "name": "nullable-appended.backward.required-missing",
+      "axis": "nullable-appended",
+      "position": "bare",
+      "direction": "v1-writes-v2-reads",
+      "reader": "NullAppendV2",
+      "hex": "8101",
+      "notes": "The payload lacks `b`, which is not nullable. Nothing honest can stand in for it, so this stays the typed field-count error naming the required count (2) and the declared one (1) - the nullable tail does not make a short payload acceptable, only a payload short by nullable fields.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonFieldCountException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonFieldCountError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "FieldCount"
+        }
+      }
+    },
+    {
+      "name": "nullable-appended.backward.required-missing.array",
+      "axis": "nullable-appended",
+      "position": "T[]",
+      "direction": "v1-writes-v2-reads",
+      "reader": "Array<NullAppendV2>",
+      "hex": "82820161628101",
+      "notes": "The same inside an array, behind a good element.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonFieldCountException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonFieldCountError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "FieldCount"
+        }
+      }
+    },
+    {
+      "name": "nullable-appended.backward.required-missing.union-payload",
+      "axis": "nullable-appended",
+      "position": "union case payload",
+      "direction": "v1-writes-v2-reads",
+      "reader": "Union<GrowNullV2>",
+      "hex": "82008101",
+      "notes": "A case payload missing its required `b`.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonFieldCountException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonFieldCountError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "FieldCount"
+        }
+      }
+    },
+    {
+      "name": "nullable-appended.forward.required-after-nullable",
+      "axis": "nullable-appended",
+      "position": "bare",
+      "direction": "v2-writes-v1-reads",
+      "reader": "MidNullV1",
+      "hex": "8301f603",
+      "notes": "v2 appended a REQUIRED field after a nullable one; forward, it is skipped like any other.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "8201f6",
+          "consumed": 4
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "8201f6",
+          "consumed": 4
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "8201f6",
+          "consumed": 4
+        }
+      }
+    },
+    {
+      "name": "nullable-appended.backward.required-after-nullable",
+      "axis": "nullable-appended",
+      "position": "bare",
+      "direction": "v1-writes-v2-reads",
+      "reader": "MidNullV2",
+      "hex": "8201f6",
+      "notes": "What a reader requires runs to its LAST non-nullable field, not to its last field before the first nullable one. `MidNullV2` is `{ a: i4; b: string?; c: i4; }`, so the two-item v1 payload is short by the required `c`: a typed field-count error, although the field just before it is nullable.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonFieldCountException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonFieldCountError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "FieldCount"
+        }
+      }
+    },
+    {
+      "name": "nullable-argument-added.forward",
+      "axis": "nullable-argument-added",
+      "position": "method argument",
+      "direction": "v2-writes-v1-reads",
+      "reader": "Args<AppendedV1>",
+      "hex": "8382016162616e05",
+      "notes": "v2 appended two nullable arguments to `Tag`; the v1 executor declares one and skips the rest.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "8182016162",
+          "consumed": 8
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "8182016162",
+          "consumed": 8
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "8182016162",
+          "consumed": 8
+        }
+      }
+    },
+    {
+      "name": "nullable-argument-added.backward",
+      "axis": "nullable-argument-added",
+      "position": "method argument",
+      "direction": "v1-writes-v2-reads",
+      "reader": "Args<AppendedV1,string?,i4?>",
+      "hex": "8182016162",
+      "notes": "A v1 client calling a v2 server: the argument array carries one item and the two arguments it lacks are nullable, so the executor runs with `note` and `weight` null. Before, every call an older client made to a method that had grown was refused.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "8382016162f6f6",
+          "consumed": 5
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "8382016162f6f6",
+          "consumed": 5
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "8382016162f6f6",
+          "consumed": 5
+        }
+      }
+    },
+    {
+      "name": "nullable-argument-added.backward.partial",
+      "axis": "nullable-argument-added",
+      "position": "method argument",
+      "direction": "v1-writes-v2-reads",
+      "reader": "Args<AppendedV1,string?,i4?>",
+      "hex": "8282016162616e",
+      "notes": "A client from an intermediate revision that sent `note` but not `weight`.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "8382016162616ef6",
+          "consumed": 7
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "8382016162616ef6",
+          "consumed": 7
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "8382016162616ef6",
+          "consumed": 7
+        }
+      }
+    },
+    {
+      "name": "nullable-argument-added.roundtrip.nulls",
+      "axis": "nullable-argument-added",
+      "position": "method argument",
+      "direction": "roundtrip",
+      "reader": "Args<AppendedV1,string?,i4?>",
+      "hex": "8382016162f6f6",
+      "notes": "A v2 client that sent both nullable arguments as null: the same values as the v1 call, spelled out.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "ok",
+          "reencodedHex": "8382016162f6f6",
+          "consumed": 7
+        },
+        "ts": {
+          "outcome": "ok",
+          "reencodedHex": "8382016162f6f6",
+          "consumed": 7
+        },
+        "rust": {
+          "outcome": "ok",
+          "reencodedHex": "8382016162f6f6",
+          "consumed": 7
+        }
+      }
+    },
+    {
+      "name": "nullable-argument-added.backward.required-missing",
+      "axis": "nullable-argument-added",
+      "position": "method argument",
+      "direction": "v1-writes-v2-reads",
+      "reader": "Args<AppendedV1,string?,i4?>",
+      "hex": "80",
+      "notes": "An empty argument array: `v` is required, so this is the typed field-count error, not a call with every argument null.",
+      "verdict": "correct",
+      "expect": {
+        "cs": {
+          "outcome": "error",
+          "error": "IonFieldCountException"
+        },
+        "ts": {
+          "outcome": "error",
+          "error": "IonFieldCountError"
+        },
+        "rust": {
+          "outcome": "error",
+          "error": "FieldCount"
         }
       }
     },
@@ -3092,7 +3725,7 @@
         },
         "rust": {
           "outcome": "error",
-          "error": "Decode"
+          "error": "FieldCount"
         }
       }
     },

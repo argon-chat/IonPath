@@ -148,7 +148,7 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
       <h2 id="safe-changes" class="text-xl font-bold mb-4">Safe Changes</h2>
       <p class="text-sm text-text-secondary mb-3">These changes are always safe and do not trigger warnings:</p>
       <ul class="list-disc list-inside space-y-1 text-sm text-text-secondary">
-        <li>Adding new <strong>nullable</strong> fields to the end of a message</li>
+        <li>Adding new <strong>nullable</strong> fields to the end of a message or a union case — compatible in both directions: a reader on the older schema skips them, and a reader on the newer schema reads them as null from a payload written before they existed</li>
         <li>Adding new methods to a service</li>
         <li>Adding new members to an enum or flags (at the end)</li>
         <li>Adding new union cases (at the end)</li>

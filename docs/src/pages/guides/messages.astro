@@ -169,6 +169,16 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
 <span class="text-text-muted">// CBOR wire representation (conceptual)</span>
 [1.5, 2.7]   <span class="text-text-muted">// index 0 = x, index 1 = y</span></pre>
       </div>
+      <h3 id="evolution" class="text-lg font-semibold mt-8 mb-3">Appending fields</h3>
+      <p class="text-sm text-text-secondary mb-3">The array's length is what lets two revisions of a message talk to each other. A reader handed a <strong>longer</strong> array — a newer writer's appended fields — skips the items past its own last field. A reader handed a <strong>shorter</strong> array — a writer from before the fields were appended — reads the items that are there, and every field the payload lacks reads as null, provided it is nullable:</p>
+      <div class="code-block text-[13px]">
+        <pre><span class="text-accent-3">msg</span> <span class="type-name">Category</span> {'{'} id: <span class="type-keyword">i4</span>; name: <span class="type-keyword">string</span>; {'}'}                  <span class="text-text-muted">// v1</span>
+<span class="text-accent-3">msg</span> <span class="type-name">Category</span> {'{'} id: <span class="type-keyword">i4</span>; name: <span class="type-keyword">string</span>; code: <span class="type-keyword">string</span>?; {'}'}   <span class="text-text-muted">// v2</span>
+
+[7, "Drinks"]           <span class="text-text-muted">// written by v1, read by v2 → code = null</span>
+[7, "Drinks", "A12"]    <span class="text-text-muted">// written by v2, read by v1 → "A12" skipped</span></pre>
+      </div>
+      <p class="text-sm text-text-secondary mt-3">So <strong>a nullable field appended to the end of a message works in both directions</strong> — old client and new server, new client and old server, and a payload one build stored and the next one reads. The same holds for a field appended to a union case and for a trailing nullable method argument. A non-nullable appended field works forward only: a newer reader has nothing to put in it, and a payload without it is a decode error naming both counts (<code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">IonFieldCountException</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">IonFieldCountError</code>, <code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">IonError::FieldCount</code>). The <a href="/guides/schema-lock/" class="text-accent hover:underline">schema lock</a> warns about that edit as <a href="/guides/diagnostics/#ION0029" class="text-accent hover:underline">ION0029</a>. Inserting, removing or reordering fields is never compatible.</p>
     </section>
 
     <section>

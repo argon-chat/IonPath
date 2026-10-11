@@ -103,6 +103,46 @@ msg GrowHolderV2 { g: GrowV2; n: i4; }
 msg SetHolderV1 { s: Set<TierV1>; n: i4; }
 msg SetHolderV2 { s: Set<TierV2>; n: i4; }
 
+// ── nullable fields appended at the end ─────────────────────────────────────
+//
+// The rule users rely on: a field appended to a message that already shipped is nullable, so
+// old and new peers keep working — in BOTH directions. `AppendedV1`/`AppendedV2` above append a
+// non-nullable field, which only works forward (a v2 reader has nothing to put in `c`). These
+// append several nullable fields, one per nullable read path — scalar, string, array, message —
+// so every shape of the nullable reader meets a payload that does not carry it. (No field is
+// spelled `d`: the generated Rust reader names its decoder `d`, and a field of that name shadows
+// it — see Compat/README.md.)
+msg NullAppendV1 { a: i4; b: string; }
+msg NullAppendV2 { a: i4; b: string; c: i4?; note: string?; xs: i4[]?; inner: AppendedV1?; }
+
+// A nullable field followed by a required one. What a reader requires runs to its LAST
+// non-nullable field, so a payload without `c` is a field-count error although `b` is nullable.
+msg MidNullV1 { a: i4; b: string?; }
+msg MidNullV2 { a: i4; b: string?; c: i4; }
+
+// The same message in every container position, with `tail: i4` as the sentinel: a short
+// element read past its own end would shift `tail`.
+msg NullNestV1 {
+    list:   NullAppendV1[];
+    slots:  NullAppendV1[2];
+    byName: Map<string, NullAppendV1>;
+    opt:    NullAppendV1?;
+    tail:   i4;
+}
+msg NullNestV2 {
+    list:   NullAppendV2[];
+    slots:  NullAppendV2[2];
+    byName: Map<string, NullAppendV2>;
+    opt:    NullAppendV2?;
+    tail:   i4;
+}
+
+// ── nullable fields appended inside a union case payload ────────────────────
+union GrowNullV1 { GrowNullCaseV1(a: i4, b: string) }
+union GrowNullV2 { GrowNullCaseV2(a: i4, b: string, c: i4?, note: string?) }
+msg GrowNullHolderV1 { g: GrowNullV1; n: i4; }
+msg GrowNullHolderV2 { g: GrowNullV2; n: i4; }
+
 // ── recursion-depth probe ───────────────────────────────────────────────────
 //
 // Recursion goes through `T[]`, not through `T?`. A directly self-referential
@@ -112,11 +152,16 @@ msg SetHolderV2 { s: Set<TierV2>; n: i4; }
 msg TreeV1 { v: i4; kids: TreeV1[]; }
 
 // ── method argument / return position ───────────────────────────────────────
+//
+// `Tag` gains two trailing nullable arguments in v2: a v1 client's one-item argument array must
+// reach a v2 executor with `note` and `weight` null.
 service CompatSvcV1() {
     Echo(v: AppendedV1): AppendedV1;
     EchoNest(v: NestV1, tail: i4): NestV1;
+    Tag(v: AppendedV1): AppendedV1;
 }
 service CompatSvcV2() {
     Echo(v: AppendedV2): AppendedV2;
     EchoNest(v: NestV2, tail: i4): NestV2;
+    Tag(v: AppendedV1, note: string?, weight: i4?): AppendedV1;
 }

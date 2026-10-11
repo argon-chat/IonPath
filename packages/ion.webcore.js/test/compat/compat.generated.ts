@@ -7,44 +7,39 @@
 //     Generator: IonPath Codegen
 // </auto-generated>
 //------------------------------------------------------------------------------
-import { 
-  CborReader, 
-  CborWriter, 
-  
-  DateOnly, 
-  IonDateTime, 
-  IonDecimal, 
-  Duration, 
-  TimeOnly, 
-  Guid, 
-  
+import {
+  CborReader,
+  CborWriter,
+  IonDateTime,
+  IonDecimal,
   IonFormatterStorage,
-
+  ServiceExecutor,
+  IonRequest
+} from "../../src";
+import type {
+  DateOnly,
+  Duration,
+  TimeOnly,
+  Guid,
   IonArray,
-  IonMaybe,
-  IonPartial,
-
   IIonService,
   IIonUnion,
-  
-  ServiceExecutor,
   IonClientContext,
-  IonRequest,
-  IonWsClient,
-  IonInterceptor
+  IonInterceptor,
+  IonStreamOptions
 } from "../../src";
 
-type guid = Guid;
-type timeonly = TimeOnly;
-type duration = Duration;
+declare type guid = Guid;
+declare type timeonly = TimeOnly;
+declare type duration = Duration;
 // IonDateTime, never the deprecated `DateTimeOffset { date: Date; offsetMinutes }`
 // shape: `Date` is millisecond-resolution, so it cannot hold the 100ns ticks the
 // wire form carries, and the webcore "datetime" formatter now reads and writes
 // IonDateTime — leaving the old alias here would be a live type mismatch, not just
 // a lossy one.
-type datetime = IonDateTime;
-type decimal = IonDecimal;
-type dateonly = DateOnly;
+declare type datetime = IonDateTime;
+declare type decimal = IonDecimal;
+declare type dateonly = DateOnly;
 
 declare type bool = boolean;
 
@@ -267,6 +262,65 @@ export interface SetHolderV1 {
 
 export interface SetHolderV2 {
   s: Set<TierV2>;
+  n: i4;
+};
+
+
+export interface NullAppendV1 {
+  a: i4;
+  b: string;
+};
+
+
+export interface NullAppendV2 {
+  a: i4;
+  b: string;
+  c: i4 | null;
+  note: string | null;
+  xs: IonArray<i4> | null;
+  inner: AppendedV1 | null;
+};
+
+
+export interface MidNullV1 {
+  a: i4;
+  b: string | null;
+};
+
+
+export interface MidNullV2 {
+  a: i4;
+  b: string | null;
+  c: i4;
+};
+
+
+export interface NullNestV1 {
+  list: IonArray<NullAppendV1>;
+  slots: IonArray<NullAppendV1>;
+  byName: Map<string, NullAppendV1>;
+  opt: NullAppendV1 | null;
+  tail: i4;
+};
+
+
+export interface NullNestV2 {
+  list: IonArray<NullAppendV2>;
+  slots: IonArray<NullAppendV2>;
+  byName: Map<string, NullAppendV2>;
+  opt: NullAppendV2 | null;
+  tail: i4;
+};
+
+
+export interface GrowNullHolderV1 {
+  g: IGrowNullV1;
+  n: i4;
+};
+
+
+export interface GrowNullHolderV2 {
+  g: IGrowNullV2;
   n: i4;
 };
 
@@ -721,6 +775,156 @@ IonFormatterStorage.register("GrowCaseV2", {
 
 
 
+export abstract class IGrowNullV1 implements IIonUnion<IGrowNullV1>
+{
+  abstract UnionKey: string;
+  abstract UnionIndex: number;
+  
+  
+  
+  
+  public isGrowNullCaseV1(): this is GrowNullCaseV1 {
+    return this.UnionKey === "GrowNullCaseV1";
+  }
+
+}
+
+
+export class GrowNullCaseV1 extends IGrowNullV1
+{
+  constructor(public a: i4, public b: string) { super(); }
+
+  UnionKey: string = "GrowNullCaseV1";
+  UnionIndex: number = 0;
+}
+
+
+
+IonFormatterStorage.register("IGrowNullV1", {
+  read(reader: CborReader): IGrowNullV1 {
+    const unionIndex = IonFormatterStorage.readStartUnion(reader, "IGrowNullV1", 1);
+    let value: IGrowNullV1 = null as any;
+
+    if (false)
+    {}
+        else if (unionIndex == 0)
+      value = IonFormatterStorage.get<GrowNullCaseV1>("GrowNullCaseV1").read(reader);
+
+    else IonFormatterStorage.invalidUnionIndex("IGrowNullV1", unionIndex, 1);
+
+    IonFormatterStorage.readEndUnion(reader);
+    return value!;
+  },
+  write(writer: CborWriter, value: IGrowNullV1): void {
+    writer.writeStartArray(2);
+    writer.writeUInt32(value.UnionIndex);
+    if (false)
+    {}
+        else if (value.UnionIndex == 0) {
+        IonFormatterStorage.get<GrowNullCaseV1>("GrowNullCaseV1").write(writer, value as GrowNullCaseV1);
+    }
+  
+    else throw new Error(`Ion union 'IGrowNullV1' has no case ${value.UnionIndex}; this revision declares 1 case(s)`);
+    writer.writeEndArray();
+  }
+});
+
+
+IonFormatterStorage.register("GrowNullCaseV1", {
+  read(reader: CborReader): GrowNullCaseV1 {
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 2, "GrowNullCaseV1");
+    const a = IonFormatterStorage.get<i4>('i4').read(reader);
+    const b = IonFormatterStorage.get<string>('string').read(reader);
+    reader.readEndArrayAndSkip(arraySize - 2);
+    return new GrowNullCaseV1(a, b);
+  },
+  write(writer: CborWriter, value: GrowNullCaseV1): void {
+    writer.writeStartArray(2);
+    IonFormatterStorage.get<i4>('i4').write(writer, value.a);
+    IonFormatterStorage.get<string>('string').write(writer, value.b);
+    writer.writeEndArray();
+  }
+});
+
+
+
+export abstract class IGrowNullV2 implements IIonUnion<IGrowNullV2>
+{
+  abstract UnionKey: string;
+  abstract UnionIndex: number;
+  
+  
+  
+  
+  public isGrowNullCaseV2(): this is GrowNullCaseV2 {
+    return this.UnionKey === "GrowNullCaseV2";
+  }
+
+}
+
+
+export class GrowNullCaseV2 extends IGrowNullV2
+{
+  constructor(public a: i4, public b: string, public c: i4 | null, public note: string | null) { super(); }
+
+  UnionKey: string = "GrowNullCaseV2";
+  UnionIndex: number = 0;
+}
+
+
+
+IonFormatterStorage.register("IGrowNullV2", {
+  read(reader: CborReader): IGrowNullV2 {
+    const unionIndex = IonFormatterStorage.readStartUnion(reader, "IGrowNullV2", 1);
+    let value: IGrowNullV2 = null as any;
+
+    if (false)
+    {}
+        else if (unionIndex == 0)
+      value = IonFormatterStorage.get<GrowNullCaseV2>("GrowNullCaseV2").read(reader);
+
+    else IonFormatterStorage.invalidUnionIndex("IGrowNullV2", unionIndex, 1);
+
+    IonFormatterStorage.readEndUnion(reader);
+    return value!;
+  },
+  write(writer: CborWriter, value: IGrowNullV2): void {
+    writer.writeStartArray(2);
+    writer.writeUInt32(value.UnionIndex);
+    if (false)
+    {}
+        else if (value.UnionIndex == 0) {
+        IonFormatterStorage.get<GrowNullCaseV2>("GrowNullCaseV2").write(writer, value as GrowNullCaseV2);
+    }
+  
+    else throw new Error(`Ion union 'IGrowNullV2' has no case ${value.UnionIndex}; this revision declares 1 case(s)`);
+    writer.writeEndArray();
+  }
+});
+
+
+IonFormatterStorage.register("GrowNullCaseV2", {
+  read(reader: CborReader): GrowNullCaseV2 {
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 4, "GrowNullCaseV2", 2);
+    const a = IonFormatterStorage.get<i4>('i4').read(reader);
+    const b = IonFormatterStorage.get<string>('string').read(reader);
+    const c = arraySize > 2 ? IonFormatterStorage.readNullable<i4>(reader, 'i4') : null;
+    const note = arraySize > 3 ? IonFormatterStorage.readNullable<string>(reader, 'string') : null;
+    IonFormatterStorage.readEndMessage(reader, arraySize, 4);
+    return new GrowNullCaseV2(a, b, c, note);
+  },
+  write(writer: CborWriter, value: GrowNullCaseV2): void {
+    writer.writeStartArray(4);
+    IonFormatterStorage.get<i4>('i4').write(writer, value.a);
+    IonFormatterStorage.get<string>('string').write(writer, value.b);
+    IonFormatterStorage.writeNullable<i4>(writer, value.c, 'i4');
+    IonFormatterStorage.writeNullable<string>(writer, value.note, 'string');
+    writer.writeEndArray();
+  }
+});
+
+
+
 IonFormatterStorage.register("AppendedV1", {
   read(reader: CborReader): AppendedV1 {
     const arraySize = IonFormatterStorage.readStartMessage(reader, 2, "AppendedV1");
@@ -931,10 +1135,10 @@ IonFormatterStorage.register("OptAddedV1", {
 
 IonFormatterStorage.register("OptAddedV2", {
   read(reader: CborReader): OptAddedV2 {
-    const arraySize = IonFormatterStorage.readStartMessage(reader, 2, "OptAddedV2");
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 2, "OptAddedV2", 1);
     const a = IonFormatterStorage.get<i4>('i4').read(reader);
-    const b = IonFormatterStorage.readNullable<string>(reader, 'string');
-    reader.readEndArrayAndSkip(arraySize - 2);
+    const b = arraySize > 1 ? IonFormatterStorage.readNullable<string>(reader, 'string') : null;
+    IonFormatterStorage.readEndMessage(reader, arraySize, 2);
     return { a, b };
   },
   write(writer: CborWriter, value: OptAddedV2): void {
@@ -947,10 +1151,10 @@ IonFormatterStorage.register("OptAddedV2", {
 
 IonFormatterStorage.register("OptTightenedV1", {
   read(reader: CborReader): OptTightenedV1 {
-    const arraySize = IonFormatterStorage.readStartMessage(reader, 2, "OptTightenedV1");
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 2, "OptTightenedV1", 1);
     const a = IonFormatterStorage.get<i4>('i4').read(reader);
-    const b = IonFormatterStorage.readNullable<string>(reader, 'string');
-    reader.readEndArrayAndSkip(arraySize - 2);
+    const b = arraySize > 1 ? IonFormatterStorage.readNullable<string>(reader, 'string') : null;
+    IonFormatterStorage.readEndMessage(reader, arraySize, 2);
     return { a, b };
   },
   write(writer: CborWriter, value: OptTightenedV1): void {
@@ -1279,6 +1483,156 @@ IonFormatterStorage.register("SetHolderV2", {
   }
 });
 
+IonFormatterStorage.register("NullAppendV1", {
+  read(reader: CborReader): NullAppendV1 {
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 2, "NullAppendV1");
+    const a = IonFormatterStorage.get<i4>('i4').read(reader);
+    const b = IonFormatterStorage.get<string>('string').read(reader);
+    reader.readEndArrayAndSkip(arraySize - 2);
+    return { a, b };
+  },
+  write(writer: CborWriter, value: NullAppendV1): void {
+    writer.writeStartArray(2);
+    IonFormatterStorage.get<i4>('i4').write(writer, value.a);
+    IonFormatterStorage.get<string>('string').write(writer, value.b);
+    writer.writeEndArray();
+  }
+});
+
+IonFormatterStorage.register("NullAppendV2", {
+  read(reader: CborReader): NullAppendV2 {
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 6, "NullAppendV2", 2);
+    const a = IonFormatterStorage.get<i4>('i4').read(reader);
+    const b = IonFormatterStorage.get<string>('string').read(reader);
+    const c = arraySize > 2 ? IonFormatterStorage.readNullable<i4>(reader, 'i4') : null;
+    const note = arraySize > 3 ? IonFormatterStorage.readNullable<string>(reader, 'string') : null;
+    const xs = arraySize > 4 ? IonFormatterStorage.readNullableArray<i4>(reader, 'i4') : null;
+    const inner = arraySize > 5 ? IonFormatterStorage.readNullable<AppendedV1>(reader, 'AppendedV1') : null;
+    IonFormatterStorage.readEndMessage(reader, arraySize, 6);
+    return { a, b, c, note, xs, inner };
+  },
+  write(writer: CborWriter, value: NullAppendV2): void {
+    writer.writeStartArray(6);
+    IonFormatterStorage.get<i4>('i4').write(writer, value.a);
+    IonFormatterStorage.get<string>('string').write(writer, value.b);
+    IonFormatterStorage.writeNullable<i4>(writer, value.c, 'i4');
+    IonFormatterStorage.writeNullable<string>(writer, value.note, 'string');
+    IonFormatterStorage.writeNullableArray<i4>(writer, value.xs, 'i4');
+    IonFormatterStorage.writeNullable<AppendedV1>(writer, value.inner, 'AppendedV1');
+    writer.writeEndArray();
+  }
+});
+
+IonFormatterStorage.register("MidNullV1", {
+  read(reader: CborReader): MidNullV1 {
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 2, "MidNullV1", 1);
+    const a = IonFormatterStorage.get<i4>('i4').read(reader);
+    const b = arraySize > 1 ? IonFormatterStorage.readNullable<string>(reader, 'string') : null;
+    IonFormatterStorage.readEndMessage(reader, arraySize, 2);
+    return { a, b };
+  },
+  write(writer: CborWriter, value: MidNullV1): void {
+    writer.writeStartArray(2);
+    IonFormatterStorage.get<i4>('i4').write(writer, value.a);
+    IonFormatterStorage.writeNullable<string>(writer, value.b, 'string');
+    writer.writeEndArray();
+  }
+});
+
+IonFormatterStorage.register("MidNullV2", {
+  read(reader: CborReader): MidNullV2 {
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 3, "MidNullV2");
+    const a = IonFormatterStorage.get<i4>('i4').read(reader);
+    const b = IonFormatterStorage.readNullable<string>(reader, 'string');
+    const c = IonFormatterStorage.get<i4>('i4').read(reader);
+    reader.readEndArrayAndSkip(arraySize - 3);
+    return { a, b, c };
+  },
+  write(writer: CborWriter, value: MidNullV2): void {
+    writer.writeStartArray(3);
+    IonFormatterStorage.get<i4>('i4').write(writer, value.a);
+    IonFormatterStorage.writeNullable<string>(writer, value.b, 'string');
+    IonFormatterStorage.get<i4>('i4').write(writer, value.c);
+    writer.writeEndArray();
+  }
+});
+
+IonFormatterStorage.register("NullNestV1", {
+  read(reader: CborReader): NullNestV1 {
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 5, "NullNestV1");
+    const list = IonFormatterStorage.readArray<NullAppendV1>(reader, 'NullAppendV1');
+    const slots = IonFormatterStorage.readFixedArray<NullAppendV1>(reader, 'NullAppendV1', 2);
+    const byName = IonFormatterStorage.get<Map<string, NullAppendV1>>('Map<string, NullAppendV1>').read(reader);
+    const opt = IonFormatterStorage.readNullable<NullAppendV1>(reader, 'NullAppendV1');
+    const tail = IonFormatterStorage.get<i4>('i4').read(reader);
+    reader.readEndArrayAndSkip(arraySize - 5);
+    return { list, slots, byName, opt, tail };
+  },
+  write(writer: CborWriter, value: NullNestV1): void {
+    writer.writeStartArray(5);
+    IonFormatterStorage.writeArray<NullAppendV1>(writer, value.list, 'NullAppendV1');
+    IonFormatterStorage.writeFixedArray<NullAppendV1>(writer, value.slots, 'NullAppendV1', 2);
+    IonFormatterStorage.get<Map<string, NullAppendV1>>('Map<string, NullAppendV1>').write(writer, value.byName);
+    IonFormatterStorage.writeNullable<NullAppendV1>(writer, value.opt, 'NullAppendV1');
+    IonFormatterStorage.get<i4>('i4').write(writer, value.tail);
+    writer.writeEndArray();
+  }
+});
+
+IonFormatterStorage.register("NullNestV2", {
+  read(reader: CborReader): NullNestV2 {
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 5, "NullNestV2");
+    const list = IonFormatterStorage.readArray<NullAppendV2>(reader, 'NullAppendV2');
+    const slots = IonFormatterStorage.readFixedArray<NullAppendV2>(reader, 'NullAppendV2', 2);
+    const byName = IonFormatterStorage.get<Map<string, NullAppendV2>>('Map<string, NullAppendV2>').read(reader);
+    const opt = IonFormatterStorage.readNullable<NullAppendV2>(reader, 'NullAppendV2');
+    const tail = IonFormatterStorage.get<i4>('i4').read(reader);
+    reader.readEndArrayAndSkip(arraySize - 5);
+    return { list, slots, byName, opt, tail };
+  },
+  write(writer: CborWriter, value: NullNestV2): void {
+    writer.writeStartArray(5);
+    IonFormatterStorage.writeArray<NullAppendV2>(writer, value.list, 'NullAppendV2');
+    IonFormatterStorage.writeFixedArray<NullAppendV2>(writer, value.slots, 'NullAppendV2', 2);
+    IonFormatterStorage.get<Map<string, NullAppendV2>>('Map<string, NullAppendV2>').write(writer, value.byName);
+    IonFormatterStorage.writeNullable<NullAppendV2>(writer, value.opt, 'NullAppendV2');
+    IonFormatterStorage.get<i4>('i4').write(writer, value.tail);
+    writer.writeEndArray();
+  }
+});
+
+IonFormatterStorage.register("GrowNullHolderV1", {
+  read(reader: CborReader): GrowNullHolderV1 {
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 2, "GrowNullHolderV1");
+    const g = IonFormatterStorage.get<IGrowNullV1>('IGrowNullV1').read(reader);
+    const n = IonFormatterStorage.get<i4>('i4').read(reader);
+    reader.readEndArrayAndSkip(arraySize - 2);
+    return { g, n };
+  },
+  write(writer: CborWriter, value: GrowNullHolderV1): void {
+    writer.writeStartArray(2);
+    IonFormatterStorage.get<IGrowNullV1>('IGrowNullV1').write(writer, value.g);
+    IonFormatterStorage.get<i4>('i4').write(writer, value.n);
+    writer.writeEndArray();
+  }
+});
+
+IonFormatterStorage.register("GrowNullHolderV2", {
+  read(reader: CborReader): GrowNullHolderV2 {
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 2, "GrowNullHolderV2");
+    const g = IonFormatterStorage.get<IGrowNullV2>('IGrowNullV2').read(reader);
+    const n = IonFormatterStorage.get<i4>('i4').read(reader);
+    reader.readEndArrayAndSkip(arraySize - 2);
+    return { g, n };
+  },
+  write(writer: CborWriter, value: GrowNullHolderV2): void {
+    writer.writeStartArray(2);
+    IonFormatterStorage.get<IGrowNullV2>('IGrowNullV2').write(writer, value.g);
+    IonFormatterStorage.get<i4>('i4').write(writer, value.n);
+    writer.writeEndArray();
+  }
+});
+
 IonFormatterStorage.register("TreeV1", {
   read(reader: CborReader): TreeV1 {
     const arraySize = IonFormatterStorage.readStartMessage(reader, 2, "TreeV1");
@@ -1303,6 +1657,10 @@ IonFormatterStorage.registerSet<TierV1>("Set<TierV1>", "TierV1");
 IonFormatterStorage.registerFixedArray<AppendedV2>("AppendedV2[2]", "AppendedV2", 2);
 IonFormatterStorage.registerMap<string, AppendedV2>("Map<string, AppendedV2>", "string", "AppendedV2");
 IonFormatterStorage.registerSet<TierV2>("Set<TierV2>", "TierV2");
+IonFormatterStorage.registerFixedArray<NullAppendV1>("NullAppendV1[2]", "NullAppendV1", 2);
+IonFormatterStorage.registerMap<string, NullAppendV1>("Map<string, NullAppendV1>", "string", "NullAppendV1");
+IonFormatterStorage.registerFixedArray<NullAppendV2>("NullAppendV2[2]", "NullAppendV2", 2);
+IonFormatterStorage.registerMap<string, NullAppendV2>("Map<string, NullAppendV2>", "string", "NullAppendV2");
 
 
 
@@ -1318,6 +1676,7 @@ export interface ICompatSvcV1 extends IIonService
 {
   Echo(v: AppendedV1): Promise<AppendedV1>;
   EchoNest(v: NestV1, tail: i4): Promise<NestV1>;
+  Tag(v: AppendedV1): Promise<AppendedV1>;
 }
 
 
@@ -1325,6 +1684,7 @@ export interface ICompatSvcV2 extends IIonService
 {
   Echo(v: AppendedV2): Promise<AppendedV2>;
   EchoNest(v: NestV2, tail: i4): Promise<NestV2>;
+  Tag(v: AppendedV1, note: string | null, weight: i4 | null): Promise<AppendedV1>;
 }
 
 
@@ -1342,6 +1702,7 @@ export interface ICompatSvcV1 extends IIonService
 {
   Echo(v: AppendedV1): Promise<AppendedV1>;
   EchoNest(v: NestV1, tail: i4): Promise<NestV1>;
+  Tag(v: AppendedV1): Promise<AppendedV1>;
 }
 
 
@@ -1349,6 +1710,7 @@ export interface ICompatSvcV2 extends IIonService
 {
   Echo(v: AppendedV2): Promise<AppendedV2>;
   EchoNest(v: NestV2, tail: i4): Promise<NestV2>;
+  Tag(v: AppendedV1, note: string | null, weight: i4 | null): Promise<AppendedV1>;
 }
 
 
@@ -1396,6 +1758,19 @@ export class CompatSvcV1_Executor extends ServiceExecutor<ICompatSvcV1> implemen
           
     return await req.callAsyncT<NestV1>("NestV1", writer.data, this.signal);
   }
+  async Tag(v: AppendedV1): Promise<AppendedV1> {
+    const req = new IonRequest(this.ctx, "ICompatSvcV1", "Tag");
+          
+    const writer = new CborWriter();
+      
+    writer.writeStartArray(1);
+          
+    IonFormatterStorage.get<AppendedV1>('AppendedV1').write(writer, v);
+      
+    writer.writeEndArray();
+          
+    return await req.callAsyncT<AppendedV1>("AppendedV1", writer.data, this.signal);
+  }
 
 }
 
@@ -1434,18 +1809,49 @@ export class CompatSvcV2_Executor extends ServiceExecutor<ICompatSvcV2> implemen
           
     return await req.callAsyncT<NestV2>("NestV2", writer.data, this.signal);
   }
+  async Tag(v: AppendedV1, note: string | null, weight: i4 | null): Promise<AppendedV1> {
+    const req = new IonRequest(this.ctx, "ICompatSvcV2", "Tag");
+          
+    const writer = new CborWriter();
+      
+    writer.writeStartArray(3);
+          
+    IonFormatterStorage.get<AppendedV1>('AppendedV1').write(writer, v);
+    IonFormatterStorage.writeNullable<string>(writer, note, 'string');
+    IonFormatterStorage.writeNullable<i4>(writer, weight, 'i4');
+      
+    writer.writeEndArray();
+          
+    return await req.callAsyncT<AppendedV1>("AppendedV1", writer.data, this.signal);
+  }
 
 }
 
 IonFormatterStorage.registerClientExecutor<ICompatSvcV2>('CompatSvcV2', CompatSvcV2_Executor);
 
 
-export function createClient(endpoint: string, interceptors: IonInterceptor[]) {
-  const ctx = {
+/**
+ * A client for every service in this module.
+ *
+ * `options.streamOptions` configures `stream` calls (transport order, heartbeat, reconnect);
+ * `options.sessionId` identifies this client instance to the server across calls (a fresh one
+ * by default); `options.signal` cancels every call made through the client.
+ */
+export function createClient(
+  endpoint: string,
+  interceptors: IonInterceptor[],
+  options?: { streamOptions?: IonStreamOptions; sessionId?: string; signal?: AbortSignal }
+) {
+  const ctx: IonClientContext = {
     baseUrl: endpoint,
-    interceptors: interceptors
-  } as IonClientContext;
+    interceptors: interceptors,
+    sessionId: options?.sessionId ?? crypto.randomUUID(),
+    streamOptions: options?.streamOptions
+  };
   const controller = new AbortController();
+  const outer = options?.signal;
+  if (outer?.aborted) controller.abort(outer.reason);
+  else outer?.addEventListener("abort", () => controller.abort(outer.reason), { once: true });
 
   return new Proxy(
     {},

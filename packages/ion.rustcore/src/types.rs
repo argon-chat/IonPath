@@ -103,15 +103,20 @@ pub enum IonError {
     #[error("Ion '{context}' declares {declared} item(s) but only {available} byte(s) of input remain")]
     LengthOverclaim { context: &'static str, declared: u64, available: usize },
 
-    /// A message array declared fewer items than this revision of the schema reads.
+    /// A message array declared fewer items than this revision of the schema requires.
     ///
     /// `minicbor::Decoder` is a flat cursor with no container stack, so reading past a definite
     /// array is not refused by anything — the reader simply takes the *next* bytes in the stream,
     /// which belong to whatever follows. Left unchecked this is silent wrong data, not a failure:
     /// the peer is on an older revision and the field genuinely is not there.
     ///
+    /// A payload shorter than the schema is *not* this error when every field it lacks is
+    /// nullable: those read as `None`, so a nullable field appended to a shipped message keeps old
+    /// payloads readable. `expected` is the number of leading fields the schema requires — up to
+    /// and including its last non-nullable one.
+    ///
     /// The counterparts are `IonFieldCountException` (C#) and `IonFieldCountError` (TypeScript).
-    #[error("Ion message declares {declared} field(s) but this schema reads {expected}")]
+    #[error("Ion message declares {declared} field(s) but this schema requires {expected}")]
     FieldCount { declared: u64, expected: u64 },
 
     /// A `union` envelope was not the two-item `[index, payload]` array the format defines.

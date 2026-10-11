@@ -67,7 +67,7 @@ A1, A2 = H["AppendedV1"], H["AppendedV2"]
 E("appended.forward.bare", "field-appended", "bare", "v2-writes-v1-reads", "AppendedV1", A2,
   "The whole point of the trailing-skip mechanism: an old reader must accept a longer array and drop the tail.")
 E("appended.backward.bare", "field-appended", "bare", "v1-writes-v2-reads", "AppendedV2", A1,
-  "A new reader against an old writer. There is no field to read, so this must be a typed decode error naming what was expected - never a default value, and never a read past the array.")
+  "A new reader against an old writer. The appended `c: i4` is NOT nullable, so there is nothing honest to put in it: this must be a typed decode error naming what was expected - never a default value, and never a read past the array. Compare `nullable-appended.backward.bare`, where the appended fields are nullable and the same shortfall reads as null.")
 E("appended.forward.array", "field-appended", "T[]", "v2-writes-v1-reads", "Array<AppendedV1>", "81" + A2,
   "The same message one element inside `T[]`.")
 E("appended.backward.array", "field-appended", "T[]", "v1-writes-v2-reads", "Array<AppendedV2>", "81" + A1,
@@ -145,11 +145,66 @@ E("widened.backward", "field-retyped", "bare", "v1-writes-v2-reads", "WidenedV2"
 E("optional-added.forward.null", "optional-added", "bare", "v2-writes-v1-reads", "OptAddedV1", H["OptAddedV2_null"], "")
 E("optional-added.forward.set", "optional-added", "bare", "v2-writes-v1-reads", "OptAddedV1", H["OptAddedV2_set"], "")
 E("optional-added.backward", "optional-added", "bare", "v1-writes-v2-reads", "OptAddedV2", H["OptAddedV1"],
-  "Adding an OPTIONAL field is still adding a field: `?` describes the value, not its presence on the wire. A v2 reader is not entitled to treat the missing slot as null.")
+  "A v2 reader against a v1 payload that predates the nullable `b`. The array is one item short and the item it lacks is nullable, so `b` reads as null: appending a nullable field works in both directions. This used to be a field-count error, which made every payload the previous build had stored unreadable after the upgrade that grew the message.")
 E("optional-tightened.forward.null", "optional-tightened", "bare", "v1-writes-v2-reads", "OptTightenedV2", H["OptTightenedV1_null"],
   "`string?` became `string`, and the old writer sent null.")
 E("optional-tightened.forward.set", "optional-tightened", "bare", "v1-writes-v2-reads", "OptTightenedV2", H["OptTightenedV1_set"], "")
 E("optional-tightened.backward", "optional-tightened", "bare", "v2-writes-v1-reads", "OptTightenedV1", H["OptTightenedV2"], "")
+
+# -- axis: nullable fields appended -------------------------------------------
+# The evolution rule users rely on: a field appended to a message that already shipped is
+# nullable, so old and new peers keep working in BOTH directions. A newer reader requires the
+# fields up to and including its last non-nullable one; it reads each later field only while the
+# payload still has it, and the rest are null. `appended.backward.*` above is the contrast: the
+# field appended there is NOT nullable, and a v2 reader handed a v1 payload must still refuse it.
+N1, N2 = H["NullAppendV1"], H["NullAppendV2_set"]
+E("nullable-appended.forward.bare", "nullable-appended", "bare", "v2-writes-v1-reads", "NullAppendV1", N2,
+  "v2 appended four nullable fields (scalar, string, array, message) and set them all; v1 skips them as surplus, exactly like any appended field.")
+E("nullable-appended.forward.bare.nulls", "nullable-appended", "bare", "v2-writes-v1-reads", "NullAppendV1", H["NullAppendV2_null"],
+  "The same with every appended field null: the items are on the wire as CBOR nulls and are skipped the same way.")
+E("nullable-appended.backward.bare", "nullable-appended", "bare", "v1-writes-v2-reads", "NullAppendV2", N1,
+  "THE CASE THIS AXIS EXISTS FOR. A v2 reader against a v1 payload: the array is four items short and every one of them is nullable, so they read as null and `consumed` stays at the message's own bytes. This is what a cached snapshot, a stored replay result or a queued job written by the previous build looks like after the upgrade that grew the message.")
+E("nullable-appended.backward.partial", "nullable-appended", "bare", "v1-writes-v2-reads", "NullAppendV2", "8301616207",
+  "A writer from an intermediate revision that had only `c`: the reader takes the item that is there and nulls the three after it.")
+E("nullable-appended.backward.array", "nullable-appended", "T[]", "v1-writes-v2-reads", "Array<NullAppendV2>", "82" + N1 + N1,
+  "Two short elements. A reader that read a nullable field past its own element's end would take element 1's header as element 0's `c`.")
+E("nullable-appended.backward.fixed", "nullable-appended", "T[N]", "v1-writes-v2-reads", "Fixed<NullAppendV2,2>", "82" + N1 + N1, "")
+E("nullable-appended.backward.map", "nullable-appended", "Map value", "v1-writes-v2-reads", "Map<string,NullAppendV2>", "a1616b" + N1, "")
+E("nullable-appended.backward.maybe", "nullable-appended", "T?", "v1-writes-v2-reads", "Maybe<NullAppendV2>", N1, "")
+E("nullable-appended.forward.every-position", "nullable-appended", "all at once", "v2-writes-v1-reads", "NullNestV1", H["NullNestV2"],
+  "The grown message in `T[]`, `T[N]`, Map value and `T?` at once, with a mix of set and null tail fields and `tail: i4 = 99` as the sentinel.")
+E("nullable-appended.backward.every-position", "nullable-appended", "all at once", "v1-writes-v2-reads", "NullNestV2", H["NullNestV1"],
+  "Every element is a short v1 payload. If any position read a field from past its element, `tail` is the field that shows it.")
+E("nullable-appended.forward.union-payload", "nullable-appended", "union case payload", "v2-writes-v1-reads", "Union<GrowNullV1>", "82008401616207616e",
+  "A union case payload is a message: two nullable fields appended to the case are skipped by a v1 reader. The envelope stays `[index, payload]`.")
+E("nullable-appended.backward.union-payload", "nullable-appended", "union case payload", "v1-writes-v2-reads", "Union<GrowNullV2>", "820082016162",
+  "A v1 case payload read by v2: the two nullable fields it lacks read as null, inside an envelope that is still exactly two items.")
+E("nullable-appended.forward.union-holder", "nullable-appended", "union in a field", "v2-writes-v1-reads", "GrowNullHolderV1", H["GrowNullHolderV2"],
+  "The grown union with a sentinel `n: i4 = 5` behind it.")
+E("nullable-appended.backward.union-holder", "nullable-appended", "union in a field", "v1-writes-v2-reads", "GrowNullHolderV2", H["GrowNullHolderV1"],
+  "A short case payload followed by `n`: a case reader that consumed one item too many would hand `n` the wrong value.")
+E("nullable-appended.backward.required-missing", "nullable-appended", "bare", "v1-writes-v2-reads", "NullAppendV2", "8101",
+  "The payload lacks `b`, which is not nullable. Nothing honest can stand in for it, so this stays the typed field-count error naming the required count (2) and the declared one (1) - the nullable tail does not make a short payload acceptable, only a payload short by nullable fields.")
+E("nullable-appended.backward.required-missing.array", "nullable-appended", "T[]", "v1-writes-v2-reads", "Array<NullAppendV2>", "82" + N1 + "8101",
+  "The same inside an array, behind a good element.")
+E("nullable-appended.backward.required-missing.union-payload", "nullable-appended", "union case payload", "v1-writes-v2-reads", "Union<GrowNullV2>", "82008101",
+  "A case payload missing its required `b`.")
+E("nullable-appended.forward.required-after-nullable", "nullable-appended", "bare", "v2-writes-v1-reads", "MidNullV1", H["MidNullV2"],
+  "v2 appended a REQUIRED field after a nullable one; forward, it is skipped like any other.")
+E("nullable-appended.backward.required-after-nullable", "nullable-appended", "bare", "v1-writes-v2-reads", "MidNullV2", H["MidNullV1"],
+  "What a reader requires runs to its LAST non-nullable field, not to its last field before the first nullable one. `MidNullV2` is `{ a: i4; b: string?; c: i4; }`, so the two-item v1 payload is short by the required `c`: a typed field-count error, although the field just before it is nullable.")
+
+# -- axis: nullable method argument appended ------------------------------------
+E("nullable-argument-added.forward", "nullable-argument-added", "method argument", "v2-writes-v1-reads", "Args<AppendedV1>", H["args_Tag_V2"],
+  "v2 appended two nullable arguments to `Tag`; the v1 executor declares one and skips the rest.")
+E("nullable-argument-added.backward", "nullable-argument-added", "method argument", "v1-writes-v2-reads", "Args<AppendedV1,string?,i4?>", H["args_Tag_V1"],
+  "A v1 client calling a v2 server: the argument array carries one item and the two arguments it lacks are nullable, so the executor runs with `note` and `weight` null. Before, every call an older client made to a method that had grown was refused.")
+E("nullable-argument-added.backward.partial", "nullable-argument-added", "method argument", "v1-writes-v2-reads", "Args<AppendedV1,string?,i4?>", "8282016162616e",
+  "A client from an intermediate revision that sent `note` but not `weight`.")
+E("nullable-argument-added.roundtrip.nulls", "nullable-argument-added", "method argument", "roundtrip", "Args<AppendedV1,string?,i4?>", H["args_Tag_V2_nulls"],
+  "A v2 client that sent both nullable arguments as null: the same values as the v1 call, spelled out.")
+E("nullable-argument-added.backward.required-missing", "nullable-argument-added", "method argument", "v1-writes-v2-reads", "Args<AppendedV1,string?,i4?>", "80",
+  "An empty argument array: `v` is required, so this is the typed field-count error, not a call with every argument null.")
 
 # -- axis: T[] <-> T[N] -------------------------------------------------------
 E("array-to-fixed.forward.right-length", "array-shape", "bare", "v1-writes-v2-reads", "VarToFixedV2", H["VarToFixedV1_3"], "")
@@ -358,7 +413,7 @@ doc["readers"] = collections.OrderedDict([
     ("Set<T>", "what a `Set<T>` field reads (CBOR tag 258)"),
     ("Maybe<T>", "what a `T?` field reads"),
     ("Union<U>", "the generated union formatter for U"),
-    ("Args<T0,T1,...>", "the method-argument envelope: ReadStartArray(), each argument, ReadEndArrayAndSkip(len - argc) - the generated executor prologue, verbatim"),
+    ("Args<T0,T1,...>", "the method-argument envelope, as the generated executor prologue reads it: ReadStartMessage(argc), each argument, ReadEndArrayAndSkip(len - argc). An argument spelled `T?` is nullable; when the list ends in nullable arguments the prologue is ReadStartMessage(argc, required), each trailing nullable argument read only while len > i (null otherwise), ReadEndMessage(len, argc)"),
 ])
 
 # ── what the toolchain stops before it ever reaches a reader ────────────────
@@ -388,9 +443,9 @@ doc["lockCheck"] = collections.OrderedDict([
     ("recordedBy", "tests/golden/compat.lockprobe.sh"),
     ("axes", [
         L("append", "warning", "ION0029 (field added is not nullable)",
-          "Correct: appending is the one safe edit, and the warning is about the reader's inability to distinguish 'absent' from 'default', not about the wire."),
+          "Correct, and the warning is the whole story: a non-nullable append works forward only. An old reader skips the new field (`appended.forward.*`), but a new reader handed an old payload has nothing to put in it and raises the typed field-count error (`appended.backward.*`). Making the field nullable is what makes it work both ways."),
         L("optional-add", "no", None,
-          "Correct on the wire, but see the `optional-added.backward` vectors: a NEW reader still cannot read an OLD writer's payload, because `?` describes the value, not its presence."),
+          "Correct: a nullable field appended at the end is compatible in both directions - an old reader skips it, a new reader reads it as null from an old payload (`optional-added.backward`, `nullable-appended.*`)."),
         L("insert-middle", "error", "ION0021 (field changed index)", "Correct - this is the edit the `inserted.forward.same-type` vectors show silently corrupting all three runtimes."),
         L("remove-field", "error", "ION0020 (field removed)", "Correct."),
         L("reorder-fields", "error", "ION0021 (field changed index)", "Correct - matches the `reordered.*.same-type` vectors."),
@@ -415,12 +470,12 @@ doc["lockCheck"] = collections.OrderedDict([
         L("union-reorder-cases", "error", "ION0028 (case changed index)", "Correct."),
         L("union-rename-case", "error", "ION0023 (union case removed)", "Correct."),
         L("union-case-append", "warning", "ION0029 (field added is not nullable)",
-          "Deliberately identical to appending to a msg: a case payload is a positional array nested in the union envelope, so the same rule applies."),
+          "Deliberately identical to appending to a msg: a case payload is a positional array nested in the union envelope, so the same rule applies - a nullable field appended to a case works both ways (`nullable-appended.*.union-*`)."),
         L("union-case-insert", "error", "ION0021 (field changed index)",
           "Closed. The lock now records each inline case payload field by index, name and canonical type, so the silent-corruption shape is visible."),
         L("union-case-retype", "error", "ION0022 (field changed type)",
           "Closed by the same change."),
-        L("method-add-arg", "error", "ION0026 (argument count)", "Correct - stricter than the wire, which skips a trailing argument (see `argument-added.forward`)."),
+        L("method-add-arg", "error", "ION0026 (argument count)", "Correct for the required argument probed here - stricter than the wire, which skips a trailing argument (see `argument-added.forward`). The lock compares argument counts only, so it rejects a trailing NULLABLE argument too, although the executor now reads one an older client did not send as null (`nullable-argument-added.*`)."),
         L("method-arg-retype", "error", "ION0026 (argument type)", "Correct."),
         L("method-retype", "error", "ION0026 (return type)", "Correct."),
         L("method-remove", "warning", "ION0025 (method removed)", "Reported, but exit 0 and the lock is rewritten, so it does not stop a build."),

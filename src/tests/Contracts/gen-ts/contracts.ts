@@ -1197,13 +1197,13 @@ IonFormatterStorage.register("KeywordFields", {
 
 IonFormatterStorage.register("KeywordPatchTarget", {
   read(reader: CborReader): KeywordPatchTarget {
-    const arraySize = IonFormatterStorage.readStartMessage(reader, 5, "KeywordPatchTarget");
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 5, "KeywordPatchTarget", 4);
     const fixed = IonFormatterStorage.get<i4>('i4').read(reader);
     const __class = IonFormatterStorage.get<string>('string').read(reader);
     const __default = IonFormatterStorage.get<bool>('bool').read(reader);
     const lock = IonFormatterStorage.readArray<i4>(reader, 'i4');
-    const event = IonFormatterStorage.readNullable<string>(reader, 'string');
-    reader.readEndArrayAndSkip(arraySize - 5);
+    const event = arraySize > 4 ? IonFormatterStorage.readNullable<string>(reader, 'string') : null;
+    IonFormatterStorage.readEndMessage(reader, arraySize, 5);
     return { fixed, class: __class, default: __default, lock, event };
   },
   write(writer: CborWriter, value: KeywordPatchTarget): void {
@@ -1269,13 +1269,13 @@ IonFormatterStorage.register("LedgerPatch", {
 
 IonFormatterStorage.register("PatchTarget", {
   read(reader: CborReader): PatchTarget {
-    const arraySize = IonFormatterStorage.readStartMessage(reader, 5, "PatchTarget");
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 5, "PatchTarget", 4);
     const n = IonFormatterStorage.get<i4>('i4').read(reader);
     const f = IonFormatterStorage.get<f4>('f4').read(reader);
     const s = IonFormatterStorage.get<string>('string').read(reader);
     const items = IonFormatterStorage.readArray<i4>(reader, 'i4');
-    const note = IonFormatterStorage.readNullable<string>(reader, 'string');
-    reader.readEndArrayAndSkip(arraySize - 5);
+    const note = arraySize > 4 ? IonFormatterStorage.readNullable<string>(reader, 'string') : null;
+    IonFormatterStorage.readEndMessage(reader, arraySize, 5);
     return { n, f, s, items, note };
   },
   write(writer: CborWriter, value: PatchTarget): void {
@@ -1291,12 +1291,12 @@ IonFormatterStorage.register("PatchTarget", {
 
 IonFormatterStorage.register("PatchEnvelope", {
   read(reader: CborReader): PatchEnvelope {
-    const arraySize = IonFormatterStorage.readStartMessage(reader, 4, "PatchEnvelope");
+    const arraySize = IonFormatterStorage.readStartMessage(reader, 4, "PatchEnvelope", 2);
     const one = IonFormatterStorage.get<IonPartial<PatchTarget>>('IonPartial<PatchTarget>').read(reader);
     const many = IonFormatterStorage.readArray<IonPartial<PatchTarget>>(reader, 'IonPartial<PatchTarget>');
-    const maybe = IonFormatterStorage.readNullable<IonPartial<PatchTarget>>(reader, 'IonPartial<PatchTarget>');
-    const maybeMany = IonFormatterStorage.readNullableArray<IonPartial<PatchTarget>>(reader, 'IonPartial<PatchTarget>');
-    reader.readEndArrayAndSkip(arraySize - 4);
+    const maybe = arraySize > 2 ? IonFormatterStorage.readNullable<IonPartial<PatchTarget>>(reader, 'IonPartial<PatchTarget>') : null;
+    const maybeMany = arraySize > 3 ? IonFormatterStorage.readNullableArray<IonPartial<PatchTarget>>(reader, 'IonPartial<PatchTarget>') : null;
+    IonFormatterStorage.readEndMessage(reader, arraySize, 4);
     return { one, many, maybe, maybeMany };
   },
   write(writer: CborWriter, value: PatchEnvelope): void {

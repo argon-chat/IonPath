@@ -471,7 +471,7 @@ c: Data~[]?;   <span class="text-status-up">// canonical</span></pre>
             <span class="text-[10px] px-2 py-0.5 rounded-full font-medium text-status-degraded bg-status-degraded-subtle">Warning</span>
           </div>
           <p class="text-sm font-medium mb-1">Field '{'{'}0{'}'}' added to '{'{'}1{'}'}' is not nullable</p>
-          <p class="text-xs text-text-secondary">Adding a required field is safe for new clients but older clients reading the previous schema won't have this field. Consider making it optional (<code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T?</code>).</p>
+          <p class="text-xs text-text-secondary">An appended field never troubles a reader on the previous schema, which skips it. The direction that breaks is the other one: a reader on the new schema handed a payload written before the field existed — an older client's request, an older server's response, a blob the previous build stored — has no value to give it and fails with a field-count error. Make it optional (<code class="bg-oled-elevated px-1 py-0.5 rounded font-mono text-[11px]">T?</code>): a nullable field the payload does not carry reads as null, so both directions work. The same applies to a field appended to a union case.</p>
         </div>
       </div>
     </section>

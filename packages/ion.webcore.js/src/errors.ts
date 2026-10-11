@@ -123,10 +123,17 @@ export class IonTruncatedPayloadError extends IonDecodeError {
  * is the only thing between a short payload and a reader walking into the bytes that follow it.
  * Both counts are reported: one of them alone does not say whether the peer is on an older
  * revision or the frame was damaged.
+ *
+ * A payload shorter than the schema is *not* this error when every field it lacks is nullable:
+ * those read as `null`, so a nullable field appended to a shipped message keeps old payloads
+ * readable. It is raised only when a non-nullable field is missing, and `expectedFields` is then
+ * the number of leading fields the schema requires — up to and including its last non-nullable
+ * one.
  */
 export class IonFieldCountError extends IonDecodeError {
   constructor(
     readonly context: string,
+    /** How many leading fields the reader's schema requires. */
     readonly expectedFields: number,
     readonly actualFields: number
   ) {
@@ -158,8 +165,8 @@ export class IonContainerOverreadError extends IonDecodeError {
 /**
  * A definite-length container was closed with items still outstanding.
  *
- * A message closes its array with `readEndArrayAndSkip(declared - fieldsRead)` and therefore never
- * hits this; a `union` envelope, which is fixed at `[index, payload]`, does. Leaving the stray item
+ * A message closes its array with `readEndArrayAndSkip(declared - fieldsRead)` (or
+ * `IonFormatterStorage.readEndMessage`, which does the same) and therefore never hits this; a `union` envelope, which is fixed at `[index, payload]`, does. Leaving the stray item
  * in the stream hands it to whatever field comes next in the enclosing message.
  */
 export class IonContainerNotConsumedError extends IonDecodeError {

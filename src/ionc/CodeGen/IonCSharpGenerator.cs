@@ -1153,9 +1153,9 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             {compileGeneratedAttributes}
             public {ionType} Read(CborReader reader)
             {
-                var arraySize = reader.ReadStartMessage({fieldsCount}, "{ionType}");
+                var arraySize = {readStartMessage};
                 {fieldReadExpression}
-                reader.ReadEndArrayAndSkip(arraySize - {fieldsCount});
+                {readEndMessage};
                 return new({ctorFields});
             }
             
@@ -1287,15 +1287,61 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             return GenerateFormatterForFlags(flags);
 
         var name = type.name.Identifier;
+        var count = type.fields.Count;
+        var required = IonWireShape.RequiredCount(type.fields);
 
         var template = FormatterTemplate
+            .Replace("{readStartMessage}", ReadStartMessageCall(count.ToString(), name, required, count))
+            .Replace("{readEndMessage}", ReadEndMessageCall(count.ToString(), required, count))
             .Replace("{ionType}", name)
             .Replace("{fieldReadExpression}", GenerateReadField(type))
             .Replace("{ctorFields}", GenerateCaptureField(type))
             .Replace("{fieldWriteExpression}", GenerateWriteField(type))
-            .Replace("{fieldsCount}", type.fields.Count.ToString());
+            .Replace("{fieldsCount}", count.ToString());
 
         return template;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Short payloads: a nullable tail an older writer did not send
+    // ═══════════════════════════════════════════════════════════════════
+    //
+    // A positional array opens with ReadStartMessage and closes with a trailing skip. When every
+    // field is required the emitted pair is the one ionc has always emitted —
+    //     ReadStartMessage(N, "T") … ReadEndArrayAndSkip(arraySize - N)
+    // — byte for byte, so code for such a message is unchanged. When the array ends in nullable
+    // fields (IonWireShape.RequiredCount < N) the pair becomes
+    //     ReadStartMessage(N, "T", requiredFields: R) … ReadEndMessage(arraySize, N)
+    // and every field at index i >= R is read as `arraySize > i ? <read> : default!`: a payload
+    // written before those fields existed is short, and the fields it lacks read as null
+    // (IonMaybe<T>.None under --maybe, which is the struct's default). Below R it is still the
+    // typed IonFieldCountException. The same shape is emitted for messages, union case payloads
+    // and method argument lists, and by the TypeScript and Rust generators.
+
+    /// <summary>The expression that opens a positional array of <paramref name="count"/> items.</summary>
+    private static string ReadStartMessageCall(string count, string context, int required, int total)
+        => required == total
+            ? $"reader.ReadStartMessage({count}, \"{context}\")"
+            : $"reader.ReadStartMessage({count}, \"{context}\", requiredFields: {required})";
+
+    /// <summary>The statement (without its <c>;</c>) that closes it.</summary>
+    private static string ReadEndMessageCall(string count, int required, int total)
+        => required == total
+            ? $"reader.ReadEndArrayAndSkip(arraySize - {count})"
+            : $"reader.ReadEndMessage(arraySize, {count})";
+
+    /// <summary>
+    /// The read statements for a positional array: required items unconditionally, the nullable
+    /// tail behind a bound on <c>arraySize</c>.
+    /// </summary>
+    private static string GenerateReadItems<T>(IReadOnlyList<T> items, Func<T, string> readRequired)
+        where T : ITypeWithName
+    {
+        var required = IonWireShape.RequiredCount(items.Cast<ITypeWithName>());
+
+        return string.Join($"\n{new string(' ', 8)}", items.Select((item, index) => index < required
+            ? readRequired(item)
+            : $"var __{item.Name.Identifier.ToLowerInvariant()} = arraySize > {index} ? {ReadMaybeExpression(item)} : default!;"));
     }
 
     private static string GenerateCaptureField(IonType type)
@@ -1310,7 +1356,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
         }).Concat(additional));
 
     private static string GenerateReadField(IonType type) =>
-        string.Join($"\n{new string(' ', 8)}", type.fields.Select(GenerateReadField));
+        GenerateReadItems(type.fields, GenerateReadField);
 
     private static string GenerateReadField(IonField field) =>
         field switch
@@ -1390,17 +1436,21 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     }
 
     private static string GenerateReadMaybeField(ITypeWithName field)
+        => $"var __{field.Name.Identifier.ToLowerInvariant()} = {ReadMaybeExpression(field)};";
+
+    /// <summary>The expression that reads a <c>T?</c> field or argument.</summary>
+    private static string ReadMaybeExpression(ITypeWithName field)
     {
         if (field.Type is not IonGenericType { IsMaybe: true } maybeType)
             throw new InvalidOperationException();
         if (maybeType.TypeArguments[0] is IonGenericType { IsArray: true } innerArray)
             return
-                $"var __{field.Name.Identifier.ToLowerInvariant()} = IonFormatterStorage<{ResolveTypeName(innerArray.TypeArguments[0])}>.ReadNullable{FixedInfix(innerArray)}Array(reader{FixedLengthArg(innerArray)});";
+                $"IonFormatterStorage<{ResolveTypeName(innerArray.TypeArguments[0])}>.ReadNullable{FixedInfix(innerArray)}Array(reader{FixedLengthArg(innerArray)})";
         if (UseMaybeWrapper)
             return
-                $"var __{field.Name.Identifier.ToLowerInvariant()} = IonFormatterStorage<{ResolveTypeName(maybeType.TypeArguments[0])}>.ReadMaybe(reader);";
+                $"IonFormatterStorage<{ResolveTypeName(maybeType.TypeArguments[0])}>.ReadMaybe(reader)";
         return
-            $"var __{field.Name.Identifier.ToLowerInvariant()} = reader.ReadNullable<{ResolveTypeName(maybeType.TypeArguments[0])}>();";
+            $"reader.ReadNullable<{ResolveTypeName(maybeType.TypeArguments[0])}>()";
     }
 
 
@@ -1478,8 +1528,14 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
     }
 
     private static string GenerateReadArguments(IonMethod method)
-        => string.Join($"\n{new string(' ', 8)}",
-            method.arguments.Where(x => x.mod is not IonArgumentModifiers.Stream).Select(GenerateReadArgument));
+        => GenerateReadItems(WireArguments(method), GenerateReadArgument);
+
+    /// <summary>
+    /// The arguments that travel in the positional argument array — everything but an input
+    /// <c>stream</c>, which arrives as frames of its own.
+    /// </summary>
+    private static List<IonArgument> WireArguments(IonMethod method)
+        => method.arguments.Where(x => x.mod is not IonArgumentModifiers.Stream).ToList();
 
     private static string GenerateWriteArguments(IonMethod method)
         => string.Join($"\n{new string(' ', 8)}", method.arguments.Where(x => x.mod is not IonArgumentModifiers.Stream).Select(GenerateWriteArgument));
@@ -1562,11 +1618,11 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
 
                 {inputCastedStream}
 
-                var arraySize = reader.ReadStartMessage(argumentSize, "{serviceTypename}.{methodNameRaw}");
+                var arraySize = {readStartMessage};
 
                 {fieldReadExpression}
 
-                reader.ReadEndArrayAndSkip(arraySize - argumentSize);
+                {readEndMessage};
 
                 return IonStreamFrames.Encode(service.{methodName}({fieldReadArgs}), ct);
             }
@@ -1581,11 +1637,11 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             
                 const int argumentSize = {argSize};
             
-                var arraySize = reader.ReadStartMessage(argumentSize, "{serviceTypename}.{methodNameRaw}");
+                var arraySize = {readStartMessage};
             
                 {fieldReadExpression}
             
-                reader.ReadEndArrayAndSkip(arraySize - argumentSize);
+                {readEndMessage};
             
                 await service.{methodName}({fieldReadArgs});
             }
@@ -1600,11 +1656,11 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             
                 const int argumentSize = {argSize};
             
-                var arraySize = reader.ReadStartMessage(argumentSize, "{serviceTypename}.{methodNameRaw}");
+                var arraySize = {readStartMessage};
             
                 {fieldReadExpression}
             
-                reader.ReadEndArrayAndSkip(arraySize - argumentSize);
+                {readEndMessage};
             
                 var result = await service.{methodName}({fieldReadArgs});
                 
@@ -1675,6 +1731,21 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             .Replace("{serviceStreamRouteBranch}", branchStreamBuilder.ToString());
     }
 
+    /// <summary>
+    /// Fills <c>{readStartMessage}</c> / <c>{readEndMessage}</c> in an executor template: the
+    /// argument array is a positional array like a message, so a trailing nullable argument an
+    /// older client does not send reads as null. The context stays
+    /// <c>"{serviceTypename}.{methodNameRaw}"</c> for the template's own replacements to resolve.
+    /// </summary>
+    private static string ReplaceArgumentArrayBounds(string template, IonMethod method, int argSize)
+    {
+        var required = IonWireShape.RequiredCount(WireArguments(method));
+        return template
+            .Replace("{readStartMessage}",
+                ReadStartMessageCall("argumentSize", "{serviceTypename}.{methodNameRaw}", required, argSize))
+            .Replace("{readEndMessage}", ReadEndMessageCall("argumentSize", required, argSize));
+    }
+
     private static void GenerateStreamMethodExecutor(IonMethod method, string serviceTypename,
         StringBuilder methodsBuilder,
         StringBuilder branchBuilder)
@@ -1700,7 +1771,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             template = template.Replace("{inputCastedStream}", "");
 
         var templateMethod =
-            template
+            ReplaceArgumentArrayBounds(template, method, argSize)
                 .Replace("{methodDoc}", Doc(method.Doc, "    "))
                 .Replace("{serviceTypename}", serviceTypename)
                 .Replace("{methodNameRaw}", methodName)
@@ -1734,7 +1805,7 @@ public class IonCSharpGenerator(string @namespace) : IIonCodeGenerator
             : ServiceExecutorMethodWithReturnTemplate;
 
         var templateMethod =
-            template
+            ReplaceArgumentArrayBounds(template, method, argSize)
                 .Replace("{methodDoc}", Doc(method.Doc, "    "))
                 .Replace("{serviceTypename}", serviceTypename)
                 .Replace("{methodNameRaw}", methodName)

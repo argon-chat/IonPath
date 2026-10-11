@@ -24,8 +24,8 @@ mod compat_schemas;
 use common::{from_hex, golden, to_hex};
 use compat_schemas::*;
 use ion_rustcore::formatter::{
-    read_array, read_fixed_array, read_map, read_maybe, read_set, skip_remaining, write_array,
-    write_fixed_array, write_map, write_maybe, write_set, IonFormat,
+    read_array, read_fixed_array, read_map, read_maybe, read_message_end, read_message_start,
+    read_set, write_array, write_fixed_array, write_map, write_maybe, write_set, IonFormat,
 };
 use ion_rustcore::IonError;
 use minicbor::{Decoder, Encoder};
@@ -177,19 +177,22 @@ where
 // One arm per `reader` spelling in the golden file. Each is the call the generator emits for that
 // position: a message field goes through the type's own `IonFormat`, a `T[]` field through
 // `read_array`, and so on. `Args<...>` is the argument envelope — Rust has no generated server, so
-// this reproduces the C#/TypeScript executor prologue that the Rust client writes for.
+// this reproduces the C# executor prologue that the Rust client writes for, in the shape the Rust
+// generator gives a message: `read_message_start` with the count of required arguments (up to the
+// last non-nullable one), a trailing nullable argument read only while `len > i`, and
+// `read_message_end`. `read` receives the declared count for that guard.
 
-fn args_probe<V, R, W>(bytes: &[u8], argc: u64, read: R, write: W) -> Observation
+fn args_probe<V, R, W>(bytes: &[u8], argc: u64, required: u64, read: R, write: W) -> Observation
 where
-    R: FnOnce(&mut Decoder<'_>) -> Result<V, IonError>,
+    R: FnOnce(&mut Decoder<'_>, u64) -> Result<V, IonError>,
     W: FnOnce(&mut Encoder<Vec<u8>>, &V) -> Result<(), IonError>,
 {
     probe(
         bytes,
         |d| {
-            let len = d.array()?.ok_or(IonError::IndefiniteArray)?;
-            let v = read(d)?;
-            skip_remaining(d, len, argc)?;
+            let (len, _depth) = read_message_start(d, "Args", argc, required)?;
+            let v = read(d, len)?;
+            read_message_end(d, len, argc)?;
             Ok(v)
         },
         |e, v| {
@@ -242,7 +245,7 @@ fn observe(spec: &str, bytes: &[u8]) -> Observation {
     }
     macro_rules! args1 {
         ($t:ty) => {
-            return args_probe::<$t, _, _>(bytes, 1, <$t as IonFormat>::ion_read, |e, v| {
+            return args_probe::<$t, _, _>(bytes, 1, 1, |d, _| <$t as IonFormat>::ion_read(d), |e, v| {
                 v.ion_write(e)
             })
         };
@@ -252,7 +255,8 @@ fn observe(spec: &str, bytes: &[u8]) -> Observation {
             return args_probe::<($a, $b), _, _>(
                 bytes,
                 2,
-                |d| Ok((<$a as IonFormat>::ion_read(d)?, <$b as IonFormat>::ion_read(d)?)),
+                2,
+                |d, _| Ok((<$a as IonFormat>::ion_read(d)?, <$b as IonFormat>::ion_read(d)?)),
                 |e, v| {
                     v.0.ion_write(e)?;
                     v.1.ion_write(e)
@@ -295,6 +299,20 @@ fn observe(spec: &str, bytes: &[u8]) -> Observation {
         "NestV1" => msg!(NestV1),
         "NestV2" => msg!(NestV2),
         "TreeV1" => msg!(TreeV1),
+        "NullAppendV1" => msg!(NullAppendV1),
+        "NullAppendV2" => msg!(NullAppendV2),
+        "MidNullV1" => msg!(MidNullV1),
+        "MidNullV2" => msg!(MidNullV2),
+        "NullNestV1" => msg!(NullNestV1),
+        "NullNestV2" => msg!(NullNestV2),
+        "GrowNullHolderV1" => msg!(GrowNullHolderV1),
+        "GrowNullHolderV2" => msg!(GrowNullHolderV2),
+        "Array<NullAppendV2>" => arr!(NullAppendV2),
+        "Fixed<NullAppendV2,2>" => fixed!(NullAppendV2, 2),
+        "Map<string,NullAppendV2>" => map!(String, NullAppendV2),
+        "Maybe<NullAppendV2>" => maybe!(NullAppendV2),
+        "Union<GrowNullV1>" => msg!(GrowNullV1),
+        "Union<GrowNullV2>" => msg!(GrowNullV2),
 
         "Array<AppendedV1>" => arr!(AppendedV1),
         "Array<AppendedV2>" => arr!(AppendedV2),
@@ -329,6 +347,25 @@ fn observe(spec: &str, bytes: &[u8]) -> Observation {
         "Args<AppendedV2,i4>" => args2!(AppendedV2, i32),
         "Args<NestV1,i4>" => args2!(NestV1, i32),
         "Args<NestV2,i4>" => args2!(NestV2, i32),
+        "Args<AppendedV1,string?,i4?>" => {
+            return args_probe::<(AppendedV1, Option<String>, Option<i32>), _, _>(
+                bytes,
+                3,
+                1,
+                |d, len| {
+                    Ok((
+                        <AppendedV1 as IonFormat>::ion_read(d)?,
+                        if len > 1 { read_maybe::<String>(d)? } else { None },
+                        if len > 2 { read_maybe::<i32>(d)? } else { None },
+                    ))
+                },
+                |e, v| {
+                    v.0.ion_write(e)?;
+                    write_maybe(e, &v.1)?;
+                    write_maybe(e, &v.2)
+                },
+            )
+        }
 
         other => panic!("unknown reader spec '{other}'"),
     }

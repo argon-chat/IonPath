@@ -309,30 +309,64 @@ public class CompatGoldenTests
         r => r.ReadNullable<T>(),
         (w, v) => IonFormatterStorage<T>.WriteNullable(w, (T?)v));
 
+    /// <summary>A <c>T?</c> over a value type — what the generated code reads an <c>i4?</c> with.</summary>
+    private static Codec MaybeOfValue<T>() where T : struct => new(
+        r => r.ReadNullable<T>(),
+        (w, v) => IonFormatterStorage<T>.WriteNullable(w, (T?)v));
+
+    /// <summary>One argument of an <c>Args&lt;…&gt;</c> envelope; <c>T?</c> in the spec is <see cref="Opt"/>.</summary>
+    private sealed record Arg(Codec Codec, bool Nullable);
+
+    private static Arg Req(Codec codec) => new(codec, false);
+
+    private static Arg Opt(Codec codec) => new(codec, true);
+
     /// <summary>
-    /// The generated executor prologue, verbatim:
+    /// The generated executor prologue (<c>IonCSharpGenerator</c>'s executor templates). When every
+    /// argument is required:
     /// <code>
-    /// var arraySize = reader.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
+    /// var arraySize = reader.ReadStartMessage(argumentSize, "Svc.Method");
     /// // one read per declared argument
     /// reader.ReadEndArrayAndSkip(arraySize - argumentSize);
     /// </code>
+    /// When the list ends in nullable arguments, everything up to the last required one is read
+    /// unconditionally and the rest only while the payload still carries them:
+    /// <code>
+    /// var arraySize = reader.ReadStartMessage(argumentSize, "Svc.Method", requiredFields: R);
+    /// var __note = arraySize > 1 ? reader.ReadNullable&lt;string&gt;() : default!;
+    /// reader.ReadEndMessage(arraySize, argumentSize);
+    /// </code>
     /// </summary>
-    private static Codec Args(params Codec[] args) => new(
-        r =>
-        {
-            var arraySize = r.ReadStartArray() ?? throw new Exception("undefined len array not allowed");
-            var values = new object?[args.Length];
-            for (var i = 0; i < args.Length; i++) values[i] = args[i].Read(r);
-            r.ReadEndArrayAndSkip(arraySize - args.Length);
-            return values;
-        },
-        (w, v) =>
-        {
-            var values = (object?[])v!;
-            w.WriteStartArray(args.Length);
-            for (var i = 0; i < args.Length; i++) args[i].Write(w, values[i]);
-            w.WriteEndArray();
-        });
+    private static Codec Args(params Arg[] args)
+    {
+        var required = 0;
+        for (var i = 0; i < args.Length; i++)
+            if (!args[i].Nullable)
+                required = i + 1;
+
+        return new Codec(
+            r =>
+            {
+                var arraySize = required == args.Length
+                    ? r.ReadStartMessage(args.Length, "Args")
+                    : r.ReadStartMessage(args.Length, "Args", requiredFields: required);
+                var values = new object?[args.Length];
+                for (var i = 0; i < args.Length; i++)
+                    values[i] = i < required || arraySize > i ? args[i].Codec.Read(r) : null;
+                if (required == args.Length)
+                    r.ReadEndArrayAndSkip(arraySize - args.Length);
+                else
+                    r.ReadEndMessage(arraySize, args.Length);
+                return values;
+            },
+            (w, v) =>
+            {
+                var values = (object?[])v!;
+                w.WriteStartArray(args.Length);
+                for (var i = 0; i < args.Length; i++) args[i].Codec.Write(w, values[i]);
+                w.WriteEndArray();
+            });
+    }
 
     private static readonly Dictionary<string, Codec> Codecs = new()
     {
@@ -369,6 +403,20 @@ public class CompatGoldenTests
         ["NestV1"] = Msg<NestV1>(),
         ["NestV2"] = Msg<NestV2>(),
         ["TreeV1"] = Msg<TreeV1>(),
+        ["NullAppendV1"] = Msg<NullAppendV1>(),
+        ["NullAppendV2"] = Msg<NullAppendV2>(),
+        ["MidNullV1"] = Msg<MidNullV1>(),
+        ["MidNullV2"] = Msg<MidNullV2>(),
+        ["NullNestV1"] = Msg<NullNestV1>(),
+        ["NullNestV2"] = Msg<NullNestV2>(),
+        ["GrowNullHolderV1"] = Msg<GrowNullHolderV1>(),
+        ["GrowNullHolderV2"] = Msg<GrowNullHolderV2>(),
+        ["Array<NullAppendV2>"] = Arr<NullAppendV2>(),
+        ["Fixed<NullAppendV2,2>"] = Fix<NullAppendV2>(2),
+        ["Map<string,NullAppendV2>"] = MapOf<string, NullAppendV2>(),
+        ["Maybe<NullAppendV2>"] = MaybeOf<NullAppendV2>(),
+        ["Union<GrowNullV1>"] = Msg<IGrowNullV1>(),
+        ["Union<GrowNullV2>"] = Msg<IGrowNullV2>(),
 
         ["Array<AppendedV1>"] = Arr<AppendedV1>(),
         ["Array<AppendedV2>"] = Arr<AppendedV2>(),
@@ -397,12 +445,14 @@ public class CompatGoldenTests
         ["Union<GrowV1>"] = Msg<IGrowV1>(),
         ["Union<GrowV2>"] = Msg<IGrowV2>(),
 
-        ["Args<AppendedV1>"] = Args(Msg<AppendedV1>()),
-        ["Args<AppendedV2>"] = Args(Msg<AppendedV2>()),
-        ["Args<ShiftedV1>"] = Args(Msg<ShiftedV1>()),
-        ["Args<AppendedV2,i4>"] = Args(Msg<AppendedV2>(), Msg<i4>()),
-        ["Args<NestV1,i4>"] = Args(Msg<NestV1>(), Msg<i4>()),
-        ["Args<NestV2,i4>"] = Args(Msg<NestV2>(), Msg<i4>()),
+        ["Args<AppendedV1>"] = Args(Req(Msg<AppendedV1>())),
+        ["Args<AppendedV2>"] = Args(Req(Msg<AppendedV2>())),
+        ["Args<ShiftedV1>"] = Args(Req(Msg<ShiftedV1>())),
+        ["Args<AppendedV2,i4>"] = Args(Req(Msg<AppendedV2>()), Req(Msg<i4>())),
+        ["Args<NestV1,i4>"] = Args(Req(Msg<NestV1>()), Req(Msg<i4>())),
+        ["Args<NestV2,i4>"] = Args(Req(Msg<NestV2>()), Req(Msg<i4>())),
+        ["Args<AppendedV1,string?,i4?>"] =
+            Args(Req(Msg<AppendedV1>()), Opt(MaybeOf<string>()), Opt(MaybeOfValue<i4>())),
     };
 
     private static Codec CodecFor(string spec) =>

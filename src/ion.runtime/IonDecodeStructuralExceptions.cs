@@ -42,6 +42,13 @@ public sealed class IonTruncatedPayloadException(string context, Exception? inne
 /// Both counts are reported: knowing only that the count was wrong does not tell a caller whether
 /// the peer speaks an older revision of the schema or the frame was damaged.
 /// </para>
+/// <para>
+/// A payload shorter than the schema is <i>not</i> this failure when every field it lacks is
+/// nullable: those read as <see langword="null"/>, so a nullable field appended to a shipped
+/// message keeps old payloads readable. This is raised only when a non-nullable field is missing,
+/// and <see cref="ExpectedFields"/> is then the number of leading fields the schema requires —
+/// up to and including its last non-nullable one.
+/// </para>
 /// </remarks>
 public sealed class IonFieldCountException(string context, int expectedFields, int actualFields)
     : IonDecodeException(
@@ -50,7 +57,10 @@ public sealed class IonFieldCountException(string context, int expectedFields, i
     /// <summary>The message or envelope whose field list was not satisfied.</summary>
     public string Context { get; } = context;
 
-    /// <summary>How many items the reader's schema requires.</summary>
+    /// <summary>
+    /// How many items the reader's schema requires: every field up to and including the last
+    /// non-nullable one.
+    /// </summary>
     public int ExpectedFields { get; } = expectedFields;
 
     /// <summary>How many items the payload actually declared.</summary>

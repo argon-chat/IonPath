@@ -577,10 +577,10 @@ impl IonFormat for KeywordUnion {
 
 impl IonFormat for Kept {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "Kept")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "Kept", 2, 2)?;
         let class = <String as IonFormat>::ion_read(d)?;
         let r#type = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { class, r#type })
     }
 
@@ -594,9 +594,9 @@ impl IonFormat for Kept {
 
 impl IonFormat for Dropped {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "Dropped")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "Dropped", 1, 1)?;
         let r#fn = <bool as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 1)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 1)?;
         Ok(Self { r#fn })
     }
 
@@ -668,9 +668,9 @@ impl IonFormat for LabSignal {
 
 impl IonFormat for Joined {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "Joined")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "Joined", 1, 1)?;
         let user = <String as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 1)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 1)?;
         Ok(Self { user })
     }
 
@@ -683,9 +683,9 @@ impl IonFormat for Joined {
 
 impl IonFormat for Left {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "Left")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "Left", 1, 1)?;
         let user = <String as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 1)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 1)?;
         Ok(Self { user })
     }
 
@@ -698,10 +698,10 @@ impl IonFormat for Left {
 
 impl IonFormat for Said {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "Said")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "Said", 2, 2)?;
         let user = <String as IonFormat>::ion_read(d)?;
         let text = <String as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { user, text })
     }
 
@@ -766,10 +766,10 @@ ion_rustcore::ion_partial! {
 
 impl IonFormat for LegacyRequest {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "LegacyRequest")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "LegacyRequest", 2, 2)?;
         let old_id = <i32 as IonFormat>::ion_read(d)?;
         let name = <String as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { old_id, name })
     }
 
@@ -783,11 +783,11 @@ impl IonFormat for LegacyRequest {
 
 impl IonFormat for CacheProbe {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "CacheProbe")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "CacheProbe", 3, 3)?;
         let hits = <i32 as IonFormat>::ion_read(d)?;
         let misses = <i32 as IonFormat>::ion_read(d)?;
         let total = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 3)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 3)?;
         Ok(Self { hits, misses, total })
     }
 
@@ -802,10 +802,10 @@ impl IonFormat for CacheProbe {
 
 impl IonFormat for Member {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "Member")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "Member", 2, 2)?;
         let id = <uuid::Uuid as IonFormat>::ion_read(d)?;
         let name = <String as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { id, name })
     }
 
@@ -819,10 +819,10 @@ impl IonFormat for Member {
 
 impl IonFormat for Doc {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "Doc")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "Doc", 2, 2)?;
         let title = <String as IonFormat>::ion_read(d)?;
         let revision = <i32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { title, revision })
     }
 
@@ -836,7 +836,7 @@ impl IonFormat for Doc {
 
 impl IonFormat for KeyMatrix {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "KeyMatrix")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "KeyMatrix", 14, 14)?;
         let by_i1 = <std::collections::HashMap<i8, i32> as IonFormat>::ion_read(d)?;
         let by_i2 = <std::collections::HashMap<i16, i32> as IonFormat>::ion_read(d)?;
         let by_i4 = <std::collections::HashMap<i32, i32> as IonFormat>::ion_read(d)?;
@@ -851,7 +851,7 @@ impl IonFormat for KeyMatrix {
         let by_string = <std::collections::HashMap<String, i32> as IonFormat>::ion_read(d)?;
         let by_guid = <std::collections::HashMap<uuid::Uuid, i32> as IonFormat>::ion_read(d)?;
         let by_enum = <std::collections::HashMap<Tier, i32> as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 14)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 14)?;
         Ok(Self { by_i1, by_i2, by_i4, by_i8, by_i16, by_u1, by_u2, by_u4, by_u8, by_u16, by_bool, by_string, by_guid, by_enum })
     }
 
@@ -877,7 +877,7 @@ impl IonFormat for KeyMatrix {
 
 impl IonFormat for ContainerShapes {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "ContainerShapes")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "ContainerShapes", 10, 10)?;
         let tags = <std::collections::HashMap<String, i32> as IonFormat>::ion_read(d)?;
         let ids = <std::collections::HashSet<i32> as IonFormat>::ion_read(d)?;
         let coords = <[f32; 16] as IonFormat>::ion_read(d)?;
@@ -888,7 +888,7 @@ impl IonFormat for ContainerShapes {
         let patches = <std::collections::HashMap<String, ion_rustcore::IonPartial<Doc>> as IonFormat>::ion_read(d)?;
         let rosters = <std::collections::HashMap<String, Vec<Member>> as IonFormat>::ion_read(d)?;
         let cohorts = <std::collections::HashMap<Tier, std::collections::HashSet<i32>> as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 10)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 10)?;
         Ok(Self { tags, ids, coords, members_by_name, groups, layers, offsets, patches, rosters, cohorts })
     }
 
@@ -921,7 +921,7 @@ impl IonFormat for KeywordAccess {
 
 impl IonFormat for KeywordFields {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "KeywordFields")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "KeywordFields", 15, 15)?;
         let fixed = <i32 as IonFormat>::ion_read(d)?;
         let class = <String as IonFormat>::ion_read(d)?;
         let int = <i32 as IonFormat>::ion_read(d)?;
@@ -937,7 +937,7 @@ impl IonFormat for KeywordFields {
         let base = ion_rustcore::formatter::read_maybe::<String>(d)?;
         let tier = <KeywordTier as IonFormat>::ion_read(d)?;
         let access = <KeywordAccess as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 15)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 15)?;
         Ok(Self { fixed, class, int, event, lock, r#type, r#move, r#match, r#fn, function, default, params, base, tier, access })
     }
 
@@ -964,13 +964,13 @@ impl IonFormat for KeywordFields {
 
 impl IonFormat for KeywordPatchTarget {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "KeywordPatchTarget")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "KeywordPatchTarget", 5, 4)?;
         let fixed = <i32 as IonFormat>::ion_read(d)?;
         let class = <String as IonFormat>::ion_read(d)?;
         let default = <bool as IonFormat>::ion_read(d)?;
         let lock = ion_rustcore::formatter::read_array::<i32>(d)?;
-        let event = ion_rustcore::formatter::read_maybe::<String>(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 5)?;
+        let event = if __len > 4 { ion_rustcore::formatter::read_maybe::<String>(d)? } else { None };
+        ion_rustcore::formatter::read_message_end(d, __len, 5)?;
         Ok(Self { fixed, class, default, lock, event })
     }
 
@@ -987,7 +987,7 @@ impl IonFormat for KeywordPatchTarget {
 
 impl IonFormat for LedgerEntry {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "LedgerEntry")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "LedgerEntry", 9, 9)?;
         let booked_at = <chrono::DateTime<chrono::FixedOffset> as IonFormat>::ion_read(d)?;
         let amount = <ion_rustcore::IonDecimal as IonFormat>::ion_read(d)?;
         let settled_at = ion_rustcore::formatter::read_maybe::<chrono::DateTime<chrono::FixedOffset>>(d)?;
@@ -997,7 +997,7 @@ impl IonFormat for LedgerEntry {
         let corrections = ion_rustcore::formatter::read_maybe::<Vec<ion_rustcore::IonDecimal>>(d)?;
         let opened_at = <chrono::DateTime<chrono::FixedOffset> as IonFormat>::ion_read(d)?;
         let opening_balance = <ion_rustcore::IonDecimal as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 9)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 9)?;
         Ok(Self { booked_at, amount, settled_at, fee, revisions, adjustments, corrections, opened_at, opening_balance })
     }
 
@@ -1018,12 +1018,12 @@ impl IonFormat for LedgerEntry {
 
 impl IonFormat for LedgerPatch {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "LedgerPatch")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "LedgerPatch", 4, 4)?;
         let booked_at = <chrono::DateTime<chrono::FixedOffset> as IonFormat>::ion_read(d)?;
         let amount = <ion_rustcore::IonDecimal as IonFormat>::ion_read(d)?;
         let settled_at = ion_rustcore::formatter::read_maybe::<chrono::DateTime<chrono::FixedOffset>>(d)?;
         let adjustments = ion_rustcore::formatter::read_array::<ion_rustcore::IonDecimal>(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 4)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 4)?;
         Ok(Self { booked_at, amount, settled_at, adjustments })
     }
 
@@ -1039,13 +1039,13 @@ impl IonFormat for LedgerPatch {
 
 impl IonFormat for PatchTarget {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "PatchTarget")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "PatchTarget", 5, 4)?;
         let n = <i32 as IonFormat>::ion_read(d)?;
         let f = <f32 as IonFormat>::ion_read(d)?;
         let s = <String as IonFormat>::ion_read(d)?;
         let items = ion_rustcore::formatter::read_array::<i32>(d)?;
-        let note = ion_rustcore::formatter::read_maybe::<String>(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 5)?;
+        let note = if __len > 4 { ion_rustcore::formatter::read_maybe::<String>(d)? } else { None };
+        ion_rustcore::formatter::read_message_end(d, __len, 5)?;
         Ok(Self { n, f, s, items, note })
     }
 
@@ -1062,12 +1062,12 @@ impl IonFormat for PatchTarget {
 
 impl IonFormat for PatchEnvelope {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "PatchEnvelope")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "PatchEnvelope", 4, 2)?;
         let one = <ion_rustcore::IonPartial<PatchTarget> as IonFormat>::ion_read(d)?;
         let many = ion_rustcore::formatter::read_array::<ion_rustcore::IonPartial<PatchTarget>>(d)?;
-        let maybe = ion_rustcore::formatter::read_maybe::<ion_rustcore::IonPartial<PatchTarget>>(d)?;
-        let maybe_many = ion_rustcore::formatter::read_maybe::<Vec<ion_rustcore::IonPartial<PatchTarget>>>(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 4)?;
+        let maybe = if __len > 2 { ion_rustcore::formatter::read_maybe::<ion_rustcore::IonPartial<PatchTarget>>(d)? } else { None };
+        let maybe_many = if __len > 3 { ion_rustcore::formatter::read_maybe::<Vec<ion_rustcore::IonPartial<PatchTarget>>>(d)? } else { None };
+        ion_rustcore::formatter::read_message_end(d, __len, 4)?;
         Ok(Self { one, many, maybe, maybe_many })
     }
 
@@ -1083,11 +1083,11 @@ impl IonFormat for PatchEnvelope {
 
 impl IonFormat for LabEvent {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "LabEvent")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "LabEvent", 3, 3)?;
         let seq = <i64 as IonFormat>::ion_read(d)?;
         let topic = <String as IonFormat>::ion_read(d)?;
         let body = <String as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 3)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 3)?;
         Ok(Self { seq, topic, body })
     }
 
@@ -1102,11 +1102,11 @@ impl IonFormat for LabEvent {
 
 impl IonFormat for Vector {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "Vector")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "Vector", 3, 3)?;
         let x = <f32 as IonFormat>::ion_read(d)?;
         let y = <f32 as IonFormat>::ion_read(d)?;
         let z = <f32 as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 3)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 3)?;
         Ok(Self { x, y, z })
     }
 
@@ -1121,11 +1121,11 @@ impl IonFormat for Vector {
 
 impl IonFormat for VectorOfVector {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "VectorOfVector")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "VectorOfVector", 3, 3)?;
         let x = <Vector as IonFormat>::ion_read(d)?;
         let y = <Vector as IonFormat>::ion_read(d)?;
         let z = <Vector as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 3)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 3)?;
         Ok(Self { x, y, z })
     }
 
@@ -1140,10 +1140,10 @@ impl IonFormat for VectorOfVector {
 
 impl IonFormat for VectorOfVectorOfVector {
     fn ion_read(d: &mut Decoder<'_>) -> Result<Self, IonError> {
-        let (len, _depth) = ion_rustcore::formatter::read_message_header(d, "VectorOfVectorOfVector")?;
+        let (__len, _depth) = ion_rustcore::formatter::read_message_start(d, "VectorOfVectorOfVector", 2, 2)?;
         let z = <VectorOfVector as IonFormat>::ion_read(d)?;
         let w = <VectorOfVector as IonFormat>::ion_read(d)?;
-        ion_rustcore::formatter::skip_remaining(d, len, 2)?;
+        ion_rustcore::formatter::read_message_end(d, __len, 2)?;
         Ok(Self { z, w })
     }
 
